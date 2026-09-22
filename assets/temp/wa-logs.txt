@@ -1,0 +1,2 @@
+{"level":50,"time":"2026-09-22T22:00:10.638Z","pid":21350,"hostname":"localhost","fullErrorNode":{"tag":"stream:error","attrs":{"code":"515"}},"msg":"stream errored out"}
+{"level":50,"time":"2026-09-22T22:26:49.227Z","pid":11865,"hostname":"localhost","fullErrorNode":{"tag":"stream:error","attrs":{"code":"515"}},"msg":"stream errored out"}

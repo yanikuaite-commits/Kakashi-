@@ -1,0 +1,10 @@
+{
+    "sticker": "stickerMessage",
+    "lottieSticker": "lottieStickerMessage",
+    "video": "videoMessage",
+    "image": "imageMessage",
+    "audio": "audioMessage",
+    "product": "productMessage",
+    "document": "documentMessage",
+    "event": "eventMessage"
+}
