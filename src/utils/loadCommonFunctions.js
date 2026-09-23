@@ -642,6 +642,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
     artist = "",
     thumbnailUrl = null,
     quoted = true,
+    mimetype = "audio/mpeg",
   ) => {
     const quotedObject = quoted
       ? { quoted: JSON.parse(JSON.stringify(webMessage)) }
@@ -659,7 +660,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
       remoteJid,
       {
         document: fs.readFileSync(filePath),
-        mimetype: "audio/mpeg",
+        mimetype,
         fileName: fileName || "musica.mp3",
         caption: `Título: ${title}\nArtista: ${artist}`,
         ...(jpegThumbnail ? { jpegThumbnail } : {}),

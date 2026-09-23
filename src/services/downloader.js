@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import { DEFAULT_VIDEO_HEIGHT, PENDING_DOWNLOAD_TTL_MS } from "../config.js";
-import { downloadWithCobalt } from "../utils/cobaltDownloader.js";
+import { downloadWithGenDownload } from "../utils/genDownloader.js";
 import { searchYouTube } from "./youtube-search.js";
 
 const pendingResolutions = new Map();
@@ -24,12 +24,11 @@ export function takePendingResolution(chatId, choice) {
 }
 
 export async function downloadVideo(source, height = DEFAULT_VIDEO_HEIGHT) {
-  return downloadWithCobalt(source, { height });
+  return downloadWithGenDownload(source, { height });
 }
 
 export async function downloadAudio(source) {
-  const result = await downloadWithCobalt(source, { audio: true });
-  return { ...result, title: "Música", artist: "", thumbnail: null, fileName: "musica.mp3" };
+  return downloadWithGenDownload(source, { audio: true });
 }
 
 export async function downloadByCommand(command, value, search = searchYouTube) {

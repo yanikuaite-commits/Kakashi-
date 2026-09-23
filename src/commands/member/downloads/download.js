@@ -3,7 +3,7 @@ import { handleDownload } from "../../download.js";
 
 export default {
   name: "baixar",
-  description: "Baixo vídeos de links compatíveis com Cobalt",
+  description: "Baixo vídeos de links compatíveis com GenDownload",
   commands: ["baixar", "download"],
   usage: `${PREFIX}baixar https://www.youtube.com/watch?v=...`,
   handle: async ({ socket, webMessage, fullArgs }) => {
