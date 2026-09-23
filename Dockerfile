@@ -10,14 +10,11 @@ RUN apt-get update && \
   apt-get install -y --no-install-recommends ffmpeg && \
   rm -rf /var/lib/apt/lists/*
 
-# yt-dlp standalone para Linux x64
-ARG YT_DLP_VERSION=2026.09.23
-RUN curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp_${YT_DLP_VERSION}_amd64.deb" \
-  -o /tmp/yt-dlp.deb && \
-  apt-get update && \
-  apt-get install -y --no-install-recommends /tmp/yt-dlp.deb && \
-  apt-get clean && \
-  rm -rf /var/lib/apt/lists/* /tmp/yt-dlp.deb
+# yt-dlp standalone para Linux x64 (executável único, sem .deb)
+ARG YT_DLP_VERSION=2026.08.19
+RUN curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp_linux" -o /usr/local/bin/yt-dlp && \
+  chmod +x /usr/local/bin/yt-dlp && \
+  yt-dlp --version
 
 ENV NODE_ENV=production
 
