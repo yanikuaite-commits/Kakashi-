@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { downloadWithCobalt } from "../utils/cobaltDownloader.js";
+import { downloadVideo } from "../services/downloader.js";
 
 export async function handleDownload(sock, message, args) {
   const jid = message.key.remoteJid;
@@ -11,16 +11,16 @@ export async function handleDownload(sock, message, args) {
 
   let filePath;
   try {
-    const result = await downloadWithCobalt(url);
+    const result = await downloadVideo(url);
     filePath = result.filePath;
     await sock.sendMessage(jid, {
       video: { url: filePath },
       mimetype: result.mimetype,
-      caption: "Vídeo baixado via Cobalt",
+      caption: "Vídeo baixado via GenDownload",
     });
     console.log("Vídeo enviado com sucesso.");
   } catch (error) {
-    console.error("Erro ao baixar vídeo com Cobalt:", error);
+    console.error("Erro ao baixar vídeo com GenDownload:", error);
     await sock.sendMessage(jid, { text: `Não consegui baixar este vídeo: ${error.message}` });
   } finally {
     if (filePath) await fs.rm(filePath, { force: true });

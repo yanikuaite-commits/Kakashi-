@@ -41,6 +41,8 @@ export default {
         data.title,
         data.artist,
         data.thumbnail,
+        true,
+        data.mimetype,
       );
     } catch (error) {
       errorLog(JSON.stringify(error, null, 2));

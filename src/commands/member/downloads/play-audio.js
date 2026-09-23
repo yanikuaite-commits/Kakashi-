@@ -34,6 +34,8 @@ export default {
         data.title,
         data.artist,
         data.thumbnail,
+        true,
+        data.mimetype,
       );
     } finally {
       if (data?.filePath) await fs.rm(data.filePath, { force: true });

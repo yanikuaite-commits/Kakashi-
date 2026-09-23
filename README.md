@@ -123,18 +123,18 @@ em `src/config.js`.
 Depois use `.backup` e `.restore`. O repositório deve permanecer privado, pois o
 backup inclui credenciais da sessão e variáveis secretas do `.env`.
 
-Os downloads por link usam a API do Cobalt via `axios`. Configure `COBALT_API_URL`
-com a URL completa do endpoint POST da sua instância Cobalt (nas versões atuais,
-normalmente a raiz, por exemplo `https://seu-cobalt.example/`). Sem essa variável,
-o bot tenta o endpoint legado `https://api.cobalt.tools/api/json`, mas a API
-pública aplica proteção contra bots e não é destinada a integrações sem permissão.
-Use uma instância própria ou autorizada. Os comandos `!baixar` e `!download`
+Os downloads por link usam a API do GenDownload via `axios`. Configure
+`GENDOWNLOAD_API_URL` com o endpoint POST `/api/extract` para usar uma instância
+autorizada diferente; o padrão é `https://gendownload.com/api/extract`.
+O bot seleciona um formato MP4 ou áudio compatível, transmite para `tmp/` e
+apaga o arquivo após enviar. Os comandos `!baixar` e `!download`
 funcionam além dos respectivos aliases com o prefixo configurado (padrão `.`) e
 aceitam URLs de vídeos de plataformas suportadas; os comandos antigos de link
-continuam disponíveis. A pesquisa por texto no YouTube usa `youtube-search-api`, retorna
-até cinco resultados em `.yt-search` (título, duração, link e thumbnail) e
-seleciona o primeiro resultado para `.play-audio` e `.play-video`; o Cobalt
-continua responsável apenas pelo download. `.pinterest` exige URL.
+continuam disponíveis. A pesquisa por texto no YouTube usa `youtube-search-api`
+e envia até cinco resultados em mensagens individuais: uma imagem de thumbnail
+e uma mensagem com título, duração e link para cada vídeo. `.play-audio` e
+`.play-video` selecionam o primeiro resultado; o GenDownload baixa a mídia.
+`.pinterest` exige URL.
 Downloads têm timeout de cinco minutos, menu de resolução no `.yt-mp4` para
 links do YouTube e limite de 100 MB por arquivo. Os fallbacks de
 ATTP e os modelos da Hugging Face estão centralizados em `src/config.js`.
@@ -144,7 +144,7 @@ ATTP e os modelos da Hugging Face estão centralizados em `src/config.js`.
 1. `.yt-mp4 https://www.youtube.com/watch?v=...` e responda `1` a `5`.
 2. `.yt-mp3`, `.facebook`, `.instagram`, `.tik-tok`, `.x-twitter` e `.pinterest` com links reais.
 3. `!baixar`/`!download` e `.tik-tok-audio` com links; `.play-audio` e `.play-video` com link ou termo.
-4. `.yt-search termo` retorna até cinco vídeos com duração, link e thumbnail.
+4. `.yt-search termo` envia até cinco resultados separados com imagem e descrição.
 5. `.attp texto` e `.ttp texto`, verificando sticker animado e imagem PNG.
 6. Responda a um vídeo com `.to-gif` e `.to-mp3`; responda a uma figurinha com `.to-image`.
 7. Envie `.ia uma pergunta` e confirme a mensagem de espera e a resposta editada.

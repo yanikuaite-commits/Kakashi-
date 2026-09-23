@@ -2,10 +2,21 @@ import { PREFIX } from "../../../config.js";
 import { InvalidParameterError, WarningError } from "../../../errors/index.js";
 import { searchYouTube } from "../../../services/youtube-search.js";
 
-export function formatYouTubeResults(videos) {
-  return videos.map((video, index) =>
-    `*${index + 1}. ${video.title}*\nDuração: ${video.duration}\nLink: ${video.url}${video.thumbnail ? `\nThumbnail: ${video.thumbnail}` : ""}`
-  ).join("\n\n");
+export function formatYouTubeResult(video, index, prefix = PREFIX) {
+  return `🎬 *RESULTADO ${index + 1}*\n━━━━━━━━━━━━━━━━━━\n📌 *${video.title}*\n⏱️ ${video.duration}\n🔗 ${video.url}\n━━━━━━━━━━━━━━━━━━\n💡 Use ${prefix}play-audio ou ${prefix}play-video com o link.`;
+}
+
+export async function sendYouTubeResults(videos, { sendImageFromURL, sendReply, prefix }) {
+  for (const [index, video] of videos.entries()) {
+    if (video.thumbnail) {
+      try {
+        await sendImageFromURL(video.thumbnail, "", null, false);
+      } catch (error) {
+        console.error("Não foi possível enviar a thumbnail da pesquisa:", error.message);
+      }
+    }
+    await sendReply(formatYouTubeResult(video, index, prefix || PREFIX));
+  }
 }
 
 export default {
@@ -16,7 +27,7 @@ export default {
   /**
    * @param {CommandHandleProps} props
    */
-  handle: async ({ fullArgs, sendSuccessReply }) => {
+  handle: async ({ fullArgs, sendImageFromURL, sendReply, prefix }) => {
     if (fullArgs.length <= 1) {
       throw new InvalidParameterError(
         "Você precisa fornecer uma pesquisa para o YouTube."
@@ -34,6 +45,6 @@ export default {
     const videos = await searchYouTube(fullArgs);
     if (!videos.length) throw new WarningError("Nenhum vídeo encontrado para esta pesquisa.");
 
-    await sendSuccessReply(`*Resultados para: ${fullArgs}*\n\n${formatYouTubeResults(videos)}`);
+    await sendYouTubeResults(videos, { sendImageFromURL, sendReply, prefix });
   },
 };
