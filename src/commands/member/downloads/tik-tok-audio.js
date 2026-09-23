@@ -35,15 +35,17 @@ export default {
       throw new WarningError("O link não é do TikTok!");
     }
 
+    let data;
     try {
       await sendReply("⬇️ Baixando...");
-      const data = await downloadByCommand("tik-tok-audio", fullArgs);
+      data = await downloadByCommand("tik-tok-audio", fullArgs);
       await sendSuccessReact();
       await sendAudioFromFile(data.filePath);
-      await fs.rm(data.filePath, { force: true });
     } catch (error) {
       errorLog(JSON.stringify(error, null, 2));
       await sendErrorReply(error.message);
+    } finally {
+      if (data?.filePath) await fs.rm(data.filePath, { force: true });
     }
   },
 };

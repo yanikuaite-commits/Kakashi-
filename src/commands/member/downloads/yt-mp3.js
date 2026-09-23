@@ -30,9 +30,10 @@ export default {
       throw new WarningError("O link não é do YouTube!");
     }
 
+    let data;
     try {
       await sendReply("⬇️ Baixando...");
-      const data = await downloadByCommand("yt-mp3", fullArgs);
+      data = await downloadByCommand("yt-mp3", fullArgs);
       await sendSuccessReact();
       await sendAudioDocumentFromFile(
         data.filePath,
@@ -41,10 +42,11 @@ export default {
         data.artist,
         data.thumbnail,
       );
-      await fs.rm(data.filePath, { force: true });
     } catch (error) {
       errorLog(JSON.stringify(error, null, 2));
       await sendErrorReply(error.message);
+    } finally {
+      if (data?.filePath) await fs.rm(data.filePath, { force: true });
     }
   },
 };

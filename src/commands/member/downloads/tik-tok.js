@@ -28,15 +28,17 @@ export default {
       throw new WarningError("O link não é do TikTok!");
     }
 
+    let data;
     try {
       await sendReply("⬇️ Baixando...");
-      const data = await downloadByCommand("tik-tok", fullArgs);
+      data = await downloadByCommand("tik-tok", fullArgs);
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);
-      await fs.rm(data.filePath, { force: true });
     } catch (error) {
       errorLog(JSON.stringify(error, null, 2));
       await sendErrorReply(error.message);
+    } finally {
+      if (data?.filePath) await fs.rm(data.filePath, { force: true });
     }
   },
 };

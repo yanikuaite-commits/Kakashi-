@@ -1,10 +1,16 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError, WarningError } from "../../../errors/index.js";
-import { getSearchResult } from "../../../services/downloader.js";
+import { searchYouTube } from "../../../services/youtube-search.js";
+
+export function formatYouTubeResults(videos) {
+  return videos.map((video, index) =>
+    `*${index + 1}. ${video.title}*\nDuração: ${video.duration}\nLink: ${video.url}${video.thumbnail ? `\nThumbnail: ${video.thumbnail}` : ""}`
+  ).join("\n\n");
+}
 
 export default {
   name: "yt-search",
-  description: "Consulta Google",
+  description: "Pesquiso vídeos no YouTube",
   commands: ["yt-search", "youtube-search"],
   usage: `${PREFIX}yt-search MC Hariel`,
   /**
@@ -25,25 +31,9 @@ export default {
       );
     }
 
-    const data = await getSearchResult(fullArgs);
+    const videos = await searchYouTube(fullArgs);
+    if (!videos.length) throw new WarningError("Nenhum vídeo encontrado para esta pesquisa.");
 
-    if (!data) {
-      throw new WarningError(
-        "Não foi possível encontrar resultados para a pesquisa."
-      );
-    }
-
-    let text = "";
-
-    text += `Título: *${data.title}*\n\n`;
-    text += `Duração: ${data.duration}\n\n`;
-    text += `URL: ${data.url}`;
-
-    await sendSuccessReply(`*Pesquisa realizada*
-
-*Termo*: ${fullArgs}
-      
-*Resultados*
-${text}`);
+    await sendSuccessReply(`*Resultados para: ${fullArgs}*\n\n${formatYouTubeResults(videos)}`);
   },
 };

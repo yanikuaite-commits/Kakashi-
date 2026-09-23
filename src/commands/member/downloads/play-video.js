@@ -8,7 +8,7 @@ export default {
   name: "play-video",
   description: "Faço o download de vídeos",
   commands: ["play-video", "pv"],
-  usage: `${PREFIX}play-video MC Hariel`,
+  usage: `${PREFIX}play-video MC Hariel (ou link)`,
   /**
    * @param {CommandHandleProps} props
    */
@@ -21,25 +21,21 @@ export default {
   }) => {
     if (!fullArgs.length) {
       throw new InvalidParameterError(
-        "Você precisa me dizer o que deseja buscar!",
+        "Você precisa informar o nome ou a URL do vídeo!",
       );
     }
 
-    if (fullArgs.includes("http://") || fullArgs.includes("https://")) {
-      throw new InvalidParameterError(
-        `Você não pode usar links para baixar vídeos! Use ${PREFIX}yt-mp4 link`,
-      );
-    }
-
+    let data;
     try {
       await sendReply("⬇️ Baixando...");
-      const data = await downloadByCommand("play-video", fullArgs);
+      data = await downloadByCommand("play-video", fullArgs);
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);
-      await fs.rm(data.filePath, { force: true });
     } catch (error) {
       errorLog(JSON.stringify(error, null, 2));
-      await sendErrorReply(JSON.stringify(error.message));
+      await sendErrorReply(error.message);
+    } finally {
+      if (data?.filePath) await fs.rm(data.filePath, { force: true });
     }
   },
 };

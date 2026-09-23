@@ -32,15 +32,17 @@ export default {
       throw new WarningError("O link não é do X (Twitter)!");
     }
 
+    let data;
     try {
       await sendReply("⬇️ Baixando...");
-      const data = await downloadByCommand("x-twitter", fullArgs);
+      data = await downloadByCommand("x-twitter", fullArgs);
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);
-      await fs.rm(data.filePath, { force: true });
     } catch (error) {
       errorLog(JSON.stringify(error, null, 2));
       await sendErrorReply(error.message);
+    } finally {
+      if (data?.filePath) await fs.rm(data.filePath, { force: true });
     }
   },
 };
