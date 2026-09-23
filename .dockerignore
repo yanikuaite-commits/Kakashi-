@@ -1,0 +1,13 @@
+node_modules
+.git
+assets/auth
+assets/temp
+database/*.json
+.dockerignore
+Dockerfile
+README.md
+CONTRIBUTING.md
+GEMINI.md
+AGENTS.md
+scripts/patch-baileys.mjs
+package-lock.json

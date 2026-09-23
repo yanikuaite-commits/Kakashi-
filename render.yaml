@@ -1,8 +1,10 @@
 services:
   - type: web
     name: kakashi-bot
-    runtime: node
-    buildCommand: npm install
-    startCommand: npm start
+    env: docker
+    plan: starter
+    region: oregon
+    buildCommand: docker build -t app .
+    startCommand: docker run --rm --env-file .env -p $PORT:8080 app
     healthCheckPath: /
     envVars:
