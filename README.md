@@ -10,7 +10,6 @@
 [![Node.js](https://img.shields.io/badge/Node.js-24-green?logo=node.js)](https://nodejs.org/en)
 [![Baileys](https://img.shields.io/badge/Baileys-7.0.0.rc14-purple?logo=whatsapp)](https://github.com/WhiskeySockets/Baileys)
 [![FFMPEG](https://img.shields.io/badge/FFMPEG-Latest-orange?logo=ffmpeg)](https://ffmpeg.org/)
-[![yt-dlp](https://img.shields.io/badge/yt--dlp-free-green)](https://github.com/yt-dlp/yt-dlp)
 
 ## 🧪 Testando a versão 9.0.0-beta (migração para Zapo)
 
@@ -73,8 +72,7 @@ Os downloads, conversões, imagens de texto e IA de texto usam ferramentas gratu
 No Termux, instale as ferramentas do sistema e as dependências do Kakashi:
 
 ```sh
-pkg install ffmpeg python
-pip install yt-dlp
+pkg install ffmpeg
 npm i fluent-ffmpeg canvas jimp dotenv
 ```
 
@@ -125,16 +123,28 @@ em `src/config.js`.
 Depois use `.backup` e `.restore`. O repositório deve permanecer privado, pois o
 backup inclui credenciais da sessão e variáveis secretas do `.env`.
 
-Os downloads usam `yt-dlp` e têm timeout de cinco minutos, menu de resolução no
-`.yt-mp4` para links do YouTube e limite de 100 MB por arquivo. Os fallbacks de
+Os downloads por link usam a API do Cobalt via `axios`. Configure `COBALT_API_URL`
+com a URL completa do endpoint POST da sua instância Cobalt (nas versões atuais,
+normalmente a raiz, por exemplo `https://seu-cobalt.example/`). Sem essa variável,
+o bot tenta o endpoint legado `https://api.cobalt.tools/api/json`, mas a API
+pública aplica proteção contra bots e não é destinada a integrações sem permissão.
+Use uma instância própria ou autorizada. Os comandos `!baixar` e `!download`
+funcionam além dos respectivos aliases com o prefixo configurado (padrão `.`) e
+aceitam URLs de vídeos de plataformas suportadas; os comandos antigos de link
+continuam disponíveis. A pesquisa por texto no YouTube usa `youtube-search-api`, retorna
+até cinco resultados em `.yt-search` (título, duração, link e thumbnail) e
+seleciona o primeiro resultado para `.play-audio` e `.play-video`; o Cobalt
+continua responsável apenas pelo download. `.pinterest` exige URL.
+Downloads têm timeout de cinco minutos, menu de resolução no `.yt-mp4` para
+links do YouTube e limite de 100 MB por arquivo. Os fallbacks de
 ATTP e os modelos da Hugging Face estão centralizados em `src/config.js`.
 
 ### Teste manual dos comandos migrados
 
 1. `.yt-mp4 https://www.youtube.com/watch?v=...` e responda `1` a `5`.
 2. `.yt-mp3`, `.facebook`, `.instagram`, `.tik-tok`, `.x-twitter` e `.pinterest` com links reais.
-3. `.tik-tok-audio`, `.play-audio` e `.play-video` com link ou termo de busca.
-4. `.yt-search termo` e confirme título, duração e URL retornados.
+3. `!baixar`/`!download` e `.tik-tok-audio` com links; `.play-audio` e `.play-video` com link ou termo.
+4. `.yt-search termo` retorna até cinco vídeos com duração, link e thumbnail.
 5. `.attp texto` e `.ttp texto`, verificando sticker animado e imagem PNG.
 6. Responda a um vídeo com `.to-gif` e `.to-mp3`; responda a uma figurinha com `.to-image`.
 7. Envie `.ia uma pergunta` e confirme a mensagem de espera e a resposta editada.

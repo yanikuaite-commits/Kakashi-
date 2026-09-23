@@ -100,6 +100,8 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   }
 
   const { type, command } = await findCommandImport(commandName);
+  const validPrefix = verifyPrefix(prefix, remoteJid) ||
+    (prefix === "!" && ["baixar", "download"].includes(commandName));
 
   if (!isOwner && isCommandBlocked(commandName)) {
     return;
@@ -111,7 +113,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
 
   if (activeGroup) {
     if (
-      !verifyPrefix(prefix, remoteJid) ||
+      !validPrefix ||
       !hasTypeAndCommand({ type, command })
     ) {
       if (isActiveAutoResponderGroup(remoteJid)) {
@@ -153,7 +155,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
 
   if (!isOwner && !activeGroup && remoteJid.endsWith("@g.us")) {
     if (
-      verifyPrefix(prefix, remoteJid) &&
+      validPrefix &&
       hasTypeAndCommand({ type, command })
     ) {
       if (command.name !== "on") {
@@ -174,7 +176,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     }
   }
 
-  if (!verifyPrefix(prefix, remoteJid)) {
+  if (!validPrefix) {
     return;
   }
 

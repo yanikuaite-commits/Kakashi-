@@ -7,9 +7,9 @@ import { errorLog } from "../../../utils/logger.js";
 
 export default {
   name: "pinterest",
-  description: "Busco imagens no Pinterest e envio separadamente.",
+  description: "Baixo vídeos do Pinterest pelo link.",
   commands: ["pinterest", "pin"],
-  usage: `${PREFIX}pinterest gatos fofos`,
+  usage: `${PREFIX}pinterest https://www.pinterest.com/pin/123456789/`,
   /**
    * @param {CommandHandleProps} props
    */
@@ -23,19 +23,21 @@ export default {
   }) => {
     if (!fullArgs.length) {
       throw new InvalidParameterError(
-        "Você precisa me dizer o que deseja buscar no Pinterest!",
+        "Você precisa enviar uma URL do Pinterest!",
       );
     }
 
+    let data;
     try {
       await sendReply("⬇️ Baixando...");
-      const data = await downloadByCommand("pinterest", fullArgs.trim());
+      data = await downloadByCommand("pinterest", fullArgs.trim());
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath, `📌 Resultado para: ${fullArgs}`);
-      await fs.rm(data.filePath, { force: true });
     } catch (error) {
       errorLog(JSON.stringify(error, null, 2));
-      await sendErrorReply(JSON.stringify(error.message));
+      await sendErrorReply(error.message);
+    } finally {
+      if (data?.filePath) await fs.rm(data.filePath, { force: true });
     }
   },
 };
