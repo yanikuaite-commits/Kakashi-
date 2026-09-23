@@ -68,9 +68,9 @@ export const DEVELOPER_MODE = false;
 export const OPENAI_API_KEY = "";
 
 // Configuracoes do projeto e APIs. Este projeto foi solicitado sem uso de .env.
-export const HF_TOKEN = ;
-export const GITHUB_TOKEN = p
-export const GITHUB_REPOSITORY = "yanikuaite-commits/Kakashi";
+export const HF_TOKEN = process.env.HF_TOKEN || "";
+export const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
+export const GITHUB_REPOSITORY = "yanikuaite-commits/Kakashi-";
 export const GITHUB_BRANCH = "main";
 export const GITHUB_BACKUP_PATH = "backups/kakashi-database.tar.gz";
 export const PAIRING_SECRET = "KakashiPairing2026";
