@@ -32,7 +32,7 @@ import {
   isActiveGroup,
   isActiveOnlyAdmins,
 } from "./database.js";
-import { findCommandImport } from "./index.js";
+import { findCommandInMessage } from "./index.js";
 import { errorLog } from "./logger.js";
 
 /**
@@ -99,11 +99,16 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     }
   }
 
-  const { type, command } = await findCommandImport(commandName);
+  const groupPrefix = getPrefix(remoteJid);
   const validPrefix = verifyPrefix(prefix, remoteJid) ||
-    (prefix === "!" && ["baixar", "download"].includes(commandName));
+    prefix === "" || (prefix === "!" && ["baixar", "download"].includes(commandName));
+  const resolved = validPrefix
+    ? await findCommandInMessage(commandName, paramsHandler.fullArgs)
+    : { type: "", command: null, commandName, fullArgs: paramsHandler.fullArgs, args: paramsHandler.args };
+  const { type, command } = resolved;
+  const invocation = { ...paramsHandler, ...resolved, prefix: prefix || groupPrefix };
 
-  if (!isOwner && isCommandBlocked(commandName)) {
+  if (!isOwner && (isCommandBlocked(commandName) || command?.commands.some(isCommandBlocked))) {
     return;
   }
 
@@ -135,7 +140,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
       return;
     }
 
-    if (!(await checkPermission({ type, ...paramsHandler }))) {
+    if (!(await checkPermission({ type, ...invocation }))) {
       await sendErrorReply(
         "Você não tem permissão para executar este comando!"
       );
@@ -165,7 +170,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
         return;
       }
 
-      if (!(await checkPermission({ type, ...paramsHandler }))) {
+      if (!(await checkPermission({ type, ...invocation }))) {
         await sendErrorReply(
           "Você não tem permissão para executar este comando!"
         );
@@ -180,8 +185,6 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     return;
   }
 
-  const groupPrefix = getPrefix(remoteJid);
-
   if (fullMessage === groupPrefix) {
     await sendReact(BOT_EMOJI);
     await sendReply(
@@ -192,6 +195,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   }
 
   if (!hasTypeAndCommand({ type, command })) {
+    if (!prefix) return;
     await sendWarningReply(
       `Comando não encontrado! Use ${groupPrefix}menu para ver os comandos disponíveis!`
     );
@@ -199,9 +203,14 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     return;
   }
 
+  if (isPrivate && !isOwner && type !== "member") {
+    await sendErrorReply("Você não tem permissão para executar este comando!");
+    return;
+  }
+
   try {
     await command.handle({
-      ...paramsHandler,
+      ...invocation,
       type,
       startProcess,
     });

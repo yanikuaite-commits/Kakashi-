@@ -7,7 +7,7 @@ export default {
   name: "play-audio",
   description: "Faço o download de músicas",
   commands: ["play-audio", "play", "pa"],
-  usage: `${PREFIX}play-audio MC Hariel (ou link)`,
+  usage: `${PREFIX}play audio MC Hariel (ou link)`,
   /**
    * @param {CommandHandleProps} props
    */

@@ -52,7 +52,7 @@ export async function handleAfkReferences({ webMessage, commonFunctions }) {
   const { commandName, prefix, remoteJid, userLid } = commonFunctions;
   const afkMembers = listAfkMembers(remoteJid);
   const isAfkCommand =
-    prefix === getPrefix(remoteJid) &&
+    (prefix === "" || prefix === getPrefix(remoteJid)) &&
     ["afk", "ausente"].includes(commandName);
 
   if (!isAfkCommand && afkMembers[userLid]) {

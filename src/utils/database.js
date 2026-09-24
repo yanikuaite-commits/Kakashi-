@@ -235,21 +235,28 @@ export function getBlockedCommands() {
   return readJSON(BLOCKED_COMMANDS_FILE, []);
 }
 
+function normalizeBlockedCommand(commandName) {
+  return String(commandName || "").trim().toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+}
+
 export function isCommandBlocked(commandName) {
-  return getBlockedCommands().includes(String(commandName || "").toLowerCase());
+  const name = normalizeBlockedCommand(commandName);
+  return !!name && getBlockedCommands().some((item) => normalizeBlockedCommand(item) === name);
 }
 
 export function blockCommand(commandName) {
-  const normalized = String(commandName || "").trim().toLowerCase();
+  const normalized = normalizeBlockedCommand(commandName);
   if (!normalized) return;
   const commands = getBlockedCommands();
-  if (!commands.includes(normalized)) commands.push(normalized);
+  if (!commands.some((item) => normalizeBlockedCommand(item) === normalized)) commands.push(normalized);
   writeJSON(BLOCKED_COMMANDS_FILE, commands, []);
 }
 
 export function unblockCommand(commandName) {
-  const normalized = String(commandName || "").trim().toLowerCase();
-  writeJSON(BLOCKED_COMMANDS_FILE, getBlockedCommands().filter((command) => command !== normalized), []);
+  const normalized = normalizeBlockedCommand(commandName);
+  if (!normalized) return;
+  writeJSON(BLOCKED_COMMANDS_FILE, getBlockedCommands().filter((command) => normalizeBlockedCommand(command) !== normalized), []);
 }
 
 export function getAutoResponderResponse(match) {

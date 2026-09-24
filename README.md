@@ -107,9 +107,9 @@ Conversas privadas ficam bloqueadas por padrão. Para autorizar um privado:
 O dono também pode bloquear comandos para os demais usuários:
 
 ```text
-.block-command play-video
-.unblock-command play-video
-.blocked-commands
+block command play video
+unblock command play video
+blocked commands
 ```
 
 O backup salva a pasta `database/`, o `.env` e a sessão `assets/auth/baileys/` em um arquivo compactado. Para sincronizar
@@ -127,26 +127,27 @@ Os downloads por link usam a API do GenDownload via `axios`. Configure
 `GENDOWNLOAD_API_URL` com o endpoint POST `/api/extract` para usar uma instância
 autorizada diferente; o padrão é `https://gendownload.com/api/extract`.
 O bot seleciona um formato MP4 ou áudio compatível, transmite para `tmp/` e
-apaga o arquivo após enviar. Os comandos `!baixar` e `!download`
-funcionam além dos respectivos aliases com o prefixo configurado (padrão `.`) e
-aceitam URLs de vídeos de plataformas suportadas; os comandos antigos de link
-continuam disponíveis. A pesquisa por texto no YouTube usa `youtube-search-api`
+apaga o arquivo após enviar. `baixar` e `download` aceitam URLs de vídeos de
+plataformas suportadas (inclusive `!baixar` e `!download`). Todos os comandos
+funcionam com o prefixo configurado (padrão `.`) ou sem prefixo; nomes com hífen
+também aceitam espaços, como `play video`, `anti link` e `set prefix`.
+A pesquisa por texto no YouTube usa `youtube-search-api`
 e envia até cinco resultados em mensagens individuais: uma imagem de thumbnail
-e uma mensagem com título, duração e link para cada vídeo. `.play-audio` e
-`.play-video` selecionam o primeiro resultado; o GenDownload baixa a mídia.
-`.pinterest` exige URL.
-Downloads têm timeout de cinco minutos, menu de resolução no `.yt-mp4` para
-links do YouTube e limite de 100 MB por arquivo. Os fallbacks de
-ATTP e os modelos da Hugging Face estão centralizados em `src/config.js`.
+e uma mensagem com título, duração e link para cada vídeo. Use `yt <termo>`;
+`play audio <termo ou link>` envia áudio e `play video <termo ou link>` permite
+escolher a resolução de vídeos do YouTube (1 a 5) antes do download. Links de
+outras plataformas em `play video` baixam diretamente. `pinterest` exige URL.
+Downloads têm timeout de cinco minutos e limite de 100 MB por arquivo;
+os fallbacks de ATTP e os modelos da Hugging Face estão em `src/config.js`.
 
 ### Teste manual dos comandos migrados
 
-1. `.yt-mp4 https://www.youtube.com/watch?v=...` e responda `1` a `5`.
-2. `.yt-mp3`, `.facebook`, `.instagram`, `.tik-tok`, `.x-twitter` e `.pinterest` com links reais.
-3. `!baixar`/`!download` e `.tik-tok-audio` com links; `.play-audio` e `.play-video` com link ou termo.
-4. `.yt-search termo` envia até cinco resultados separados com imagem e descrição.
+1. `play video <nome ou link YouTube>` e responda `1` a `5` para escolher resolução.
+2. `play audio <nome ou link>` envia áudio; `facebook`, `instagram`, `tik tok` e `pinterest` aceitam links reais.
+3. `!baixar`/`!download` e `tik tok audio` com links; `play video <link não YouTube>` baixa diretamente.
+4. `yt <termo>` envia até cinco resultados separados com imagem e descrição.
 5. `.attp texto` e `.ttp texto`, verificando sticker animado e imagem PNG.
-6. Responda a um vídeo com `.to-gif` e `.to-mp3`; responda a uma figurinha com `.to-image`.
+6. Responda a um vídeo com `to mp3`; responda a uma figurinha com `togif` ou `toimage`.
 7. Envie `.ia uma pergunta` e confirme a mensagem de espera e a resposta editada.
 8. Responda a uma imagem com `.removebg`, `.invert`, `.cadeia`, `.rip` e `.bolsonaro`.
 
@@ -661,7 +662,11 @@ O Kakashi Bot possui um auto-responder embutido, edite o arquivo em `./database/
 
 ## Onde fica o menu do bot?
 
-O menu do bot fica dentro da pasta `src` no arquivo chamado `menu.js`
+Use `menu` (ou `.menu`) para ver categorias curtas e `menu download` para ver os comandos
+de download, incluindo `yt <termo>`. Também há submenus como
+`.menu imagem`, `.menu admin` e `.menu ia`. Todos usam a mesma imagem do menu
+principal, que pode ser trocada com `.set-menu-image`. A configuração do menu
+fica em `src/menu.js`.
 
 ## Onde modifico a mensagem de boas vindas e quando alguém sai do grupo?
 
