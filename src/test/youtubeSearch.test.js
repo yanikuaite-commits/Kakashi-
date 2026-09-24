@@ -54,7 +54,7 @@ test("cada resultado envia foto e texto separados e continua sem foto", async ()
   assert.match(sent[1].text, /RESULTADO 1/);
   assert.match(sent[3].text, /RESULTADO 2/);
   assert.match(sent[5].text, /RESULTADO 3/);
-  assert.match(sent[5].text, /!play-audio ou !play-video/);
+  assert.match(sent[5].text, /!play audio ou !play video/);
 });
 
 test("consulta vazia, pesquisa sem resultados e falha remota têm resposta definida", async () => {

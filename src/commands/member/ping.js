@@ -14,8 +14,8 @@ export default {
   /**
    * @param {CommandHandleProps} props
    */
-  handle: async ({ sendReply, sendReact, startProcess, fullMessage }) => {
-    const response = fullMessage.slice(1).startsWith("ping")
+  handle: async ({ sendReply, sendReact, startProcess, commandName }) => {
+    const response = commandName === "ping"
       ? "🏓 Pong!"
       : "🏓 Ping!";
 

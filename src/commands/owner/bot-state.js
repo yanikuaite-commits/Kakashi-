@@ -8,11 +8,11 @@ export default {
   commands: ["bot-on", "bot-off", "bot-status"],
   usage: `${PREFIX}bot-on | ${PREFIX}bot-off | ${PREFIX}bot-status`,
   handle: async ({ commandName, sendSuccessReply }) => {
-    if (commandName === "bot-on") {
+    if (commandName === "boton") {
       setBotEnabled(true);
       return sendSuccessReply("Bot ativado globalmente.");
     }
-    if (commandName === "bot-off") {
+    if (commandName === "botoff") {
       setBotEnabled(false);
       return sendSuccessReply("Bot desativado globalmente.");
     }

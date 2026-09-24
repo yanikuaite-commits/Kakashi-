@@ -12,6 +12,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { pathToFileURL } from "node:url";
 import { ASSETS_DIR, COMMANDS_DIR, PREFIX, TEMP_DIR } from "../config.js";
+import { getPrefix } from "./database.js";
 import { errorLog } from "./logger.js";
 
 export function question(message) {
@@ -101,15 +102,18 @@ export function extractDataFromMessage(webMessage) {
     "",
   );
 
-  const [command, ...args] = fullMessage.split(" ");
-  const prefix = command.charAt(0);
-
-  const commandWithoutPrefix = command.replace(new RegExp(`^[${PREFIX}]+`), "");
+  const messageText = fullMessage.trimStart();
+  const command = messageText.match(/^\S+/)?.[0] || "";
+  const fullArgs = messageText.slice(command.length).trimStart();
+  const groupPrefix = getPrefix(webMessage?.key?.remoteJid);
+  const prefix = [groupPrefix, PREFIX, "!"].find((candidate) => command.startsWith(candidate)) ||
+    (/^[^\p{L}\p{N}]/u.test(command) ? command[0] : "");
+  const commandWithoutPrefix = prefix ? command.slice(prefix.length) : command;
 
   return {
-    args: splitByCharacters(args.join(" "), ["\\", "|", "/"]),
+    args: splitByCharacters(fullArgs, ["\\", "|", "/"]),
     commandName: formatCommand(commandWithoutPrefix),
-    fullArgs: args.join(" "),
+    fullArgs,
     fullMessage,
     isReply,
     prefix,
@@ -252,8 +256,30 @@ export function readDirectoryRecursive(dir) {
 }
 
 export async function findCommandImport(commandName) {
-  const command = await readCommandImports();
+  return findLoadedCommand(await readCommandImports(), commandName);
+}
 
+export async function findCommandInMessage(commandName, fullArgs) {
+  const imports = await readCommandImports();
+  const words = String(fullArgs || "").trim().split(/\s+/).filter(Boolean);
+
+  for (let count = Math.min(words.length, 5); count >= 0; count--) {
+    const candidate = formatCommand([commandName, ...words.slice(0, count)].join(""));
+    const match = findLoadedCommand(imports, candidate);
+    if (match.command) {
+      let remaining = String(fullArgs || "");
+      for (let index = 0; index < count; index++) {
+        remaining = remaining.trimStart().replace(/^\S+/, "");
+      }
+      remaining = remaining.trimStart();
+      return { ...match, commandName: candidate, fullArgs: remaining, args: splitByCharacters(remaining, ["\\", "|", "/"]) };
+    }
+  }
+
+  return { type: "", command: null, commandName, fullArgs, args: splitByCharacters(String(fullArgs || ""), ["\\", "|", "/"]) };
+}
+
+function findLoadedCommand(command, commandName) {
   let typeReturn = "";
   let targetCommandReturn = null;
 

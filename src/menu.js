@@ -1,164 +1,139 @@
-/**
- * Menu do bot
- *
- * @author Dev Gui
- */
-import pkg from "../package.json" with { type: "json" };
 import { BOT_NAME } from "./config.js";
 import { getPrefix } from "./utils/database.js";
-import { readMore } from "./utils/index.js";
+import { formatCommand } from "./utils/index.js";
 
-export function menuMessage(groupJid) {
-  const date = new Date();
+export const MENU_CATEGORIES = [
+  {
+    key: "geral", label: "Geral", icon: "🌐", aliases: ["cgeral"],
+    commands: [
+      ["ping", "testar o bot"],
+      ["suporte <pergunta>", "pedir ajuda"],
+      ["exemplos-de-mensagens", "exemplos avançados"],
+    ],
+  },
+  {
+    key: "util", label: "Utilitários", icon: "🛠️", aliases: ["cutil", "utilitarios"],
+    commands: [
+      ["cep <número>", "consultar CEP"],
+      ["gerar-link", "responda a uma imagem"],
+      ["fake-chat @usuário / citação / resposta", "citação fictícia"],
+    ],
+  },
+  {
+    key: "texto", label: "Texto", icon: "🔤", aliases: ["ctexto"],
+    commands: [
+      ["attp <texto>", "figurinha animada"],
+      ["ttp <texto>", "figurinha de texto"],
+      ["brat <texto>", "figurinha Brat"],
+      ["bratvid <texto>", "Brat em vídeo"],
+    ],
+  },
+  {
+    key: "info", label: "Informação", icon: "🌍", aliases: ["cinfo", "informacao"],
+    commands: [["info", "sobre o bot"], ["perfil", "seu perfil"], ["meu-lid", "seu ID"]],
+  },
+  {
+    key: "diversao", label: "Diversão", icon: "😁", aliases: ["cdiv", "brincadeiras"],
+    commands: ["abracar", "beijar", "dado", "jantar", "lutar", "matar", "socar", "tapa"].map((name) => [name]),
+  },
+  {
+    key: "imagem", label: "Imagem", icon: "🖼️", aliases: ["cimg", "canvas"],
+    intro: "Responda a uma imagem para aplicar um efeito.",
+    commands: ["removebg", "blur", "bolsonaro", "cadeia", "contraste", "espelhar", "gray", "inverter", "pixel", "rip"].map((name) => [name]),
+  },
+  {
+    key: "midia", label: "Mídia", icon: "📲", aliases: ["cmidia", "media"],
+    commands: [
+      ["to-mp3", "responda a um vídeo"],
+      ["togif", "responda a uma figurinha"],
+      ["toimage", "responda a uma figurinha"],
+      ["transcrever", "responda a um áudio"],
+    ],
+  },
+  {
+    key: "download", label: "Downloads", icon: "📥", aliases: ["cdownload", "downloads"],
+    commands: [
+      ["yt <termo>", "5 resultados com fotos"],
+      ["play-audio <nome ou link>", "pesquisa ou link"],
+      ["play-video <nome ou link>", "escolha a resolução"],
+      ["baixar <link>", "vídeo de várias plataformas"],
+      ["instagram <link>"], ["facebook <link>"],
+      ["tik-tok <link>"], ["tik-tok-audio <link>"],
+      ["xtwitter <link>"], ["pinterest <link>"],
+    ],
+  },
+  {
+    key: "protecao", label: "Proteção", icon: "🛡️", aliases: ["cprot", "seguranca"],
+    intro: "Admin: use 1 para ativar e 0 para desativar.",
+    commands: [
+      "anti-audio", "anti-call", "anti-document", "anti-event", "anti-image", "anti-link",
+      "anti-lottie-sticker", "anti-payment", "anti-product", "anti-status-grupo",
+      "anti-sticker", "anti-video", "only-admin", "welcome", "exit", "auto-sticker",
+    ].map((name) => [`${name} <1/0>`]),
+  },
+  {
+    key: "admin", label: "Administração", icon: "👮", aliases: ["cadmin", "administracao"],
+    commands: [
+      ["abrir"], ["fechar"], ["ban", "responda ao membro"],
+      ["promover"], ["rebaixar"], ["mute"], ["unmute"],
+      ["warn"], ["unwarn"], ["revelar"],
+      ["delete", "responda à mensagem"], ["limpar-chat"], ["link-grupo"],
+      ["hide-tag <texto>"], ["saldo"], ["set-name <nome>"],
+      ["afk <motivo>"], ["agendar-mensagem"],
+      ["auto-responder <1/0>"], ["add-auto-responder"],
+      ["delete-auto-responder"], ["list-auto-responder"],
+    ],
+  },
+  {
+    key: "sticker", label: "Stickers", icon: "🎨", aliases: ["cstick", "stickers"],
+    commands: [
+      ["sticker", "responda a imagem/vídeo"],
+      ["rename <pacote> / <autor>", "responda à figurinha"],
+      ["ia-sticker <descrição>", "gera figurinha"],
+    ],
+  },
+  {
+    key: "ia", label: "Inteligência artificial", icon: "🤖", aliases: ["cia"],
+    commands: [
+      ["deepseek <pergunta>"], ["gemini <pergunta>"],
+      ["gpt-5-mini <pergunta>"], ["flux <descrição>"],
+      ["tts <texto> / <voz>", "ana, joao ou pedro"],
+    ],
+  },
+  {
+    key: "dono", label: "Dono", icon: "👑", aliases: ["cdono", "owner"],
+    commands: [
+      ["bot-on"], ["bot-off"], ["bot-status"],
+      ["backup"], ["restore"], ["get-group-id"],
+      ["block-command <nome>"], ["unblock-command <nome>"], ["blocked-commands"],
+      ["private-whitelist <add|remove|list>"],
+      ["set-menu-image", "responda a uma imagem"],
+      ["set-prefix <símbolo>"], ["set-spider-api-token <token>"],
+      ["on"], ["off"], ["exec <código>"],
+    ],
+  },
+];
 
+export function menuMessage(groupJid, section = "", userName = "Você") {
   const prefix = getPrefix(groupJid);
+  const key = formatCommand(String(section).trim());
+  const category = MENU_CATEGORIES.find(({ key: name, aliases }) =>
+    key === name || aliases.includes(key));
 
-  return `╭━━⪩ BEM VINDO! ⪨━━${readMore()}
-▢
-▢ • ${BOT_NAME}
-▢ • Data: ${date.toLocaleDateString("pt-br")}
-▢ • Hora: ${date.toLocaleTimeString("pt-br")}
-▢ • Prefixo: ${prefix}
-▢ • Versão: ${pkg.version}
-▢
-╰━━─「🪐」─━━
+  if (key && !category) return null;
 
-╭━━⪩ DONO ⪨━━
-▢
-▢ • ${prefix}exec
-▢ • ${prefix}backup
-▢ • ${prefix}restore
-▢ • ${prefix}bot-on / ${prefix}bot-off
-▢ • ${prefix}bot-status
-▢ • ${prefix}private-whitelist add|remove|list
-▢ • ${prefix}block-command nome
-▢ • ${prefix}unblock-command nome
-▢ • ${prefix}blocked-commands
-▢ • ${prefix}get-group-id
-▢ • ${prefix}off
-▢ • ${prefix}on
-▢ • ${prefix}set-menu-image
-▢ • ${prefix}set-prefix
-▢ • ${prefix}set-spider-api-token
-▢
-╰━━─「🌌」─━━
+  if (category) {
+    const items = category.commands.map(([usage, hint]) => {
+      const [name, ...parameters] = usage.split(" ");
+      const display = [name.replaceAll("-", " "), ...parameters].join(" ");
+      return `├ ${prefix}${display}${hint ? ` — ${hint}` : ""}`;
+    });
+    return `╭━━━ ⚡ *${BOT_NAME}* ⚡\n┃ ${category.icon} *${category.label.toUpperCase()}*\n${category.intro ? `┃ ${category.intro}\n` : ""}┣━━━━━━━━━━━━━━━━━━\n${items.join("\n")}\n╰━━ Voltar: ${prefix}menu`;
+  }
 
-╭━━⪩ ADMINS ⪨━━
-▢
-▢ • ${prefix}abrir
-▢ • ${prefix}add-auto-responder
-▢ • ${prefix}agendar-mensagem
-▢ • ${prefix}anti-audio (1/0)
-▢ • ${prefix}anti-call (1/0)
-▢ • ${prefix}anti-document (1/0)
-▢ • ${prefix}anti-event (1/0)
-▢ • ${prefix}anti-image (1/0)
-▢ • ${prefix}anti-link (1/0)
-▢ • ${prefix}anti-lottie-sticker (1/0)
-▢ • ${prefix}anti-payment (1/0)
-▢ • ${prefix}anti-product (1/0)
-▢ • ${prefix}anti-sticker (1/0)
-▢ • ${prefix}anti-status-grupo (1/0)
-▢ • ${prefix}anti-video (1/0)
-▢ • ${prefix}auto-responder (1/0)
-▢ • ${prefix}auto-sticker (1/0)
-▢ • ${prefix}ban
-▢ • ${prefix}delete
-▢ • ${prefix}delete-auto-responder
-▢ • ${prefix}exit (1/0)
-▢ • ${prefix}fechar
-▢ • ${prefix}hidetag
-▢ • ${prefix}limpar-chat
-▢ • ${prefix}link-grupo
-▢ • ${prefix}list-auto-responder
-▢ • ${prefix}mute
-▢ • ${prefix}only-admin (1/0)
-▢ • ${prefix}promover
-▢ • ${prefix}rebaixar
-▢ • ${prefix}revelar
-▢ • ${prefix}saldo
-▢ • ${prefix}set-proxy
-▢ • ${prefix}unmute
-▢ • ${prefix}welcome (1/0)
-▢
-╰━━─「⭐」─━━
+  const safeName = String(userName || "Você").replace(/[\r\n*_~`]/g, "").slice(0, 32);
+  const categories = MENU_CATEGORIES.map(({ key: name, label, icon }) =>
+    `├ *${prefix}menu ${name}* — ${icon} ${label}`);
 
-╭━━⪩ PRINCIPAL ⪨━━
-▢
-▢ • ${prefix}attp
-▢ • ${prefix}brat
-▢ • ${prefix}bratvid
-▢ • ${prefix}cep
-▢ • ${prefix}exemplos-de-mensagens
-▢ • ${prefix}fake-chat
-▢ • ${prefix}gerar-link
-▢ • ${prefix}info
-▢ • ${prefix}meu-lid
-▢ • ${prefix}perfil
-▢ • ${prefix}ping
-▢ • ${prefix}raw-message
-▢ • ${prefix}rename
-▢ • ${prefix}removebg
-▢ • ${prefix}sticker
-▢ • ${prefix}suporte
-▢ • ${prefix}to-gif
-▢ • ${prefix}to-image
-▢ • ${prefix}to-mp3
-▢ • ${prefix}ttp
-▢ • ${prefix}yt-search
-▢
-╰━━─「🚀」─━━
-
-╭━━⪩ DOWNLOADS ⪨━━
-▢
-▢ • ${prefix}facebook
-▢ • ${prefix}instagram
-▢ • ${prefix}play-audio
-▢ • ${prefix}play-video
-▢ • ${prefix}pinterest
-▢ • ${prefix}tik-tok
-▢ • ${prefix}tik-tok-audio
-▢ • ${prefix}xtwitter
-▢ • ${prefix}yt-mp3
-▢ • ${prefix}yt-mp4
-▢
-╰━━─「🎶」─━━
-
-╭━━⪩ BRINCADEIRAS ⪨━━
-▢
-▢ • ${prefix}abracar
-▢ • ${prefix}beijar
-▢ • ${prefix}dado
-▢ • ${prefix}jantar
-▢ • ${prefix}lutar
-▢ • ${prefix}matar
-▢ • ${prefix}socar
-▢
-╰━━─「🎡」─━━
-
-╭━━⪩ IA ⪨━━
-▢
-▢ • ${prefix}deepseek
-▢ • ${prefix}flux
-▢ • ${prefix}gemini
-▢ • ${prefix}gpt-5-mini
-▢ • ${prefix}ia-sticker
-▢ • ${prefix}transcrever
-▢ • ${prefix}tts
-▢
-╰━━─「🚀」─━━
-
-╭━━⪩ CANVAS ⪨━━
-▢
-▢ • ${prefix}blur
-▢ • ${prefix}bolsonaro
-▢ • ${prefix}cadeia
-▢ • ${prefix}contraste
-▢ • ${prefix}espelhar
-▢ • ${prefix}gray
-▢ • ${prefix}inverter
-▢ • ${prefix}pixel
-▢ • ${prefix}rip
-▢
-╰━━─「❇」─━━`;
+  return `╭━━━ ⚡ *${BOT_NAME}* ⚡\n┃ MENU PRINCIPAL\n┣ 👤 Usuário: ${safeName}\n┣ 🟢 Status: Online\n┣ 📱 Chat: ${groupJid?.endsWith("@g.us") ? "Grupo" : "Privado"}\n┣━━━━━━━━━━━━━━━━━━\n┃ 📚 *CATEGORIAS*\n${categories.join("\n")}\n╰━━ Escolha: ${prefix}menu download`;
 }

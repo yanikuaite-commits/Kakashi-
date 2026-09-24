@@ -12,14 +12,14 @@ export default {
   commands: ["block-command", "unblock-command", "blocked-commands"],
   usage: `${PREFIX}block-command nome | ${PREFIX}unblock-command nome`,
   handle: async ({ commandName, args, sendSuccessReply }) => {
-    if (commandName === "blocked-commands") {
+    if (commandName === "blockedcommands") {
       const commands = getBlockedCommands();
       return sendSuccessReply(commands.length ? commands.join(", ") : "Nenhum comando bloqueado.");
     }
     const command = args[0]?.toLowerCase();
     if (!command) throw new InvalidParameterError("Informe o nome do comando.");
-    if (commandName === "block-command") blockCommand(command);
+    if (commandName === "blockcommand") blockCommand(command);
     else unblockCommand(command);
-    return sendSuccessReply(`Comando ${commandName === "block-command" ? "bloqueado" : "desbloqueado"}: ${command}`);
+    return sendSuccessReply(`Comando ${commandName === "blockcommand" ? "bloqueado" : "desbloqueado"}: ${command}`);
   },
 };

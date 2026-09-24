@@ -31,7 +31,7 @@ export async function downloadAudio(source) {
   return downloadWithGenDownload(source, { audio: true });
 }
 
-export async function downloadByCommand(command, value, search = searchYouTube) {
+export async function resolveDownloadSource(command, value, search = searchYouTube) {
   let source = value;
   let match;
   if (["play-audio", "play-video"].includes(command) && !/^https?:\/\//i.test(value)) {
@@ -39,8 +39,12 @@ export async function downloadByCommand(command, value, search = searchYouTube) 
     if (!match) throw new Error("Nenhum vídeo encontrado para esta pesquisa.");
     source = match.url;
   }
+  return { source, match };
+}
 
-  if (["play-audio", "tik-tok-audio", "yt-mp3"].includes(command)) {
+export async function downloadByCommand(command, value, search = searchYouTube) {
+  const { source, match } = await resolveDownloadSource(command, value, search);
+  if (["play-audio", "tik-tok-audio"].includes(command)) {
     const result = await downloadAudio(source);
     return match ? {
       ...result,

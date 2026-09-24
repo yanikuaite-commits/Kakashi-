@@ -6,8 +6,9 @@ import { dirname } from "node:path";
 import { after, before, test } from "node:test";
 import { downloadWithGenDownload } from "../utils/genDownloader.js";
 import { handleDownload } from "../commands/download.js";
-import { downloadAudio, downloadVideo, downloadByCommand, setPendingResolution, handlePendingResolution } from "../services/downloader.js";
+import { downloadAudio, downloadVideo, downloadByCommand, resolveDownloadSource, setPendingResolution, takePendingResolution, handlePendingResolution } from "../services/downloader.js";
 import command from "../commands/member/downloads/download.js";
+import playVideo from "../commands/member/downloads/play-video.js";
 import { findCommandImport, formatCommand } from "../utils/index.js";
 
 let server;
@@ -123,6 +124,28 @@ test("play pesquisa antes do GenDownload mas aceita links diretos", async () => 
   assert.equal(terms.length, 2);
   await Promise.all([video, audio, direct].map((result) => rm(result.filePath)));
   await assert.rejects(downloadByCommand("play-video", "sem resultado", async () => []), /Nenhum vídeo encontrado/);
+});
+
+test("play video pesquisa o primeiro resultado e pede resolução antes do download", async () => {
+  const found = await resolveDownloadSource("play-video", "Minha pesquisa", async (term, limit) => {
+    assert.equal(term, "Minha pesquisa");
+    assert.equal(limit, 1);
+    return [{ url: `${baseUrl}/source` }];
+  });
+  assert.equal(found.source, `${baseUrl}/source`);
+
+  const replies = [];
+  await playVideo.handle({
+    remoteJid: "play-video-test",
+    fullArgs: "https://www.youtube.com/watch?v=exemplo",
+    sendReply: async (message) => replies.push(message),
+  });
+  assert.match(replies[0], /1\. 360p/);
+  assert.match(replies[0], /5\. Best/);
+  assert.deepEqual(takePendingResolution("play-video-test", "3"), {
+    source: "https://www.youtube.com/watch?v=exemplo",
+    height: 720,
+  });
 });
 
 test("comando envia vídeo e apaga temporário mesmo com erro de envio", async () => {
