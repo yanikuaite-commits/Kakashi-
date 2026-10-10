@@ -96,6 +96,7 @@ export const PROTECTED_COMMANDS = [
   "revelar",
 ];
 
+export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 export const AI_TIMEOUT_MS = 30 * 1000;
 export const ATTP_TIMEOUT_MS = 10 * 1000;
 export const PENDING_DOWNLOAD_TTL_MS = 5 * 60 * 1000;

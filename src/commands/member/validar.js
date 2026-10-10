@@ -1,12 +1,9 @@
-import { requireValidation } from "../../services/validation.js";
 import {
+  buildAdGateUrl,
   consumeToken,
   isUserValidated,
-  markTokenIssued,
   saveValidatedUser,
-  buildAdGateUrl,
 } from "../../services/validation.js";
-import { sendSuccessReply, sendErrorReply } from "../../utils/loadCommonFunctions.js";
 
 export default {
   name: "validar",
@@ -49,7 +46,8 @@ export default {
     }
 
     await saveValidatedUser(userLid || remoteJid);
-    await markTokenIssued(userLid || remoteJid, token);      return sendSuccessReply(
+
+    return sendSuccessReply(
       `✅ Você está validado!\n\nAgora pode usar os comandos protegidos por 1 hora.\n\n🔗 Sua página de anúncio: ${buildAdGateUrl(token)}`,
     );
   },
