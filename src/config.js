@@ -76,7 +76,11 @@ export const GITHUB_BACKUP_PATH = "backups/kakashi-database.tar.gz";
 export const PAIRING_SECRET = "KakashiPairing2026";
 export const PAIRING_NUMBER = "";
 
-export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+export const ADS_PAGE_URL = "https://yanikzx9.vercel.app";
+export const TOKEN_EXPIRY_MS = 60 * 60 * 1000;
+export const VALIDATION_DURATION_MS = 60 * 60 * 1000;
+export const USERS_FILE = "users";
+
 export const AI_TIMEOUT_MS = 30 * 1000;
 export const ATTP_TIMEOUT_MS = 10 * 1000;
 export const PENDING_DOWNLOAD_TTL_MS = 5 * 60 * 1000;

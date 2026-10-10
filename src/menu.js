@@ -52,6 +52,7 @@ export const MENU_CATEGORIES = [
   },
   {
     key: "download", label: "Downloads", icon: "📥", aliases: ["cdownload", "downloads"],
+    intro: "Alguns downloads exigem validação via anúncio. Use .validar depois de abrir o link do bot.",
     commands: [
       ["yt <termo>", "5 resultados com fotos"],
       ["play-audio <nome ou link>", "pesquisa ou link"],
@@ -98,6 +99,13 @@ export const MENU_CATEGORIES = [
       ["deepseek <pergunta>"], ["gemini <pergunta>"],
       ["gpt-5-mini <pergunta>"], ["flux <descrição>"],
       ["tts <texto> / <voz>", "ana, joao ou pedro"],
+    ],
+  },
+  {
+    key: "validacao", label: "Validação", icon: "🆔", aliases: ["cvalid", "auth"],
+    intro: "Fluxo ad-gate: o bot gera token, você abre link, assiste ao anúncio e valida.",
+    commands: [
+      ["validar <TOKEN>", "ativar acesso por 24h"],
     ],
   },
   {
