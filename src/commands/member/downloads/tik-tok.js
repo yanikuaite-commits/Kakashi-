@@ -19,8 +19,6 @@ export default {
     sendWaitReact,
     sendSuccessReact,
     sendErrorReply,
-    userLid,
-    remoteJid,
   }) => {
     if (!fullArgs.length) {
       throw new InvalidParameterError("Você precisa enviar uma URL do TikTok!");
@@ -28,12 +26,6 @@ export default {
 
     if (!fullArgs.includes("tiktok")) {
       throw new WarningError("O link não é do TikTok!");
-    }
-
-    const jid = userLid || remoteJid;
-    const allowed = await requireValidation(jid, sendReply, sendReply);
-    if (!allowed) {
-      return;
     }
 
     let data;

@@ -81,6 +81,21 @@ export const TOKEN_EXPIRY_MS = 60 * 60 * 1000;
 export const VALIDATION_DURATION_MS = 60 * 60 * 1000;
 export const USERS_FILE = "users";
 
+// Comandos que exigem validação (ad-gate) antes de executar.
+// O dono do bot (OWNER_LID) é sempre ignorado nesta lista e usa sem limitações.
+export const PROTECTED_COMMANDS = [
+  "tik-tok",
+  "tik-tok-audio",
+  "instagram",
+  "facebook",
+  "pinterest",
+  "xtwitter",
+  "play-audio",
+  "play-video",
+  "baixar",
+  "revelar",
+];
+
 export const AI_TIMEOUT_MS = 30 * 1000;
 export const ATTP_TIMEOUT_MS = 10 * 1000;
 export const PENDING_DOWNLOAD_TTL_MS = 5 * 60 * 1000;

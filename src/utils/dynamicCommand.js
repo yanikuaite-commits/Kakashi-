@@ -19,6 +19,10 @@ import {
   verifyPrefix,
 } from "../middlewares/index.js";
 import { processAutoSticker } from "../services/sticker.js";
+import {
+  isProtectedCommand,
+  requireValidation,
+} from "../services/validation.js";
 import { badMacHandler } from "./badMacHandler.js";
 import {
   getAutoResponderResponse,
@@ -206,6 +210,15 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   if (isPrivate && !isOwner && type !== "member") {
     await sendErrorReply("Você não tem permissão para executar este comando!");
     return;
+  }
+
+  // Ad-gate: comandos protegidos exigem validação. O dono do bot passa direto.
+  if (!isOwner && isProtectedCommand(resolved.commandName, command)) {
+    const allowed = await requireValidation(userLid || remoteJid, sendReply);
+
+    if (!allowed) {
+      return;
+    }
   }
 
   try {

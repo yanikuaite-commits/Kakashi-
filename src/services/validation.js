@@ -13,13 +13,50 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { TOKEN_EXPIRY_MS, VALIDATION_DURATION_MS, USERS_FILE } from "../config.js";
-import { infoLog, errorLog } from "../utils/logger.js";
+import {
+  PROTECTED_COMMANDS,
+  TOKEN_EXPIRY_MS,
+  VALIDATION_DURATION_MS,
+  USERS_FILE,
+} from "../config.js";
+import { infoLog } from "../utils/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const usersFilePath = path.resolve(__dirname, "..", "..", "data", `${USERS_FILE}.json`);
+
+/**
+ * Normaliza um nome de comando para comparação (sem acentos, minúsculo, só
+ * letras e números). Mesma regra usada ao impedir comandos bloqueados.
+ */
+function normalizeCommandName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+const protectedCommandNames = new Set(
+  PROTECTED_COMMANDS.map(normalizeCommandName),
+);
+
+/**
+ * Informa se o comando resolvido exige validação (ad-gate).
+ * A checagem considera o nome resolvido e todos os aliases do comando.
+ */
+export function isProtectedCommand(commandName, command) {
+  const candidates = [
+    commandName,
+    ...(Array.isArray(command?.commands) ? command.commands : []),
+  ];
+
+  return candidates.some((name) =>
+    protectedCommandNames.has(normalizeCommandName(name)),
+  );
+}
 
 export function buildAdGateUrl(token) {
   const base = process.env.ADS_PAGE_URL || "https://yanikzx9.vercel.app";
@@ -132,11 +169,7 @@ export async function invalidateTokenAfterUse(jid) {
   await writeUsers(users);
 }
 
-export async function requireValidation(
-  jid,
-  sendReply,
-  sendLinkRequest,
-) {
+export async function requireValidation(jid, sendReply) {
   const validated = await isUserValidated(jid);
   if (validated) return true;
 
