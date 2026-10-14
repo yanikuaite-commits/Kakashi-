@@ -119,6 +119,7 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
 
       if (await handlePendingResolution({
         chatId: commonFunctions.remoteJid,
+        jid: commonFunctions.userLid,
         text: commonFunctions.fullMessage,
         sendReply: commonFunctions.sendReply,
         sendVideoFromFile: commonFunctions.sendVideoFromFile,

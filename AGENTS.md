@@ -67,6 +67,7 @@ High-value architectural notes:
 | `src/utils/database.js` | Safe access layer for JSON persistence. |
 | `src/@types/index.d.ts` | Typing and documentation for command and middleware props. |
 | `src/services/spider-x-api.js` | Spider X integration for downloads, AI, Pinterest, Brat, and related endpoints. |
+| `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
 | `src/services/ffmpeg.js` | Media conversion and audio/video processing. |
 
@@ -192,6 +193,19 @@ It depends on `SPIDER_API_TOKEN`, which can come from:
 
 - `src/config.js`
 - runtime database config through `/set-spider-api-token`
+
+### yt-dlp
+
+`src/services/ytdlp.js` runs the yt-dlp CLI locally: metadata (`--dump-single-json`,
+which feeds the credit cost by duration), video downloads, mp3 extraction and
+`isYtDlpAvailable()`. `src/services/downloader.js` prefers yt-dlp and falls back to
+the GenDownload API when the binary is missing or the extraction fails.
+
+- the binary is installed by the `Dockerfile` (standalone `yt-dlp_linux`, no Python)
+- `npm run setup:ytdlp` downloads it to `bin/yt-dlp` on non-Docker hosts; Termux uses `pkg install yt-dlp`
+- configuration lives in `src/config.js` under the `YTDLP_*` constants (`ENABLED`, `PATH`, `COOKIES_PATH`, `PROXY`, `JS_RUNTIME`, `IMPERSONATE`, `EXTRACTOR_ARGS`)
+- `YTDLP_ENABLED=false` disables it entirely; nothing breaks without the binary
+- YouTube blocks datacenter IPs (Render included) with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
 
 ### Media Services
 

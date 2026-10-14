@@ -93,7 +93,17 @@ export async function downloadWithGenDownload(url, options = {}) {
     const title = data.title || "Mídia";
     const artist = data.author || "Artista desconhecido";
     const fileName = `${title} - ${artist}`.replace(/[\\/:*?"<>|]/g, "_").slice(0, 170) + `.${extension}`;
-    return { filePath, mimetype, fileName, title, artist, thumbnail: data.thumbnail || null };
+    // fileSize/duration alimentam o custo extra de créditos de mídias longas.
+    return {
+      filePath,
+      mimetype,
+      fileName,
+      title,
+      artist,
+      thumbnail: data.thumbnail || null,
+      fileSize: bytes,
+      duration: Number(data.duration) || Number(format.duration) || 0,
+    };
   } catch (error) {
     if (filePath) await rm(filePath, { force: true });
     const details = error.response?.data;

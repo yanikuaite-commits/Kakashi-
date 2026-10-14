@@ -9,6 +9,7 @@
     "test": "node ./src/test.js",
     "test:all": "node --test --test-concurrency=1",
     "patch:baileys": "node ./scripts/patch-baileys.mjs",
+    "setup:ytdlp": "node ./scripts/setup-ytdlp.mjs",
     "postinstall": "node ./scripts/patch-baileys.mjs"
   },
   "engines": {

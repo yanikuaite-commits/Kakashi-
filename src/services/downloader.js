@@ -1,7 +1,10 @@
 import fs from "node:fs/promises";
 import { DEFAULT_VIDEO_HEIGHT, PENDING_DOWNLOAD_TTL_MS } from "../config.js";
 import { downloadWithGenDownload } from "../utils/genDownloader.js";
+import { errorLog } from "../utils/logger.js";
+import { chargeMediaCredits, withCreditsContext } from "./credits.js";
 import { searchYouTube } from "./youtube-search.js";
+import { downloadWithYtDlp, isYtDlpAvailable } from "./ytdlp.js";
 
 const pendingResolutions = new Map();
 
@@ -23,12 +26,48 @@ export function takePendingResolution(chatId, choice) {
   return { source: pending.source, height: heights[index] };
 }
 
+/**
+ * Mídias longas/pesadas gastam créditos extras depois do download.
+ * Fora de uma sessão de usuário (ex: dono do bot) nada é cobrado.
+ */
+async function settleMediaCredits(command, result) {
+  await chargeMediaCredits({
+    command,
+    bytes: result?.fileSize,
+    seconds: result?.duration,
+  });
+
+  return result;
+}
+
+/**
+ * Escolhe o downloader: yt-dlp (local, recomendado no Render/Docker) quando
+ * disponível, com fallback automático para a API GenDownload.
+ */
+async function downloadMedia(source, options) {
+  if (await isYtDlpAvailable()) {
+    try {
+      return await downloadWithYtDlp(source, options);
+    } catch (error) {
+      errorLog(
+        `Falha no yt-dlp (${error.message}). Tentando a API GenDownload...`,
+      );
+    }
+  }
+
+  return downloadWithGenDownload(source, options);
+}
+
 export async function downloadVideo(source, height = DEFAULT_VIDEO_HEIGHT) {
-  return downloadWithGenDownload(source, { height });
+  const result = await downloadMedia(source, { height });
+
+  return settleMediaCredits("vídeo", result);
 }
 
 export async function downloadAudio(source) {
-  return downloadWithGenDownload(source, { audio: true });
+  const result = await downloadMedia(source, { audio: true });
+
+  return settleMediaCredits("áudio", result);
 }
 
 export async function resolveDownloadSource(command, value, search = searchYouTube) {
@@ -56,23 +95,33 @@ export async function downloadByCommand(command, value, search = searchYouTube) 
   return downloadVideo(source);
 }
 
-export async function handlePendingResolution({ chatId, text, sendReply, sendVideoFromFile }) {
+export async function handlePendingResolution({
+  chatId,
+  jid,
+  text,
+  sendReply,
+  sendVideoFromFile,
+}) {
   const value = String(text || "").trim();
   if (!/^[1-5]$/.test(value)) return false;
   const pending = takePendingResolution(chatId, value);
   if (!pending) return false;
-  await sendReply("⬇️ Baixando...");
-  let result;
-  try {
-    result = await downloadVideo(pending.source, pending.height);
-    await sendVideoFromFile(result.filePath);
-  } catch (error) {
-    console.error("Erro no download pendente:", error);
-    await sendReply(error.message);
-  } finally {
-    if (result?.filePath) await fs.rm(result.filePath, { force: true }).catch(() => {});
-  }
-  return true;
+
+  // Resolução escolhida: mantém o usuário no contexto para cobrar a mídia longa.
+  return withCreditsContext(jid, async () => {
+    await sendReply("⬇️ Baixando...");
+    let result;
+    try {
+      result = await downloadVideo(pending.source, pending.height);
+      await sendVideoFromFile(result.filePath);
+    } catch (error) {
+      console.error("Erro no download pendente:", error);
+      await sendReply(error.message);
+    } finally {
+      if (result?.filePath) await fs.rm(result.filePath, { force: true }).catch(() => {});
+    }
+    return true;
+  });
 }
 
 export function resolutionMenu() {

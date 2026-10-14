@@ -20,9 +20,12 @@ import {
 } from "../middlewares/index.js";
 import { processAutoSticker } from "../services/sticker.js";
 import {
-  isProtectedCommand,
-  requireValidation,
-} from "../services/validation.js";
+  chargeCredits,
+  commandCost,
+  creditsExhaustedMessage,
+  refundCredits,
+  withCreditsContext,
+} from "../services/credits.js";
 import { badMacHandler } from "./badMacHandler.js";
 import {
   getAutoResponderResponse,
@@ -212,22 +215,47 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     return;
   }
 
-  // Ad-gate: comandos protegidos exigem validação. O dono do bot passa direto.
-  if (!isOwner && isProtectedCommand(resolved.commandName, command)) {
-    const allowed = await requireValidation(userLid || remoteJid, sendReply);
+  // Créditos: funções de membro gastam créditos. O dono do bot não gasta.
+  // Sem conta (dono), o contexto de mídia não cobra nada.
+  const accountId = isOwner ? null : userLid || remoteJid;
+  const cost = !isOwner && type === "member" ? commandCost(command, resolved.commandName) : 0;
+  let chargedCredits = 0;
 
-    if (!allowed) {
+  if (cost > 0) {
+    const charge = chargeCredits(accountId, cost, {
+      reason: `comando:${command.name}`,
+      countUsage: true,
+    });
+
+    if (!charge.ok) {
+      await sendReply(
+        creditsExhaustedMessage({
+          commandName: command.name,
+          cost,
+          account: charge.account,
+          prefix: groupPrefix,
+        }),
+      );
+
       return;
     }
+
+    chargedCredits = charge.charged;
   }
 
   try {
-    await command.handle({
-      ...invocation,
-      type,
-      startProcess,
-    });
+    await withCreditsContext(accountId, () =>
+      command.handle({
+        ...invocation,
+        type,
+        startProcess,
+      }),
+    );
   } catch (error) {
+    if (chargedCredits > 0 && accountId) {
+      refundCredits(accountId, chargedCredits);
+    }
+
     if (badMacHandler.handleError(error, `command:${command?.name}`)) {
       await sendWarningReply(
         "Erro temporário de sincronização. Tente novamente em alguns segundos."

@@ -3,11 +3,13 @@ node_modules
 assets/auth
 assets/temp
 database/*.json
+tmp
 .dockerignore
 Dockerfile
 README.md
 CONTRIBUTING.md
 GEMINI.md
 AGENTS.md
-scripts/patch-baileys.mjs
-package-lock.json
+# O Render copia os Secret Files para a raiz do contexto de build; nunca
+# deixe cookies do YouTube entrarem na imagem.
+cookies.txt

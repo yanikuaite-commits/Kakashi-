@@ -1,49 +1,43 @@
-import { PREFIX } from "../../config.js";
+import { DAILY_FREE_CREDITS, PREFIX } from "../../config.js";
 import { InvalidParameterError } from "../../errors/index.js";
+import { ownerContactLine } from "../../services/credits.js";
 import { getPrefix } from "../../utils/database.js";
 
-const VALIDATION_FLOW = `
-🔐 *VALIDAÇÃO POR ANÚNCIO (AD-GATE)*
+const CREDITS_FLOW = `
+💳 *COMO FUNCIONAM OS CRÉDITOS*
 
-Alguns comandos exigem validação antes do uso.
+Cada função do bot gasta créditos.
+
+🎁 Você recebe ${DAILY_FREE_CREDITS} créditos grátis por dia.
+🕛 Os créditos gratuitos são renovados todos os dias às 00h00 (horário de Moçambique).
+💎 Créditos recarregados com pagamento não expiram.
 
 📌 Passo a passo:
-1️⃣ Use o comando normalmente, ex: ${PREFIX}tiktok <link>
-2️⃣ Se você não estiver validado, o bot enviará um token único
-3️⃣ Abra o link recebido no celular/browser
-4️⃣ Assista ao anúncio por 30 segundos
-5️⃣ Copie o código abaixo:
-6️⃣ Envie no WhatsApp: .validar <TOKEN>
-7️⃣ Pronto: acesso liberado por 1 hora
-7️⃣ Pronto: acesso liberado por 1 hora
+1️⃣ Envie o comando normalmente, ex: ${PREFIX}tiktok <link>
+2️⃣ O custo é descontado da sua conta
+3️⃣ Mídias longas gastam créditos extras (duração/tamanho do arquivo)
+4️⃣ Acompanhe tudo com ${PREFIX}conta
 
 📌 Comandos:
-${PREFIX}validar <TOKEN> — validar acesso a partir do token
+${PREFIX}conta — seu saldo, estatísticas e próxima renovação
+${PREFIX}conta custos — tabela de custos por função
 
-⚠️ Cada token é único, expira em 1 hora e só pode ser usado uma vez.
-⚠️ Após validar, seu acesso dura 1 hora.
-⚠️ Quando expirar, use .validar novamente com um novo token.
+⚠️ Sem créditos o comando não roda: o bot avisa e você recarrega com o dono.
+${ownerContactLine()}
 `;
 
 export default {
   name: "help",
-  description: "Ajuda sobre comandos e fluxo de validação",
+  description: "Ajuda sobre comandos e sobre os créditos",
   commands: ["help"],
   usage: `${PREFIX}help [categoria]`,
   /** @param {import("../../utils/loadCommonFunctions.js").CommonFunctions} props */
-  handle: async ({
-    remoteJid,
-    fullArgs,
-    webMessage,
-    sendReply,
-    sendSuccessReply,
-    sendErrorReply,
-  }) => {
+  handle: async ({ fullArgs, remoteJid, sendReply }) => {
     const prefix = getPrefix(remoteJid);
     const section = fullArgs.trim().toLowerCase();
 
-    if (section === "validar" || section === "validacao" || section === "auth") {
-      return sendReply(VALIDATION_FLOW.trim());
+    if (["creditos", "credito", "credits", "conta", "carteira"].includes(section)) {
+      return sendReply(CREDITS_FLOW.trim());
     }
 
     if (section) {
@@ -59,15 +53,14 @@ ${prefix}tiktok-audio <link>
 ${prefix}xtwitter <link>
 ${prefix}pinterest <link>
 
-⚠ Alguns downloads exigem validação prévia (${prefix}validar).
+⚠ Cada download gasta créditos (veja ${prefix}conta - ${prefix}conta custos).
       `.trim(),
-        validacao: VALIDATION_FLOW.trim(),
       };
 
       const content = helpByCategory[section];
       if (!content) {
         throw new InvalidParameterError(
-          `Categoria desconhecida. Use ${prefix}help para ver o tema de validação.`,
+          `Categoria desconhecida. Use ${prefix}help para ver o tema de créditos.`,
         );
       }
 
@@ -78,8 +71,9 @@ ${prefix}pinterest <link>
       `📖 *COMANDOS DISPONÍVEIS*
 
 ${prefix}menu — ver categorias
-${prefix}help validar — como funciona a validação por anúncio
-${prefix}validar <TOKEN> — ativar acesso
+${prefix}conta — seus créditos e estatísticas
+${prefix}conta custos — tabela de custos das funções
+${prefix}help creditos — como funcionam os créditos
 
 💡 Dica: para ver todos os comandos, use ${prefix}menu.
       `.trim(),

@@ -1,10 +1,33 @@
+# Blueprint do Render (https://render.com/docs/blueprint-spec).
+#
+# Serviço web em Docker: a imagem já traz ffmpeg + yt-dlp (veja o Dockerfile) e
+# o bot escuta a porta que o Render injeta em PORT. O caminho "/" responde a
+# página de pareamento, por isso ele serve como health check.
+#
+# O pareamento no Render é feito em https://SEU-SERVICO.onrender.com/pairing
+# (veja o README).
 services:
   - type: web
     name: kakashi-bot
-    env: docker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: starter
     region: oregon
-    buildCommand: docker build -t app .
-    startCommand: docker run --rm --env-file .env -p $PORT:8080 app
     healthCheckPath: /
     envVars:
+      # Downloads locais com o yt-dlp (padrão). "false" usa só a API GenDownload.
+      - key: YTDLP_ENABLED
+        value: "true"
+      - key: YTDLP_PATH
+        value: /usr/local/bin/yt-dlp
+      # Runtime JS para os desafios do YouTube (o projeto usa Node >= 22.8).
+      - key: YTDLP_JS_RUNTIME
+        value: node
+      # Opcional: cookies (Secret File) e proxy para o YouTube em IP de
+      # datacenter, além do fingerprint de navegador.
+      # - key: YTDLP_COOKIES_PATH
+      #   value: /etc/secrets/cookies.txt
+      # - key: YTDLP_PROXY
+      #   value: http://usuario:senha@host:porta
+      # - key: YTDLP_IMPERSONATE
+      #   value: chrome

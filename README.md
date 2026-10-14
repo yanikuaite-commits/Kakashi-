@@ -91,6 +91,42 @@ e o segredo definido em `src/config.js`; o código aparecerá na página. O camp
 `PAIRING_NUMBER` é opcional para solicitar o código automaticamente. O serviço
 usa a variável `PORT` fornecida pelo Render.
 
+### Downloads no Render (yt-dlp)
+
+A imagem Docker (veja `Dockerfile` e `render.yaml`) já instala **ffmpeg** e o
+binário oficial do **yt-dlp** (`yt-dlp_linux`, sem precisar de Python). Com isso
+os downloads de YouTube, TikTok, Instagram, Facebook, X e Pinterest acontecem
+dentro do container, sem depender de APIs de terceiros.
+
+Se o yt-dlp não estiver disponível, o bot cai automaticamente no fallback da API
+GenDownload — nada quebra.
+
+Variáveis de ambiente usadas pelo yt-dlp:
+
+| Variável | Para que serve |
+| --- | --- |
+| `YTDLP_ENABLED` | `false` desliga o yt-dlp e usa só a API GenDownload |
+| `YTDLP_PATH` | Caminho do binário (padrão: `/usr/local/bin/yt-dlp`, `bin/yt-dlp` ou `yt-dlp` do PATH) |
+| `YTDLP_COOKIES_PATH` | Arquivo de cookies (Netscape) para o YouTube aceitar a sessão |
+| `YTDLP_PROXY` | Proxy usado pelo yt-dlp (ex: `http://usuario:senha@host:porta`) |
+| `YTDLP_JS_RUNTIME` | Runtime JS dos desafios do YouTube (padrão `node`) |
+| `YTDLP_IMPERSONATE` | Ex: `chrome` para imitar o fingerprint do navegador |
+| `YTDLP_EXTRACTOR_ARGS` | Argumentos extras de extractor (ex: `youtube:player_client=web`) |
+
+⚠ **IP de datacenter:** o YouTube costuma responder
+`Sign in to confirm you're not a bot` para IPs de nuvem (Render incluso). Não
+existe flag que resolva isso de vez: o caminho é enviar cookies
+(`YTDLP_COOKIES_PATH`) ou rotear por um proxy residencial (`YTDLP_PROXY`).
+Quando a extração falha, o bot avisa o motivo e tenta a API GenDownload.
+
+Para usar cookies no Render: crie um **Secret File** chamado `cookies.txt` com o
+conteúdo do arquivo de cookies e defina
+`YTDLP_COOKIES_PATH=/etc/secrets/cookies.txt`. O arquivo fica fora da imagem
+(o `.dockerignore` já evita que ele entre no build).
+
+Em hosts sem Docker use `npm run setup:ytdlp` (baixa para `bin/yt-dlp`); no
+Termux use `pkg install yt-dlp`.
+
 ### Controle do dono
 
 O bot começa globalmente desativado e não responde a usuários enquanto o dono

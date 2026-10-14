@@ -76,25 +76,106 @@ export const GITHUB_BACKUP_PATH = "backups/kakashi-database.tar.gz";
 export const PAIRING_SECRET = "KakashiPairing2026";
 export const PAIRING_NUMBER = "";
 
-export const ADS_PAGE_URL = "https://yanikzx9.vercel.app";
-export const TOKEN_EXPIRY_MS = 60 * 60 * 1000;
-export const VALIDATION_DURATION_MS = 60 * 60 * 1000;
-export const USERS_FILE = "users";
+// ==========================================================================
+// SISTEMA DE CRÉDITOS
+// ==========================================================================
 
-// Comandos que exigem validação (ad-gate) antes de executar.
-// O dono do bot (OWNER_LID) é sempre ignorado nesta lista e usa sem limitações.
-export const PROTECTED_COMMANDS = [
-  "tik-tok",
-  "tik-tok-audio",
-  "instagram",
-  "facebook",
-  "pinterest",
-  "xtwitter",
-  "play-audio",
-  "play-video",
-  "baixar",
-  "revelar",
+// Fuso usado no reset diário dos créditos e do planejamento semanal.
+// Moçambique usa UTC+2 o ano inteiro (sem horário de verão).
+export const CREDITS_TIMEZONE = "Africa/Maputo";
+
+// Créditos gratuitos renovados todos os dias às 00h00 (horário de Moçambique).
+export const DAILY_FREE_CREDITS = 30;
+
+// Contato do dono para receber pagamento e recarregar créditos.
+// Use o número com DDI e DDD, apenas dígitos (ex: "258840000000").
+export const OWNER_CONTACT = "";
+
+// Comandos isentos de créditos (navegação, ajuda e a própria conta).
+// A comparação usa o nome "oficial" do comando (não os atalhos).
+export const FREE_COMMANDS = [
+  "ping",
+  "menu",
+  "help",
+  "info",
+  "meu-lid",
+  "perfil",
+  "conta",
+  "suporte",
+  "exemplos-de-mensagens",
 ];
+
+// Custo em créditos por comando (nome oficial do comando).
+// Comandos de membro que não estão aqui gastam DEFAULT_COMMAND_CREDITS.
+export const COMMAND_CREDITS = {
+  // Downloads
+  "tik-tok": 3,
+  "tik-tok-audio": 2,
+  "instagram": 3,
+  "facebook": 3,
+  "pinterest": 2,
+  "x-twitter": 3,
+  "play-video": 4,
+  "play-audio": 3,
+  "baixar": 3,
+  "yt-search": 1,
+  // Inteligência artificial
+  "deepseek": 2,
+  "gemini": 2,
+  "gpt-5-mini": 3,
+  "flux": 4,
+  "ia-sticker": 5,
+  "tts": 2,
+  // Mídia, stickers e utilidades
+  "sticker": 1,
+  "rename": 1,
+  "attp": 1,
+  "ttp": 1,
+  "brat": 1,
+  "bratvid": 3,
+  "to-mp3": 2,
+  "togif": 2,
+  "toimage": 1,
+  "transcrever": 4,
+  "removebg": 3,
+  "gerar-link": 2,
+};
+
+// Custo de qualquer outro comando de membro não listado acima.
+export const DEFAULT_COMMAND_CREDITS = 1;
+
+// Créditos extras para mídias longas/pesadas.
+// A duração é usada quando a API informa; senão, o tamanho do arquivo.
+export const MEDIA_CREDITS_BY_DURATION = [
+  { minSeconds: 0, credits: 0 },
+  { minSeconds: 3 * 60, credits: 2 },
+  { minSeconds: 10 * 60, credits: 4 },
+  { minSeconds: 30 * 60, credits: 6 },
+];
+
+export const MEDIA_CREDITS_BY_SIZE = [
+  { minBytes: 0, credits: 0 },
+  { minBytes: 10 * 1024 * 1024, credits: 2 },
+  { minBytes: 30 * 1024 * 1024, credits: 4 },
+  { minBytes: 60 * 1024 * 1024, credits: 6 },
+];
+
+// ==========================================================================
+// YT-DLP (downloader local, recomendado no Render/Docker)
+// ==========================================================================
+// O binário "yt-dlp_linux" é instalado pelo Dockerfile (e por
+// "npm run setup:ytdlp" em hosts sem Docker). Quando ele não existe, os
+// downloads continuam funcionando pela API GenDownload (fallback).
+export const YTDLP_ENABLED = process.env.YTDLP_ENABLED !== "false";
+export const YTDLP_PATH = process.env.YTDLP_PATH || "";
+export const YTDLP_TIMEOUT_MS = 5 * 60 * 1000;
+// Cookies (formato Netscape) para o YouTube aceitar a sessão em IP de datacenter.
+export const YTDLP_COOKIES_PATH = process.env.YTDLP_COOKIES_PATH || "";
+export const YTDLP_PROXY = process.env.YTDLP_PROXY || "";
+// Runtime JavaScript para os desafios do YouTube (Node 22+). Vazio desativa.
+export const YTDLP_JS_RUNTIME = process.env.YTDLP_JS_RUNTIME ?? "node";
+export const YTDLP_IMPERSONATE = process.env.YTDLP_IMPERSONATE || "";
+export const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || "";
 
 export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 export const AI_TIMEOUT_MS = 30 * 1000;

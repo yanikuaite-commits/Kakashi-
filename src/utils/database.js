@@ -31,6 +31,7 @@ const WELCOME_GROUPS_FILE = "welcome-groups";
 const BOT_STATE_FILE = "bot-state";
 const PRIVATE_WHITELIST_FILE = "private-whitelist";
 const BLOCKED_COMMANDS_FILE = "blocked-commands";
+const CREDITS_FILE = "credits";
 
 function createIfNotExists(fullPath, formatIfNotExists = []) {
   if (!fs.existsSync(fullPath)) {
@@ -594,4 +595,16 @@ export function getSpiderApiToken() {
   const config = readJSON(filename, {});
 
   return config.spider_api_token || SPIDER_API_TOKEN;
+}
+
+/**
+ * Contas de créditos por usuário (chave = LID/JID).
+ * A regra de negócio fica em src/services/credits.js.
+ */
+export function readCreditsAccounts() {
+  return readJSON(CREDITS_FILE, {});
+}
+
+export function saveCreditsAccounts(accounts) {
+  writeJSON(CREDITS_FILE, accounts, {});
 }

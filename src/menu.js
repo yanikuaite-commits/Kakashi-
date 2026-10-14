@@ -1,4 +1,4 @@
-import { BOT_NAME } from "./config.js";
+import { BOT_NAME, DAILY_FREE_CREDITS } from "./config.js";
 import { getPrefix } from "./utils/database.js";
 import { formatCommand } from "./utils/index.js";
 
@@ -52,7 +52,7 @@ export const MENU_CATEGORIES = [
   },
   {
     key: "download", label: "Downloads", icon: "📥", aliases: ["cdownload", "downloads"],
-    intro: "Alguns downloads exigem validação via anúncio. Use .validar depois de abrir o link do bot.",
+    intro: "Cada download gasta créditos. Veja seu saldo em .conta.",
     commands: [
       ["yt <termo>", "5 resultados com fotos"],
       ["play-audio <nome ou link>", "pesquisa ou link"],
@@ -102,10 +102,11 @@ export const MENU_CATEGORIES = [
     ],
   },
   {
-    key: "validacao", label: "Validação", icon: "🆔", aliases: ["cvalid", "auth"],
-    intro: "Fluxo ad-gate: o bot gera token, você abre link, assiste ao anúncio e valida.",
+    key: "creditos", label: "Créditos", icon: "💳", aliases: ["ccred", "carteira"],
+    intro: `Cada função gasta créditos. Você ganha ${DAILY_FREE_CREDITS} créditos grátis por dia, renovados às 00h (Moçambique).`,
     commands: [
-      ["validar <TOKEN>", "ativar acesso por 24h"],
+      ["conta", "saldo de créditos e estatísticas"],
+      ["conta custos", "tabela de custos por função"],
     ],
   },
   {
@@ -113,6 +114,7 @@ export const MENU_CATEGORIES = [
     commands: [
       ["bot-on"], ["bot-off"], ["bot-status"],
       ["backup"], ["restore"], ["get-group-id"],
+      ["recarregar <créditos> @usuario", "adicionar créditos após pagamento"],
       ["block-command <nome>"], ["unblock-command <nome>"], ["blocked-commands"],
       ["private-whitelist <add|remove|list>"],
       ["set-menu-image", "responda a uma imagem"],
