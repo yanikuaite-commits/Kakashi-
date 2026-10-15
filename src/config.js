@@ -68,7 +68,7 @@ export const DEVELOPER_MODE = false;
 export const OPENAI_API_KEY = "";
 
 // Configuracoes do projeto e APIs. Este projeto foi solicitado sem uso de .env.
-export const HF_TOKEN = "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";
+export const HF_TOKEN = "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";
 export const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 export const GITHUB_REPOSITORY = "yanikuaite-commits/Kakashi-";
 export const GITHUB_BRANCH = "main";
