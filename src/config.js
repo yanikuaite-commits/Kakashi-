@@ -81,6 +81,9 @@ export const DEVELOPER_MODE = false;
 // Chave da OpenAI para o comando de suporte
 export const OPENAI_API_KEY = "";
 
+// Configuracoes do projeto e APIs. Este projeto foi solicitado sem uso de .env.
+export const HF_TOKEN = "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";
+
 // ==========================================================================
 // GROQ (IA do bot: chat e transcrição)
 // ==========================================================================
