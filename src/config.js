@@ -125,7 +125,7 @@ export const GROQ_SUPPORT_VISION = false;
 // no ambiente do bot, o valor do ambiente tem prioridade.
 // IMPORTANTE: a geração de IMAGEM não tem free tier na Google (exige billing
 // ativado na conta).
-export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+export const GEMINI_API_KEY = "AQ.Ab8RN6LurSB7uP0Kt-uaCJnEeJJLkwZMqsFS85XeD_kyXP3rzA";
 
 export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 
