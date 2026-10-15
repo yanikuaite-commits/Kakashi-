@@ -115,6 +115,13 @@ declare global {
     isImage: boolean;
 
     /**
+     * Se quem enviou é o dono do bot. Em grupo vale o OWNER_LID; no privado
+     * (sem "participant") o dispetche reconhece o dono pelo JID da conversa
+     * (OWNER_LID ou OWNER_PRIVATE_JIDS, gated por OWNER_PRIVATE_ALL).
+     */
+    isOwner: boolean;
+
+    /**
      * Se a mensagem é uma resposta a outra mensagem.
      */
     isReply: boolean;

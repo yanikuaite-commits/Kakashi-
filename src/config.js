@@ -23,6 +23,20 @@ export const BOT_LID = "12345678901234567890@lid";
 // Troque o <prefixo> pelo prefixo do bot (ex: /meu-lid).
 export const OWNER_LID = "275381038891241@lid";
 
+// ==========================================================================
+// DONO NO PRIVADO
+// ==========================================================================
+// true = o dono usa todos os comandos do bot na conversa privada (membro,
+// admin e dono), mesmo com o bot desativado, sem estar na lista de privados
+// e sem gastar créditos. false = no privado vale só o que vale para membros.
+export const OWNER_PRIVATE_ALL = true;
+
+// Em chat privado não existe "participant", então o bot reconhece o dono pelo
+// OWNER_LID na conversa (forma LID e forma alternativa que o Baileys publica).
+// Se você não for reconhecido, coloque aqui os seus números com DDI, ex:
+// ["258840000000"].
+export const OWNER_PRIVATE_JIDS = [];
+
 // Diretório dos comandos
 export const COMMANDS_DIR = path.join(__dirname, "commands");
 
@@ -67,8 +81,62 @@ export const DEVELOPER_MODE = false;
 // Chave da OpenAI para o comando de suporte
 export const OPENAI_API_KEY = "";
 
-// Configuracoes do projeto e APIs. Este projeto foi solicitado sem uso de .env.
-export const HF_TOKEN = process.env.HF_TOKEN || "";
+// ==========================================================================
+// GROQ (IA do bot: chat e transcrição)
+// ==========================================================================
+// Crie a sua chave em: https://console.groq.com/keys
+// A chave fica em branco aqui para você preencher. Se você definir GROQ_API_KEY
+// no ambiente do bot, o valor do ambiente tem prioridade sobre este.
+export const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+
+export const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
+export const GROQ_CHAT_URL = `${GROQ_BASE_URL}/chat/completions`;
+export const GROQ_TRANSCRIPTION_URL = `${GROQ_BASE_URL}/audio/transcriptions`;
+
+// Modelos de chat, tentados nesta ordem (o primeiro é o usado pelo .kakashi).
+// Só modelos de produção: a Groq descontinuou llama-3.3-70b-versatile e
+// llama-3.1-8b-instant em 16/08/2026, e qwen/qwen3-32b em 17/07/2026.
+export const GROQ_MODELS = ["openai/gpt-oss-20b", "openai/gpt-oss-120b"];
+
+// Ajustes de geração (temperatura vai de 0 a 2; top_p de 0 a 1).
+export const GROQ_TEMPERATURE = 0.6;
+export const GROQ_TOP_P = 1;
+export const GROQ_MAX_TOKENS = 1024;
+
+// Quantas mensagens do histórico de cada conversa são enviadas ao modelo.
+export const GROQ_HISTORY_SIZE = 10;
+
+// Comando .suporte (assistente que responde com AGENTS.md/README.md no contexto).
+export const GROQ_SUPPORT_MODEL = "openai/gpt-oss-120b";
+export const GROQ_SUPPORT_MAX_TOKENS = 2048;
+
+// Análise de imagem no .suporte: a Groq só aceita imagens em modelos de visão
+// (ex: "qwen/qwen3.8-27b", em preview). Deixe false para responder só texto.
+export const GROQ_SUPPORT_VISION = false;
+
+// ==========================================================================
+// GOOGLE GEMINI (o que a Groq não faz: gerar imagem)
+// ==========================================================================
+// Crie a sua chave em: https://aistudio.google.com/apikey
+// Deixe em branco aqui para preencher depois; se você definir GEMINI_API_KEY
+// no ambiente do bot, o valor do ambiente tem prioridade.
+// IMPORTANTE: a geração de IMAGEM não tem free tier na Google (exige billing
+// ativado na conta).
+export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+
+export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
+
+// Geração de imagem (a doc usa a versão v1 nesses modelos).
+export const GEMINI_IMAGE_API = `${GEMINI_BASE_URL}/v1/models`;
+export const GEMINI_IMAGE_MODEL = "gemini-nano-banana-2.1";
+export const GEMINI_IMAGE_ASPECT_RATIO = "1:1";
+export const GEMINI_IMAGE_SIZE = "1K";
+export const GEMINI_IMAGE_TIMEOUT_MS = 60 * 1000;
+
+// Transcrição de áudio (comando .transcrever).
+// Limite de upload do free tier: 25 MB.
+export const GROQ_TRANSCRIPTION_MODEL = "whisper-large-v3-turbo";
+export const GROQ_TRANSCRIPTION_LANGUAGE = "pt";
 export const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 export const GITHUB_REPOSITORY = "yanikuaite-commits/Kakashi-";
 export const GITHUB_BRANCH = "main";
@@ -187,9 +255,4 @@ export const ATTP_APIS = [
 	"https://api.urfake.com/attp?text=",
 	"https://widipe.com/api/attp?text=",
 	"https://rest.apibotwa.com/api/attp?text=",
-];
-export const HF_MODELS = [
-	"mistralai/Mistral-7B-Instruct-v0.3",
-	"TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-	"microsoft/Phi-3-mini-4k-instruct",
 ];

@@ -10,7 +10,7 @@ import { onMessagesUpsert } from "./onMesssagesUpsert.js";
 export { messageHandler, onGroupParticipantsUpdate, onMessagesUpsert };
 
 import { delay } from "baileys";
-import { OWNER_LID } from "../config.js";
+import { OWNER_LID, OWNER_PRIVATE_ALL, OWNER_PRIVATE_JIDS } from "../config.js";
 import { getPrefix } from "../utils/database.js";
 
 export function verifyPrefix(prefix, groupJid) {
@@ -129,6 +129,53 @@ export async function isAdmin({ remoteJid, userLid, socket }) {
 
 export function isBotOwner({ userLid }) {
   return userLid === OWNER_LID;
+}
+
+const jidDigits = (jid) => String(jid || "").replace(/\D/g, "");
+
+function isOwnerJid(jid) {
+  const digits = jidDigits(jid);
+
+  if (!digits) {
+    return false;
+  }
+
+  if (jid === OWNER_LID || digits === jidDigits(OWNER_LID)) {
+    return true;
+  }
+
+  return OWNER_PRIVATE_JIDS.some((entry) => jidDigits(entry) === digits);
+}
+
+/**
+ * Reconhece o dono na conversa privada.
+ *
+ * Em grupo a identidade vem de key.participant (que no privado não existe),
+ * por isso lá o dono é identificado pelo próprio JID da conversa: o OWNER_LID
+ * tanto na forma LID quanto na forma alternativa (número <-> LID) que o
+ * Baileys publica em key.remoteJidAlt.
+ *
+ * @param {WAMessage} webMessage mensagem recebida
+ * @returns {boolean} true se a conversa privada é do dono
+ */
+export function isOwnerInPrivateChat(webMessage) {
+  if (!OWNER_PRIVATE_ALL) {
+    return false;
+  }
+
+  const key = webMessage?.key;
+
+  if (!key) {
+    return false;
+  }
+
+  // Só faz sentido em conversa privada: em grupo a identidade vem de
+  // key.participant (checado por isBotOwner/checkPermission).
+  if (key.remoteJid?.endsWith("@g.us")) {
+    return false;
+  }
+
+  return [key.remoteJid, key.remoteJidAlt, key.participant, key.participantAlt].some(isOwnerJid);
 }
 
 export async function checkPermission({ type, socket, userLid, remoteJid }) {

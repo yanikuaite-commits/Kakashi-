@@ -1,12 +1,12 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
-import { askHuggingFace } from "../../../services/ai.js";
+import { askGroq } from "../../../services/ai.js";
 
 export default {
   name: "gemini",
-  description: "Use a inteligência artificial da Google Gemini!",
-  commands: ["gemini", "takeshi", "ia"],
-  usage: `${PREFIX}gemini com quantos paus se faz uma canoa?`,
+  description: "Use a inteligência artificial do Kakashi Bot!",
+  commands: ["gemini", "kakashi", "ia"],
+  usage: `${PREFIX}kakashi com quantos paus se faz uma canoa?`,
   /**
    * @param {CommandHandleProps} props
    */
@@ -21,7 +21,7 @@ export default {
 
     const waitingMessage = await sendWaitReply("🤔 Pensando...");
 
-    const responseText = await askHuggingFace(remoteJid, text);
+    const responseText = await askGroq(remoteJid, text);
 
     if (waitingMessage) {
       await sendEditedReply(responseText, waitingMessage);

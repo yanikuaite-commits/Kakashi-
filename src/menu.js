@@ -96,6 +96,7 @@ export const MENU_CATEGORIES = [
   {
     key: "ia", label: "Inteligência artificial", icon: "🤖", aliases: ["cia"],
     commands: [
+      ["kakashi <pergunta>", "IA do bot"],
       ["deepseek <pergunta>"], ["gemini <pergunta>"],
       ["gpt-5-mini <pergunta>"], ["flux <descrição>"],
       ["tts <texto> / <voz>", "ana, joao ou pedro"],

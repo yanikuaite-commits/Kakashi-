@@ -89,8 +89,10 @@ Este comando pode causar danos críticos ao sistema.`,
   /**
    * @param {CommandHandleProps} props
    */
-  handle: async ({ fullArgs, sendSuccessReply, sendErrorReply, userLid }) => {
-    if (!isBotOwner({ userLid })) {
+  handle: async ({ fullArgs, sendSuccessReply, sendErrorReply, userLid, isOwner }) => {
+    // "isOwner" vem do dispetche (no privado o userLid fica vazio, então o dono
+    // é reconhecido pelo JID da conversa). Sem ele, vale o userLid do grupo.
+    if (!(isOwner ?? isBotOwner({ userLid }))) {
       throw new DangerError("Apenas o dono do bot pode usar este comando!");
     }
 

@@ -2,6 +2,7 @@ import { exec as execChild } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { PREFIX, TEMP_DIR } from "../../../config.js";
+import { generateImage, isGeminiConfigured } from "../../../services/gemini.js";
 import { imagePromptUrl } from "../../../services/public-ai.js";
 import { getBuffer, getRandomName } from "../../../utils/index.js";
 
@@ -30,12 +31,30 @@ export default {
 
     await sendWaitReply("gerando figurinha...");
 
-    const imageUrl = imagePromptUrl(fullArgs);
+    // Com a chave da Google configurada a imagem sai da Gemini; sem ela,
+    // continua no gerador gratuito (Pollinations).
+    const extensionByMimeType = {
+      "image/png": "png",
+      "image/jpeg": "jpg",
+      "image/webp": "webp",
+    };
 
-    if (imageUrl) {
-      const buffer = await getBuffer(imageUrl);
+    let buffer = null;
+    let extension = "png";
 
-      const inputTempPath = path.resolve(TEMP_DIR, getRandomName("png"));
+    if (isGeminiConfigured()) {
+      const image = await generateImage(fullArgs);
+
+      buffer = image.buffer;
+      extension =
+        extensionByMimeType[String(image.mimeType).split(";")[0].trim()] ||
+        "png";
+    } else {
+      buffer = await getBuffer(imagePromptUrl(fullArgs));
+    }
+
+    if (buffer?.length) {
+      const inputTempPath = path.resolve(TEMP_DIR, getRandomName(extension));
       const outputTempPath = path.resolve(TEMP_DIR, getRandomName("webp"));
 
       fs.writeFileSync(inputTempPath, buffer);

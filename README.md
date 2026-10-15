@@ -65,7 +65,7 @@ Nós não prestamos suporte gratuíto caso você tenha adquirido esta base com t
 Este bot sempre foi e sempre será **gratuíto**.
 Caso você tenha pago para utilizar este bot, do jeito que ele está hoje, saiba que você **foi enganado**.
 Nós não temos vínculo nenhum com terceiros e não nos responsabilizamos por isso, também não prestamos suporte nessas condições.
-Os downloads, conversões, imagens de texto e IA de texto usam ferramentas gratuitas. A IA precisa de um token opcional da Hugging Face.
+Os downloads, conversões, imagens de texto e IA de texto usam ferramentas gratuitas. A IA (chat, suporte e transcrição) usa a API da Groq e precisa da chave gratuita `GROQ_API_KEY` (`src/config.js`). A geração de imagem (`.flux` e `.ia-sticker`) usa a chave `GEMINI_API_KEY` da Google quando ela está preenchida; sem essa chave, esses dois comandos continuam no serviço gratuito de antes (Pollinations). O `.tts` segue no TTS gratuito do Google Tradutor. Atenção: gerar imagem na Google exige billing ativado.
 
 ## Migração gratuita no Termux
 
@@ -174,7 +174,7 @@ e uma mensagem com título, duração e link para cada vídeo. Use `yt <termo>`;
 escolher a resolução de vídeos do YouTube (1 a 5) antes do download. Links de
 outras plataformas em `play video` baixam diretamente. `pinterest` exige URL.
 Downloads têm timeout de cinco minutos e limite de 100 MB por arquivo;
-os fallbacks de ATTP e os modelos da Hugging Face estão em `src/config.js`.
+os fallbacks de ATTP e os ajustes de IA ficam em `src/config.js`: modelos/temperatura da Groq (`GROQ_*`) e imagem da Google (`GEMINI_*`).
 
 ### Teste manual dos comandos migrados
 
@@ -566,6 +566,24 @@ Lembre-se de trocar os números acima pelos seus números, obviamente e tbm ver 
 ## Diagrama de conexão
 
 [![diagram](https://mermaid.ink/img/pako:eNqdVc1u1DAQfpWpJSSQtqX7k_2JoChse-hh26qtWlTtxZtMs4bEXhxnVVpV4gDcOLQUDgipQnBAiBs3OO6b8AR9BMbJZvu3BYQPVmx_M558M9_4gPkqQOayBJ-mKH1cFDzUPO5KoMFTo2Qa91Dn6wHXRvhiwKWBRRwCT-Ds9OjLr-evz06Pf8KW8kdfryMfKpMjP7-DTf4Ek76we9eB216OO_4G231uEm8w6MoctqIMghqitveWtj2XYO-fQ1vFCtTEq68k-oaDVBMHDwoPt27B_cmAtfXlztLyugdbSzsX9nOoJiegw97tSnW-BJWanRznTn54UzSv3sKaFjEKzWGI-6BVwGVgo-sV_2rH-ReZzi4sEBEuyEEMiSEmzk9pn04J40KXLYpQ2BtBjn7EqBUEmVd7NNWf45TLrWJMuzv3bgNfwwDBH30PREhu0eYDeYzSqHP0tjdbeF5Ho7TkE4vbuOdCuVKtzTr1RvPO1PjPTk-OoKMSoyd2F2ymhXeJXxe8Hlmep9Sm18cojbi-19N3F7ZGHwFj4sKzwUd9lVBdZIUQqKTLMkw7ElTfOWx8qKHAjzETloufi7OYA3Vz9iyDvz68hPbYggpwV-iYbC4EeYnIMY82hr3RJ5VJTIt9HvCZq-RlwA0eDYk2TWmSvuAi-TNfmY2N6OHqJrRXV5bam97i6kz2f16oiEeMEIZ8opWcQhtFzEmIWeoREowHGvMLUAY3aWj05tFyx9uwIlra-IOMxgrKtPQXGZ28gBVqAgM9-r4nYvoiLWHyv_rJueZaY3iJREgsrck0QYyrA65QMlUNWeqLUpv5x8ysra-ubI5TYlvjY1u-iaFZyUhIzA4QeJhynbcQCiDhIU0XEgJTByuxUIuAuUanWGLUK2Jul-zAWnSZ6WOMXWYbR4C7PI2M7SCHZEYNeEepuLDUKg37zN3lUUKrdBBwUzwNk11NgaBuq1Qa5pZbzUrmhbkHbI_WzfpcrdGq1eabTtNpVSrVEnvG3Mb8XKPpVKpVakx1p1FvHpbYfnZvea5RL9drjfK8UynXW80Sw0CQNjr5-5Q9U4e_ARz-Fnw?type=png)](https://mermaid.live/edit#pako:eNqdVc1u1DAQfpWpJSSQtqX7k_2JoChse-hh26qtWlTtxZtMs4bEXhxnVVpV4gDcOLQUDgipQnBAiBs3OO6b8AR9BMbJZvu3BYQPVmx_M558M9_4gPkqQOayBJ-mKH1cFDzUPO5KoMFTo2Qa91Dn6wHXRvhiwKWBRRwCT-Ds9OjLr-evz06Pf8KW8kdfryMfKpMjP7-DTf4Ek76we9eB216OO_4G231uEm8w6MoctqIMghqitveWtj2XYO-fQ1vFCtTEq68k-oaDVBMHDwoPt27B_cmAtfXlztLyugdbSzsX9nOoJiegw97tSnW-BJWanRznTn54UzSv3sKaFjEKzWGI-6BVwGVgo-sV_2rH-ReZzi4sEBEuyEEMiSEmzk9pn04J40KXLYpQ2BtBjn7EqBUEmVd7NNWf45TLrWJMuzv3bgNfwwDBH30PREhu0eYDeYzSqHP0tjdbeF5Ho7TkE4vbuOdCuVKtzTr1RvPO1PjPTk-OoKMSoyd2F2ymhXeJXxe8Hlmep9Sm18cojbi-19N3F7ZGHwFj4sKzwUd9lVBdZIUQqKTLMkw7ElTfOWx8qKHAjzETloufi7OYA3Vz9iyDvz68hPbYggpwV-iYbC4EeYnIMY82hr3RJ5VJTIt9HvCZq-RlwA0eDYk2TWmSvuAi-TNfmY2N6OHqJrRXV5bam97i6kz2f16oiEeMEIZ8opWcQhtFzEmIWeoREowHGvMLUAY3aWj05tFyx9uwIlra-IOMxgrKtPQXGZ28gBVqAgM9-r4nYvoiLWHyv_rJueZaY3iJREgsrck0QYyrA65QMlUNWeqLUpv5x8ysra-ubI5TYlvjY1u-iaFZyUhIzA4QeJhynbcQCiDhIU0XEgJTByuxUIuAuUanWGLUK2Jul-zAWnSZ6WOMXWYbR4C7PI2M7SCHZEYNeEepuLDUKg37zN3lUUKrdBBwUzwNk11NgaBuq1Qa5pZbzUrmhbkHbI_WzfpcrdGq1eabTtNpVSrVEnvG3Mb8XKPpVKpVakx1p1FvHpbYfnZvea5RL9drjfK8UynXW80Sw0CQNjr5-5Q9U4e_ARz-Fnw)
+
+## Usar tudo no privado (dono)
+
+Em chat privado o Baileys não traz o campo `participant`, então o dono é reconhecido pelo próprio JID da conversa: o `OWNER_LID` na forma LID e na forma alternativa (número ↔ LID) que o Baileys publica. Com isso o dono pode usar todos os comandos do bot no privado — inclusive os de admin e de dono —, mesmo com o bot desativado, sem estar na lista de privados e sem gastar créditos.
+
+Para ajustar, edite o `config.js` em `src`:
+
+```js
+// true = o dono usa todos os comandos do bot na conversa privada (padrão).
+// false = no privado valem só os comandos de membro.
+export const OWNER_PRIVATE_ALL = true;
+
+// Se o bot não reconhecer você no privado, coloque aqui os seus números com
+// DDI, ex: ["5511999998888"]. (padrão: [] = só o OWNER_LID)
+export const OWNER_PRIVATE_JIDS = [];
+```
+
+Observação: como no privado não existe LID de participante, os créditos são contabilizados pelo JID da conversa (`...@s.whatsapp.net` ou `...@lid`) e o dono continua isento de cobrança. Quem mais pode usar o bot no privado (sem todos os comandos) é a lista do comando `private-whitelist`.
 
 ## Alguns comandos necessitam de API
 

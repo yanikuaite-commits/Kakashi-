@@ -16,6 +16,7 @@ import {
   isAdmin,
   isBotOwner,
   isLink,
+  isOwnerInPrivateChat,
   verifyPrefix,
 } from "../middlewares/index.js";
 import { processAutoSticker } from "../services/sticker.js";
@@ -62,8 +63,11 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   } = paramsHandler;
 
   const activeGroup = remoteJid.endsWith("@g.us") && isActiveGroup(remoteJid);
-  const isOwner = isBotOwner({ userLid });
   const isPrivate = !remoteJid.endsWith("@g.us");
+  // No chat privado não existe "participant", então o userLid vem vazio e o dono
+  // é reconhecido também pelo próprio JID da conversa (ver OWNER_PRIVATE_ALL).
+  const isOwner =
+    isBotOwner({ userLid }) || (isPrivate && isOwnerInPrivateChat(webMessage));
 
   if (!isOwner && !isBotEnabled()) {
     return;
@@ -119,7 +123,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     return;
   }
 
-  if (ONLY_GROUP_ID && ONLY_GROUP_ID !== remoteJid) {
+  if (ONLY_GROUP_ID && ONLY_GROUP_ID !== remoteJid && !(isOwner && isPrivate)) {
     return;
   }
 
@@ -249,6 +253,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
         ...invocation,
         type,
         startProcess,
+        isOwner,
       }),
     );
   } catch (error) {

@@ -2,7 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
-import { BOT_EMOJI, OPENAI_API_KEY, PREFIX } from "../../config.js";
+import {
+  BOT_EMOJI,
+  GROQ_API_KEY,
+  GROQ_BASE_URL,
+  GROQ_SUPPORT_MAX_TOKENS,
+  GROQ_SUPPORT_MODEL,
+  GROQ_SUPPORT_VISION,
+  GROQ_TEMPERATURE,
+  PREFIX,
+} from "../../config.js";
 import { DangerError, WarningError } from "../../errors/index.js";
 import {
   getRandomName,
@@ -35,7 +44,7 @@ Você também pode escrever o texto e responder a mensagem com o comando ${PREFI
     downloadImage,
     webMessage,
   }) => {
-    if (!OPENAI_API_KEY) {
+    if (!GROQ_API_KEY) {
       throw new WarningError(
         "O suporte inteligente não está disponível no momento. Entre em contato com o administrador do bot!",
       );
@@ -50,6 +59,12 @@ Você também pode escrever o texto e responder a mensagem com o comando ${PREFI
     if (isAudio) {
       throw new WarningError(
         "Não consigo interpretar áudios ainda! Envie uma imagem ou texto!",
+      );
+    }
+
+    if (isImage && !GROQ_SUPPORT_VISION) {
+      throw new WarningError(
+        "A análise de imagem no suporte está desativada. Envie texto ou peça ao dono do bot para ativar GROQ_SUPPORT_VISION (com um modelo de visão da Groq).",
       );
     }
 
@@ -107,8 +122,10 @@ Faça sua pergunta sobre mim que eu te ajudarei!
       imagePath = await downloadImage(webMessage, getRandomName());
     }
 
+    // O SDK da OpenAI é compatível: aqui ele fala com a Groq.
     const openai = new OpenAI({
-      apiKey: OPENAI_API_KEY,
+      apiKey: GROQ_API_KEY,
+      baseURL: GROQ_BASE_URL,
     });
 
     const messages = [
@@ -273,10 +290,10 @@ const x = 1;
     messages.push(userMessage);
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5.6-luna",
+      model: GROQ_SUPPORT_MODEL,
       messages: messages,
-      reasoning_effort: "low",
-      max_completion_tokens: 2048,
+      temperature: GROQ_TEMPERATURE,
+      max_completion_tokens: GROQ_SUPPORT_MAX_TOKENS,
     });
 
     const answer = removeUnsolicitedFollowUps(

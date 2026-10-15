@@ -1,6 +1,6 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
-import { askHuggingFace } from "../../../services/ai.js";
+import { askGroq } from "../../../services/ai.js";
 
 export default {
   name: "gpt-5-mini",
@@ -21,7 +21,7 @@ export default {
 
     await sendWaitReply();
 
-    const responseText = await askHuggingFace(remoteJid, text);
+    const responseText = await askGroq(remoteJid, text);
 
     await sendSuccessReply(responseText);
   },

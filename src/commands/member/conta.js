@@ -22,6 +22,7 @@ export default {
     webMessage,
     sendReply,
     sendSuccessReply,
+    isOwner: ownerFromDispatcher,
   }) => {
     const prefix = getPrefix(remoteJid);
     // "args" não separa por espaço, então lemos o fullArgs diretamente.
@@ -32,8 +33,9 @@ export default {
       return sendReply(costsMessage({ prefix }));
     }
 
-    // O dono pode consultar a conta de outro usuário.
-    const isOwner = userLid === OWNER_LID;
+    // O dono pode consultar a conta de outro usuário. No privado o userLid vem
+    // vazio, então vale também o isOwner que o dispetche calcula pelo JID.
+    const isOwner = ownerFromDispatcher ?? userLid === OWNER_LID;
     const mentioned = parts.find((part) => part.includes("@"));
 
     const targetLid = isOwner && mentioned
