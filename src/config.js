@@ -90,7 +90,7 @@ export const HF_TOKEN = "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";
 // Crie a sua chave em: https://console.groq.com/keys
 // A chave fica em branco aqui para você preencher. Se você definir GROQ_API_KEY
 // no ambiente do bot, o valor do ambiente tem prioridade sobre este.
-export const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+export const GROQ_API_KEY = "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";
 
 export const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 export const GROQ_CHAT_URL = `${GROQ_BASE_URL}/chat/completions`;
