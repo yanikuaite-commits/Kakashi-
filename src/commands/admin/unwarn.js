@@ -81,7 +81,7 @@ export default {
       removeLastWarn(remoteJid, targetLid);
       await sendReply(`✅ Última advertência removida.`);
     } catch (error) {
-      errorLog(JSON.stringify(error, null, 2));
+      errorLog(error);
       await sendErrorReply(`Erro: ${error.message}`);
     }
   },

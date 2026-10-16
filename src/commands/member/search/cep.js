@@ -38,7 +38,7 @@ export default {
 *UF*: ${data.uf}
 *IBGE*: ${data.ibge}`);
     } catch (error) {
-      errorLog(JSON.stringify(error, null, 2));
+      errorLog(error);
       throw new Error(error.message);
     }
   },

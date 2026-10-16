@@ -106,7 +106,24 @@ export async function downloadWithGenDownload(url, options = {}) {
     };
   } catch (error) {
     if (filePath) await rm(filePath, { force: true });
+    const status = Number(error.response?.status) || 0;
     const details = error.response?.data;
+
+    // 5xx (ex: 504 Gateway Timeout) é instabilidade do serviço, não do link.
+    if (status >= 500) {
+      throw new Error(
+        `O GenDownload está com problema no servidor (HTTP ${status}). Tente novamente em instantes.`,
+        { cause: error },
+      );
+    }
+
+    if (error.code === "ECONNABORTED" || /timeout/i.test(error.message || "")) {
+      throw new Error(
+        "O GenDownload demorou demais para responder. Tente novamente em instantes.",
+        { cause: error },
+      );
+    }
+
     throw new Error(details && typeof details === "object" ? apiError(details) : error.message, { cause: error });
   }
 }

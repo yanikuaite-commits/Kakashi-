@@ -41,7 +41,7 @@ export default {
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);
     } catch (error) {
-      errorLog(JSON.stringify(error, null, 2));
+      errorLog(error);
       await sendErrorReply(error.message);
     } finally {
       if (data?.filePath) await fs.rm(data.filePath, { force: true });

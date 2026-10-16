@@ -68,6 +68,6 @@ export async function onGroupParticipantsUpdate({
     }
   } catch (error) {
     errorLog(`Erro em onGroupParticipantsUpdate: ${error.message}`);
-    errorLog(JSON.stringify(error, null, 2));
+    errorLog(error);
   }
 }

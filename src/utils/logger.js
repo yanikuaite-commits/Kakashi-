@@ -51,8 +51,43 @@ export function successLog(message) {
   console.log("\x1b[32m[KAKASHI BOT | SUCCESS]\x1b[0m", message);
 }
 
+/**
+ * Transforma um erro em uma linha legível.
+ *
+ * `JSON.stringify(error)` devolve "{}" (message e stack não são enumeráveis),
+ * o que deixava o log sem nenhuma informação. Aqui o motivo aparece, com o
+ * código HTTP e a causa encadeada de erros como os do axios.
+ *
+ * @param {unknown} error valor capturado (Error, objeto de rejeição ou string)
+ * @returns {string}
+ */
+export function formatError(error) {
+  if (error instanceof Error) {
+    const status = error.response?.status;
+    const cause =
+      error.cause instanceof Error ? ` (causa: ${error.cause.message})` : "";
+
+    return `${error.message}${status ? ` [HTTP ${status}]` : ""}${cause}`;
+  }
+
+  if (error && typeof error === "object") {
+    try {
+      const text = JSON.stringify(error);
+
+      return text && text !== "{}" ? text : String(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+  return String(error);
+}
+
 export function errorLog(message) {
-  console.log("\x1b[31m[KAKASHI BOT | ERROR]\x1b[0m", message);
+  console.log(
+    "\x1b[31m[KAKASHI BOT | ERROR]\x1b[0m",
+    typeof message === "string" ? message : formatError(message),
+  );
 }
 
 export function warningLog(message) {

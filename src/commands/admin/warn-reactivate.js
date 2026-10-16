@@ -81,7 +81,7 @@ export default {
         await sendReply("❌ Falha ao reativar advertência.");
       }
     } catch (error) {
-      errorLog(JSON.stringify(error, null, 2));
+      errorLog(error);
       await sendErrorReply(`Erro: ${error.message}`);
     }
   },

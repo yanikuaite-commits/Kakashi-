@@ -70,7 +70,7 @@ ${PREFIX}ban (mencionando uma mensagem)`,
       await sendSuccessReact();
       await sendReply("Membro removido com sucesso!");
     } catch (error) {
-      errorLog(JSON.stringify(error, null, 2));
+      errorLog(error);
       await sendErrorReply(
         `Ocorreu um erro ao remover o membro: ${error.message}`
       );
