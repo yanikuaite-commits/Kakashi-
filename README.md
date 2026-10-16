@@ -88,8 +88,15 @@ O pareamento é universal: no Termux, `npm start` pede o número diretamente no
 terminal. No Render, abra a URL original do serviço em
 `https://SEU-SERVICO.onrender.com/pairing`, informe o número com código do país
 e o segredo definido em `src/config.js`; o código aparecerá na página. O campo
-`PAIRING_NUMBER` é opcional para solicitar o código automaticamente. O serviço
-usa a variável `PORT` fornecida pelo Render.
+`PAIRING_NUMBER` é opcional para solicitar o código automaticamente. O segredo
+pode vir de `src/config.js` ou da variável de ambiente `PAIRING_SECRET` (o
+ambiente tem prioridade). O serviço usa a variável `PORT` fornecida pelo Render.
+
+A sessão do WhatsApp (`assets/auth/baileys`) **não** é versionada: cada
+instalação cria a sua no pareamento. Em hosts com disco efêmero (o Render, sem
+disco montado), o container começa sem sessão a cada deploy/reinício e o
+pareamento precisa ser refeito. Para manter a sessão entre reinícios, monte um
+disco persistente no caminho `/opt/project/assets/auth/baileys`.
 
 ### Downloads no Render (yt-dlp)
 

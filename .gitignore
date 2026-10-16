@@ -2,3 +2,7 @@ node_modules/
 tmp/
 bin/yt-dlp
 bin/yt-dlp.exe
+
+# Sessão do WhatsApp (chaves privadas do pareamento). Cada instalação cria a
+# sua em tempo de execução; ela não deve ir para o repositório.
+assets/auth/

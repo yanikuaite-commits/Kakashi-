@@ -144,8 +144,15 @@ export const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 export const GITHUB_REPOSITORY = "yanikuaite-commits/Kakashi-";
 export const GITHUB_BRANCH = "main";
 export const GITHUB_BACKUP_PATH = "backups/kakashi-database.tar.gz";
-export const PAIRING_SECRET = "KakashiPairing2026";
-export const PAIRING_NUMBER = "";
+// Segredo pedido pela página de pareamento (com ou sem o "/pairing").
+// Você pode trocar o valor aqui ou definir PAIRING_SECRET no ambiente do bot
+// (variável de ambiente do Render, por exemplo); o ambiente tem prioridade.
+// A comparação diferencia maiúsculas de minúsculas e ignora espaços nas pontas.
+export const PAIRING_SECRET = process.env.PAIRING_SECRET || "KakashiPairing2026";
+
+// Opcional: número usado para pedir o código automaticamente, sem passar pela
+// página. Ex: "258850421617". Vazio = pergunta no terminal ou na página.
+export const PAIRING_NUMBER = process.env.PAIRING_NUMBER || "";
 
 // ==========================================================================
 // SISTEMA DE CRÉDITOS

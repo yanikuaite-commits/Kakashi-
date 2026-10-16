@@ -31,7 +31,11 @@ import { PAIRING_NUMBER, PREFIX, TEMP_DIR } from "./config.js";
 import { load } from "./loader.js";
 import { badMacHandler } from "./utils/badMacHandler.js";
 import { onlyNumbers, question } from "./utils/index.js";
-import { waitForPairingNumber } from "./services/pairing-server.js";
+import {
+  deliverPairingCode,
+  failPairingRequest,
+  waitForPairingNumber,
+} from "./services/pairing-server.js";
 import {
   bannerLog,
   errorLog,
@@ -116,9 +120,25 @@ export async function connect() {
       process.exit(1);
     }
 
-    const code = await socket.requestPairingCode(onlyNumbers(phoneNumber));
+    let code;
 
-    console.log(`Código de pareamento: ${formatPairingCode(code)}`);
+    try {
+      code = await socket.requestPairingCode(onlyNumbers(phoneNumber));
+    } catch (error) {
+      errorLog(`Erro ao gerar o código de pareamento: ${error.message}`);
+
+      // Avisa a página /pairing; no terminal não existe página esperando.
+      failPairingRequest(
+        "Não foi possível gerar o código. Confira o número e reinicie o serviço para tentar novamente.",
+      );
+    }
+
+    if (code) {
+      console.log(`Código de pareamento: ${formatPairingCode(code)}`);
+
+      // Entrega o código para a página /pairing (quando o número veio dela).
+      deliverPairingCode(code);
+    }
   }
 
   socket.ev.on("connection.update", async (update) => {
