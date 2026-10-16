@@ -47,6 +47,16 @@ const BOT_CHECK_HINT =
   "datacenter, como o do Render). Configure YTDLP_COOKIES_PATH apontando para um " +
   "arquivo de cookies ou YTDLP_PROXY com um proxy residencial.";
 
+const UNSUPPORTED_URL_HINT =
+  "O yt-dlp não reconhece este link. Posts de fotos/carrossel (TikTok, " +
+  "Instagram, Facebook) não têm vídeo para baixar — reenvie o link de um vídeo.";
+
+const INSTAGRAM_HINT =
+  "O Instagram não liberou este post para o servidor: fotos/carrossel e posts " +
+  "restritos exigem login. Reenvie o link de um reel ou vídeo público; se " +
+  "continuar, configure YTDLP_COOKIES_PATH com cookies de uma conta que veja o " +
+  "post.";
+
 let binaryPromise;
 
 function binaryCandidates() {
@@ -170,14 +180,45 @@ export async function getMediaInfo(url) {
   return normalizeInfo(JSON.parse(stdout));
 }
 
-function buildFormatSelector(height) {
-  const limit = !height || height === "best" ? "" : `[height<=${Number(height)}]`;
+/**
+ * Monta o seletor de formatos do yt-dlp.
+ *
+ * O vídeo retrato (9:16) é o caso que falhava: o TikTok entrega 720x1280 e o
+ * yt-dlp chama de `height` o lado vertical (1280), então filtrar apenas por
+ * `[height<=720]` não casava com formato nenhum e o download terminava em
+ * "Requested format is not available". Por isso o filtro por `width` também é
+ * tentado, e as duas últimas alternativas ignoram o limite: melhor entregar
+ * uma resolução maior que falhar.
+ *
+ * @param {number|string} [height] limite desejado (ex: 720) ou "best"
+ * @returns {string} seletor para o argumento -f do yt-dlp
+ */
+export function buildFormatSelector(height) {
+  const limit = Number(height);
+  const hasLimit =
+    Boolean(height) && height !== "best" && Number.isFinite(limit);
+
+  // Sem limite ("best", vazio ou valor inválido) o seletor é o de sempre.
+  if (!hasLimit) {
+    return ["bv*[ext=mp4]+ba[ext=m4a]", "bv*+ba", "b[ext=mp4]", "b"].join(
+      "/",
+    );
+  }
+
+  const byHeight = `[height<=${limit}]`;
+  const byWidth = `[width<=${limit}]`;
 
   return [
-    `bv*[ext=mp4]${limit}+ba[ext=m4a]`,
-    `bv*${limit}+ba`,
-    `b[ext=mp4]${limit}`,
-    `b${limit}`,
+    `bv*[ext=mp4]${byHeight}+ba[ext=m4a]`,
+    `bv*${byHeight}+ba`,
+    `b[ext=mp4]${byHeight}`,
+    `b${byHeight}`,
+    `bv*[ext=mp4]${byWidth}+ba[ext=m4a]`,
+    `bv*${byWidth}+ba`,
+    `b[ext=mp4]${byWidth}`,
+    `b${byWidth}`,
+    "b[ext=mp4]",
+    "b",
   ].join("/");
 }
 
@@ -187,7 +228,13 @@ function buildFileName(title, artist, extension) {
   return `${base.replace(/[\\/:*?"<>|]/g, "_").slice(0, 170)}.${extension}`;
 }
 
-function friendlyError(error) {
+/**
+ * Traduz o erro cru do yt-dlp em uma mensagem útil para o log e para o grupo.
+ *
+ * @param {{ stderr?: string, message?: string }} error
+ * @returns {string}
+ */
+export function friendlyError(error) {
   const detail =
     String(error?.stderr || error?.message || "")
       .split("\n")
@@ -195,6 +242,20 @@ function friendlyError(error) {
       .filter(Boolean)
       .at(-1) || "falha ao rodar o yt-dlp";
   const message = detail.replace(/^ERROR:\s*/i, "");
+
+  // Antes do teste de "bot": o link pode conter "bot" em algum parâmetro.
+  if (/unsupported url/i.test(message)) {
+    return `yt-dlp: ${message}\n\n${UNSUPPORTED_URL_HINT}`;
+  }
+
+  // O Instagram responde com um texto enorme (inclusive o template de issue do
+  // yt-dlp); aqui vira uma orientação curta.
+  if (
+    /\[Instagram\]/i.test(message) &&
+    /empty media response|login required|rate-?limit|not available/i.test(message)
+  ) {
+    return `yt-dlp: o post do Instagram não pôde ser lido.\n\n${INSTAGRAM_HINT}`;
+  }
 
   if (/sign in to confirm|bot/i.test(message)) {
     return `yt-dlp: ${message}\n\n${BOT_CHECK_HINT}`;

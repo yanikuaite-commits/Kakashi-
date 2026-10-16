@@ -65,7 +65,7 @@ Nós não prestamos suporte gratuíto caso você tenha adquirido esta base com t
 Este bot sempre foi e sempre será **gratuíto**.
 Caso você tenha pago para utilizar este bot, do jeito que ele está hoje, saiba que você **foi enganado**.
 Nós não temos vínculo nenhum com terceiros e não nos responsabilizamos por isso, também não prestamos suporte nessas condições.
-Os downloads, conversões, imagens de texto e IA de texto usam ferramentas gratuitas. A IA (chat, suporte e transcrição) usa a API da Groq e precisa da chave gratuita `GROQ_API_KEY` (`src/config.js`). A geração de imagem (`.flux` e `.ia-sticker`) usa a chave `GEMINI_API_KEY` da Google quando ela está preenchida; sem essa chave, esses dois comandos continuam no serviço gratuito de antes (Pollinations). O `.tts` segue no TTS gratuito do Google Tradutor. Atenção: gerar imagem na Google exige billing ativado.
+Os downloads, conversões, imagens de texto e IA de texto usam ferramentas gratuitas. A IA (chat, suporte e transcrição) usa a API da Groq e precisa da chave gratuita `GROQ_API_KEY` (`src/config.js`). A geração de imagem (`.flux` e `.ia-sticker`) usa a chave `GEMINI_API_KEY` da Google quando ela está preenchida; sem a chave, ou quando a chamada falha (billing desativado ou quota), esses dois comandos caem automaticamente no serviço gratuito de antes (Pollinations). O `.tts` segue no TTS gratuito do Google Tradutor. Atenção: gerar imagem na Google exige billing ativado na conta — sem billing o free tier responde 429 com limite 0 nos modelos de imagem.
 
 ## Migração gratuita no Termux
 

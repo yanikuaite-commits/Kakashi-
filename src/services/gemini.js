@@ -88,11 +88,12 @@ export async function generateImage(prompt) {
       ],
       generationConfig: {
         responseModalities: ["TEXT", "IMAGE"],
-        responseFormat: {
-          image: {
-            aspectRatio: GEMINI_IMAGE_ASPECT_RATIO,
-            imageSize: GEMINI_IMAGE_SIZE,
-          },
+        // O generateContent usa generationConfig.imageConfig; o formato
+        // generationConfig.responseFormat.image pertence a outra API e o Google
+        // responde 400 Invalid value at '...aspect_ratio'.
+        imageConfig: {
+          aspectRatio: GEMINI_IMAGE_ASPECT_RATIO,
+          imageSize: GEMINI_IMAGE_SIZE,
         },
       },
     },

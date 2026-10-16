@@ -130,8 +130,11 @@ export const GEMINI_API_KEY = "AQ.Ab8RN6LurSB7uP0Kt-uaCJnEeJJLkwZMqsFS85XeD_kyXP
 export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 
 // Geração de imagem (a doc usa a versão v1 nesses modelos).
+// Modelos de imagem suportados pela API: gemini-3-pro-image,
+// gemini-3.1-flash-image, gemini-3.1-flash-lite-image e gemini-2.5-flash-image.
+// Trocar para gemini-3-pro-image aumenta a qualidade (e o custo por imagem).
 export const GEMINI_IMAGE_API = `${GEMINI_BASE_URL}/v1/models`;
-export const GEMINI_IMAGE_MODEL = "gemini-nano-banana-2.1";
+export const GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image";
 export const GEMINI_IMAGE_ASPECT_RATIO = "1:1";
 export const GEMINI_IMAGE_SIZE = "1K";
 export const GEMINI_IMAGE_TIMEOUT_MS = 60 * 1000;

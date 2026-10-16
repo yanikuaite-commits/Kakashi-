@@ -5,6 +5,7 @@ import { PREFIX, TEMP_DIR } from "../../../config.js";
 import { generateImage, isGeminiConfigured } from "../../../services/gemini.js";
 import { imagePromptUrl } from "../../../services/public-ai.js";
 import { getBuffer, getRandomName } from "../../../utils/index.js";
+import { errorLog } from "../../../utils/logger.js";
 
 export default {
   name: "ia-sticker",
@@ -31,8 +32,9 @@ export default {
 
     await sendWaitReply("gerando figurinha...");
 
-    // Com a chave da Google configurada a imagem sai da Gemini; sem ela,
-    // continua no gerador gratuito (Pollinations).
+    // Com a chave da Google configurada a imagem sai da Gemini. Se a chamada
+    // falhar (billing desativado, quota, bloqueio), cai no gerador gratuito
+    // para o usuário não ficar sem resposta.
     const extensionByMimeType = {
       "image/png": "png",
       "image/jpeg": "jpg",
@@ -43,12 +45,17 @@ export default {
     let extension = "png";
 
     if (isGeminiConfigured()) {
-      const image = await generateImage(fullArgs);
+      try {
+        const image = await generateImage(fullArgs);
 
-      buffer = image.buffer;
-      extension =
-        extensionByMimeType[String(image.mimeType).split(";")[0].trim()] ||
-        "png";
+        buffer = image.buffer;
+        extension =
+          extensionByMimeType[String(image.mimeType).split(";")[0].trim()] ||
+          "png";
+      } catch (error) {
+        errorLog(`IA sticker (Gemini): ${error.message}`);
+        buffer = await getBuffer(imagePromptUrl(fullArgs));
+      }
     } else {
       buffer = await getBuffer(imagePromptUrl(fullArgs));
     }

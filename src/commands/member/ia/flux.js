@@ -1,6 +1,7 @@
 import { PREFIX } from "../../../config.js";
 import { generateImage, isGeminiConfigured } from "../../../services/gemini.js";
 import { imagePromptUrl } from "../../../services/public-ai.js";
+import { errorLog } from "../../../utils/logger.js";
 
 export default {
   name: "flux",
@@ -29,11 +30,20 @@ export default {
 
     await sendSuccessReact();
 
-    // Com a chave da Google configurada a imagem sai da Gemini; sem ela,
-    // continua no gerador gratuito (Pollinations).
-    if (isGeminiConfigured()) {
-      const { buffer } = await generateImage(fullArgs);
+    // Com a chave da Google configurada a imagem sai da Gemini; se a chamada
+    // falhar (billing desativado, quota, bloqueio), cai no gerador gratuito para
+    // o usuário não ficar sem resposta.
+    let buffer = null;
 
+    if (isGeminiConfigured()) {
+      try {
+        buffer = (await generateImage(fullArgs)).buffer;
+      } catch (error) {
+        errorLog(`Flux (Gemini): ${error.message}`);
+      }
+    }
+
+    if (buffer?.length) {
       return await sendImageFromBuffer(buffer);
     }
 
