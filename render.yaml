@@ -23,10 +23,9 @@ services:
       # Runtime JS para os desafios do YouTube (o projeto usa Node >= 22.8).
       - key: YTDLP_JS_RUNTIME
         value: node
-      # Opcional: cookies (Secret File) e proxy para o YouTube em IP de
-      # datacenter, além do fingerprint de navegador.
-      # - key: YTDLP_COOKIES_PATH
-      #   value: /etc/secrets/cookies.txt
+      # Cookies versionados no repositório privado e copiados para /opt/project.
+      - key: YTDLP_COOKIES_PATH
+        value: /opt/project/cookies.txt
       # - key: YTDLP_PROXY
       #   value: http://usuario:senha@host:porta
       # - key: YTDLP_IMPERSONATE
