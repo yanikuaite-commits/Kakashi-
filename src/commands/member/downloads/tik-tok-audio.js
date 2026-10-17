@@ -1,6 +1,7 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError, WarningError } from "../../../errors/index.js";
 import { downloadByCommand } from "../../../services/downloader.js";
+import { downloadingMessage } from "../../../services/download-message.js";
 import fs from "node:fs/promises";
 import { errorLog } from "../../../utils/logger.js";
 
@@ -17,7 +18,7 @@ export default {
   ],
   usage: `${PREFIX}tik-tok-audio https://www.tiktok.com/@topicoquiz/video/7384803418855984389`,
   /**
-   * @param {CommandHandleProps} props
+   * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
     sendAudioFromFile,
@@ -37,7 +38,7 @@ export default {
 
     let data;
     try {
-      await sendReply("⬇️ Baixando...");
+      await sendReply(downloadingMessage({ fileType: "áudio" }));
       data = await downloadByCommand("tik-tok-audio", fullArgs);
       await sendSuccessReact();
       await sendAudioFromFile(data.filePath);

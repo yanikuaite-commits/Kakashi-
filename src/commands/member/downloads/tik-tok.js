@@ -1,6 +1,7 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError, WarningError } from "../../../errors/index.js";
 import { downloadByCommand } from "../../../services/downloader.js";
+import { downloadingMessage } from "../../../services/download-message.js";
 import fs from "node:fs/promises";
 import { errorLog } from "../../../utils/logger.js";
 
@@ -10,7 +11,7 @@ export default {
   commands: ["tik-tok", "ttk", "tik"],
   usage: `${PREFIX}tik-tok https://www.tiktok.com/@yrrefutavel/video/7359413022483287301`,
   /**
-   * @param {CommandHandleProps} props
+   * @param {import("../../../@types/index.d.js").CommandHandleProps} props
    */
   handle: async ({
     sendVideoFromFile,
@@ -30,7 +31,7 @@ export default {
 
     let data;
     try {
-      await sendReply("⬇️ Baixando...");
+      await sendReply(downloadingMessage({ fileType: "vídeo" }));
       data = await downloadByCommand("tik-tok", fullArgs);
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);

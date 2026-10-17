@@ -1,5 +1,6 @@
-import { PREFIX } from "../../../config.js";
-import { handleDownload } from "../../download.js";
+import { PREFIX } from "../../config.js";
+import { handleDownload } from "../download.js";
+import { downloadingMessage } from "../services/download-message.js";
 
 export default {
   name: "baixar",
@@ -7,6 +8,8 @@ export default {
   commands: ["baixar", "download"],
   usage: `${PREFIX}baixar https://www.youtube.com/watch?v=...`,
   handle: async ({ socket, webMessage, fullArgs }) => {
-    await handleDownload(socket, webMessage, fullArgs.trim().split(/\s+/).filter(Boolean));
+    await handleDownload(socket, webMessage, fullArgs.trim().split(/\s+/).filter(Boolean), {
+      downloadingMessage,
+    });
   },
 };

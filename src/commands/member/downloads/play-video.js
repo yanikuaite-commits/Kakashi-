@@ -1,6 +1,13 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
-import { downloadByCommand, isYouTubeUrl, resolveDownloadSource, resolutionMenu, setPendingResolution } from "../../../services/downloader.js";
+import {
+  downloadByCommand,
+  isYouTubeUrl,
+  resolveDownloadSource,
+  resolutionMenu,
+  setPendingResolution,
+} from "../../../services/downloader.js";
+import { downloadingMessage } from "../../../services/download-message.js";
 import fs from "node:fs/promises";
 import { errorLog } from "../../../utils/logger.js";
 
@@ -10,7 +17,7 @@ export default {
   commands: ["play-video", "pv"],
   usage: `${PREFIX}play video MC Hariel (ou link)`,
   /**
-   * @param {CommandHandleProps} props
+   * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
     sendVideoFromFile,
@@ -36,7 +43,7 @@ export default {
         return;
       }
 
-      await sendReply("⬇️ Baixando...");
+      await sendReply(downloadingMessage({ fileType: "vídeo" }));
       data = await downloadByCommand("play-video", source);
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);

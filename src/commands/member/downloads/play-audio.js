@@ -1,6 +1,7 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
 import { downloadByCommand, setPendingDocOffer } from "../../../services/downloader.js";
+import { downloadingMessage } from "../../../services/download-message.js";
 import fs from "node:fs/promises";
 
 export default {
@@ -9,7 +10,7 @@ export default {
   commands: ["play-audio", "play", "pa"],
   usage: `${PREFIX}play audio MC Hariel (ou link)`,
   /**
-   * @param {CommandHandleProps} props
+   * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
     sendAudioDocumentFromFile,
@@ -27,18 +28,15 @@ export default {
 
     let data;
     try {
-      await sendReply("⬇️ Baixando...");
+      await sendReply(downloadingMessage({ fileType: "áudio" }));
       data = await downloadByCommand("play-audio", fullArgs);
       await sendSuccessReact();
-      // Áudio reproduzível: o WhatsApp lê os metadados reais e mostra a
-      // duração certa, diferente do documento que só estima pelo tamanho.
       await sendAudioFromFile(data.filePath, false, true);
     } catch (error) {
       if (data?.filePath) await fs.rm(data.filePath, { force: true }).catch(() => {});
       throw error;
     }
 
-    // Guarda o arquivo enquanto o usuário decide se quer a versão documento.
     setPendingDocOffer(remoteJid, {
       filePath: data.filePath,
       fileName: data.fileName,

@@ -2,6 +2,7 @@ import { delay } from "baileys";
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
 import { downloadByCommand } from "../../../services/downloader.js";
+import { downloadingMessage } from "../../../services/download-message.js";
 import fs from "node:fs/promises";
 import { errorLog } from "../../../utils/logger.js";
 
@@ -11,7 +12,7 @@ export default {
   commands: ["pinterest", "pin"],
   usage: `${PREFIX}pinterest https://www.pinterest.com/pin/123456789/`,
   /**
-   * @param {CommandHandleProps} props
+   * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
     fullArgs,
@@ -29,7 +30,7 @@ export default {
 
     let data;
     try {
-      await sendReply("⬇️ Baixando...");
+      await sendReply(downloadingMessage({ fileType: "vídeo" }));
       data = await downloadByCommand("pinterest", fullArgs.trim());
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath, `📌 Resultado para: ${fullArgs}`);

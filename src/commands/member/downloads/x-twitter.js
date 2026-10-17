@@ -1,6 +1,7 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError, WarningError } from "../../../errors/index.js";
 import { downloadByCommand } from "../../../services/downloader.js";
+import { downloadingMessage } from "../../../services/download-message.js";
 import fs from "node:fs/promises";
 import { errorLog } from "../../../utils/logger.js";
 
@@ -12,7 +13,7 @@ export default {
   commands: ["xtwitter", "twitter", "x"],
   usage: `${PREFIX}xtwitter https://x.com/usuario/status/1234567890`,
   /**
-   * @param {CommandHandleProps} props
+   * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
     sendVideoFromFile,
@@ -34,7 +35,7 @@ export default {
 
     let data;
     try {
-      await sendReply("⬇️ Baixando...");
+      await sendReply(downloadingMessage({ fileType: "vídeo" }));
       data = await downloadByCommand("x-twitter", fullArgs);
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);
