@@ -10,3 +10,6 @@ README.md
 CONTRIBUTING.md
 GEMINI.md
 AGENTS.md
+# Cookies do YouTube ficam na raiz do projeto e "vão junto" no build:
+# o Dockerfile copia tudo para a imagem (COPY . .), o bot os usa quando
+# YTDLP_COOKIES_PATH aponta para a raiz, ex: /opt/project/cookies.txt.

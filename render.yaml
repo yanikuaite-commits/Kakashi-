@@ -23,7 +23,10 @@ services:
       # Runtime JS para os desafios do YouTube (o projeto usa Node >= 22.8).
       - key: YTDLP_JS_RUNTIME
         value: node
-      # Cookies versionados no repositório privado e copiados para /opt/project.
+      # Cookies do YouTube: o projeto usa o cookies.txt commitado na raiz do
+      # repositório (o Dockerfile copia tudo para /opt/project). Para usar um
+      # Secret File no painel em vez disso, troque o valor para
+      # /etc/secrets/cookies.txt.
       - key: YTDLP_COOKIES_PATH
         value: /opt/project/cookies.txt
       # - key: YTDLP_PROXY

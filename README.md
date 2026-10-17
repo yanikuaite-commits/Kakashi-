@@ -126,10 +126,21 @@ existe flag que resolva isso de vez: o caminho é enviar cookies
 (`YTDLP_COOKIES_PATH`) ou rotear por um proxy residencial (`YTDLP_PROXY`).
 Quando a extração falha, o bot avisa o motivo e tenta a API GenDownload.
 
-Para usar cookies no Render: crie um **Secret File** chamado `cookies.txt` com o
-conteúdo do arquivo de cookies e defina
-`YTDLP_COOKIES_PATH=/etc/secrets/cookies.txt`. O arquivo fica fora da imagem
-(o `.dockerignore` já evita que ele entre no build).
+Duas maneiras de fornecer cookies no Render:
+
+1. **Commitado no repositório (padrão do projeto):** coloque
+   `cookies.txt` na raiz e evolua ele como parte do código.
+   `render.yaml` já define `YTDLP_COOKIES_PATH=/opt/project/cookies.txt`
+   (o Dockerfile faz `COPY . .`, então o arquivo entra na imagem a cada deploy).
+2. **Secret File no painel (alternativa):** crie um Secret File chamado
+   `cookies.txt` (montado em `/etc/secrets/cookies.txt`) e deixe
+   `YTDLP_COOKIES_PATH=/etc/secrets/cookies.txt` no painel — nesse caso omita a
+   variável do `render.yaml` para o valor do painel prevalecer.
+
+⚠ Cookies de sessão do YouTube no repositório: se o repositório ficar público,
+cookies expostos permitem uso da sua conta no YouTube (inclusive gravações/
+trocas de senha impactam essa sessão). Se isso for um problema, prefira a opção 2
+ou mantenha o repositório privado e rotacione os cookies periodicamente.
 
 Em hosts sem Docker use `npm run setup:ytdlp` (baixa para `bin/yt-dlp`); no
 Termux use `pkg install yt-dlp`.
