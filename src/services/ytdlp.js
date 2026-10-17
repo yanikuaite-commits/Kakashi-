@@ -339,7 +339,19 @@ export async function downloadWithYtDlp(url, { audio = false, height } = {}) {
   ];
 
   if (audio) {
-    args.push("-x", "--audio-format", "mp3", "--audio-quality", "0");
+    // MP3 sai com tags ID3 (título, artista e capa embutidas) para os
+    // metadados aparecerem em qualquer player, não só na legenda do chat.
+    // Falhar em embutir não derruba o download (era o comportamento sem as
+    // flags): o yt-dlp só loga um aviso quando a capa não está disponível.
+    args.push(
+      "-x",
+      "--audio-format",
+      "mp3",
+      "--audio-quality",
+      "0",
+      "--embed-metadata",
+      "--embed-thumbnail",
+    );
   } else {
     args.push("--merge-output-format", "mp4", "-N", "4", "-f", buildFormatSelector(height));
   }
