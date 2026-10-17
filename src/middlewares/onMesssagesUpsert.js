@@ -22,7 +22,7 @@ import { recordMessageEnvelope } from "../utils/messageEnvelopeRegistry.js";
 import { hasPaymentMessage } from "../utils/paymentMessage.js";
 import { handleAfkReferences } from "./afkHandler.js";
 import { onGroupParticipantsUpdate } from "./onGroupParticipantsUpdate.js";
-import { handlePendingResolution } from "../services/downloader.js";
+import { handlePendingDocOffer, handlePendingResolution } from "../services/downloader.js";
 
 export async function onMessagesUpsert({ socket, messages, startProcess }) {
   if (!messages.length) {
@@ -123,6 +123,15 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         text: commonFunctions.fullMessage,
         sendReply: commonFunctions.sendReply,
         sendVideoFromFile: commonFunctions.sendVideoFromFile,
+      })) {
+        continue;
+      }
+
+      if (await handlePendingDocOffer({
+        chatId: commonFunctions.remoteJid,
+        text: commonFunctions.fullMessage,
+        sendReply: commonFunctions.sendReply,
+        sendAudioDocumentFromFile: commonFunctions.sendAudioDocumentFromFile,
       })) {
         continue;
       }

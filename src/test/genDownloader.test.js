@@ -6,7 +6,7 @@ import { dirname } from "node:path";
 import { after, before, test } from "node:test";
 import { downloadWithGenDownload } from "../utils/genDownloader.js";
 import { handleDownload } from "../commands/download.js";
-import { downloadAudio, downloadVideo, downloadByCommand, resolveDownloadSource, setPendingResolution, takePendingResolution, handlePendingResolution } from "../services/downloader.js";
+import { downloadAudio, downloadVideo, downloadByCommand, resolveDownloadSource, setPendingResolution, takePendingResolution, handlePendingResolution, setPendingDocOffer, handlePendingDocOffer } from "../services/downloader.js";
 import command from "../commands/member/downloads/download.js";
 import playVideo from "../commands/member/downloads/play-video.js";
 import { findCommandImport, formatCommand } from "../utils/index.js";
@@ -197,4 +197,66 @@ test("menu pendente remove arquivo mesmo quando o envio falha", async () => {
   assert.equal(handled, true);
   assert.match(replies.at(-1), /Falha no envio/);
   await assert.rejects(stat(pendingPath), { code: "ENOENT" });
+});
+
+test("oferta de documento é respondida com 1 ou 2 e apaga o MP3", async (t) => {
+  const { mkdtemp } = await import("node:fs/promises");
+  const { writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = await mkdtemp(join(tmpdir(), "doc-offer-"));
+  t.after(async () => { await rm(dir, { recursive: true, force: true }); });
+  const filePath = join(dir, "musica.mp3");
+  await writeFile(filePath, "mp3-content");
+
+  setPendingDocOffer("doc-chat", {
+    filePath,
+    fileName: "musica.mp3",
+    title: "Título",
+    artist: "Artista",
+    thumbnail: null,
+    mimetype: "audio/mpeg",
+  });
+
+  const documents = [];
+  const replies = [];
+  const handled = await handlePendingDocOffer({
+    chatId: "doc-chat",
+    text: "1",
+    sendReply: async (text) => { replies.push(text); },
+    sendAudioDocumentFromFile: async (path, fileName, title, artist, _thumb, asDocument, mimetype) => {
+      documents.push({ path, fileName, title, artist, asDocument, mimetype });
+    },
+  });
+  assert.equal(handled, true);
+  assert.deepEqual(documents, [{
+    path: filePath,
+    fileName: "musica.mp3",
+    title: "Título",
+    artist: "Artista",
+    asDocument: true,
+    mimetype: "audio/mpeg",
+  }]);
+  await assert.rejects(stat(filePath), { code: "ENOENT" });
+
+  // Recusa ("2") também consome a oferta e limpa o arquivo.
+  await writeFile(filePath, "mp3-content");
+  setPendingDocOffer("doc-chat-2", { filePath, mimetype: "audio/mpeg" });
+  const refused = await handlePendingDocOffer({
+    chatId: "doc-chat-2",
+    text: "2",
+    sendReply: async (text) => { replies.push(text); },
+    sendAudioDocumentFromFile: async () => { throw new Error("não deveria enviar"); },
+  });
+  assert.equal(refused, true);
+  await assert.rejects(stat(filePath), { code: "ENOENT" });
+
+  // Texto qualquer não intercepta o fluxo dos comandos.
+  const notHandled = await handlePendingDocOffer({
+    chatId: "doc-chat-3",
+    text: "olá",
+    sendReply: async () => {},
+    sendAudioDocumentFromFile: async () => {},
+  });
+  assert.equal(notHandled, false);
 });

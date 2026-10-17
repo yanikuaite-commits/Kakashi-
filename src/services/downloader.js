@@ -7,6 +7,7 @@ import { searchYouTube } from "./youtube-search.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "./ytdlp.js";
 
 const pendingResolutions = new Map();
+const pendingDocOffers = new Map();
 
 export function isYouTubeUrl(value) {
   return /(?:youtube\.com|youtu\.be)/i.test(value);
@@ -24,6 +25,74 @@ export function takePendingResolution(chatId, choice) {
   const index = Number(choice) - 1;
   if (!Number.isInteger(index) || index < 0 || index >= heights.length) return null;
   return { source: pending.source, height: heights[index] };
+}
+
+/**
+ * Pergunta pós-áudio: guarda os dados do MP3 até o usuário decidir se quer
+ * também a versão documento. Sem resposta no TTL, o arquivo é apagado.
+ */
+export function setPendingDocOffer(chatId, payload) {
+  const offer = { ...payload, expiresAt: Date.now() + PENDING_DOWNLOAD_TTL_MS };
+  pendingDocOffers.set(chatId, offer);
+  offer.cleanupTimer = setTimeout(() => {
+    const current = pendingDocOffers.get(chatId);
+    if (current === offer) {
+      pendingDocOffers.delete(chatId);
+      if (offer.filePath) fs.rm(offer.filePath, { force: true }).catch(() => {});
+    }
+  }, PENDING_DOWNLOAD_TTL_MS);
+  offer.cleanupTimer.unref?.();
+}
+
+function takePendingDocOffer(chatId) {
+  const offer = pendingDocOffers.get(chatId);
+  pendingDocOffers.delete(chatId);
+  if (offer?.cleanupTimer) clearTimeout(offer.cleanupTimer);
+  if (!offer || offer.expiresAt < Date.now()) {
+    if (offer?.filePath) fs.rm(offer.filePath, { force: true }).catch(() => {});
+    return null;
+  }
+  return offer;
+}
+
+/**
+ * Responde "1" (manda como documento) ou "2" (envia o arquivo MP3 solto
+ * no chat). Consome a oferta em qualquer caso e apaga o arquivo temporário.
+ */
+export async function handlePendingDocOffer({
+  chatId,
+  text,
+  sendReply,
+  sendAudioDocumentFromFile,
+}) {
+  const value = String(text || "").trim();
+  if (value !== "1" && value !== "2" && !/^(sim|nao|não)$/i.test(value)) return false;
+  const offer = takePendingDocOffer(chatId);
+  if (!offer) return false;
+
+  const wantsDoc = value === "1" || /^sim$/i.test(value);
+  if (wantsDoc) {
+    await sendReply("📄 Transformando em documento...");
+    try {
+      await sendAudioDocumentFromFile(
+        offer.filePath,
+        offer.fileName,
+        offer.title,
+        offer.artist,
+        offer.thumbnail,
+        true,
+        offer.mimetype,
+      );
+    } catch (error) {
+      errorLog(`Erro ao enviar documento do áudio pendente: ${error.message}`);
+      await sendReply("❌ Não consegui enviar o documento agora. Peça de novo com .play audio.");
+    }
+  } else {
+    await sendReply("👍 Tudo certo, fico com a versão em áudio mesmo!");
+  }
+
+  if (offer.filePath) await fs.rm(offer.filePath, { force: true }).catch(() => {});
+  return true;
 }
 
 /**
