@@ -1,4 +1,4 @@
-/**
+/** ws https://upstash.com/docs/redis/using-sdk/com "
  * Serviço de download via yt-dlp (CLI).
  *
  * Por que existe:
@@ -82,8 +82,33 @@ function runBinary(binary, args, options = {}) {
   });
 }
 
-/**
- * Caminho do binário em uso (ou null quando indisponível). O resultado é
+/** Resolver automaticamente o cookies.txt da raiz do projeto quando não
+ * há YTDLP_COOKIES_PATH configurado e o ficheiro existir.
+ */
+function resolveAutoCookiesPath() {
+  if (YTDLP_COOKIES_PATH) {
+    return YTDLP_COOKIES_PATH;
+  }
+
+  if (!fs.existsSync(ROOT_DIR)) {
+    return null;
+  }
+
+  const candidates = [
+    path.resolve(ROOT_DIR, "cookies.txt"),
+    path.resolve(ROOT_DIR, "cookies", "cookies.txt"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+/** Caminho do binário em uso (ou null quando indisponível). O resultado é
  * memorizado: a checagem roda uma única vez por processo.
  */
 export async function resolveYtDlpBinary() {
@@ -130,8 +155,9 @@ export async function isYtDlpAvailable() {
 function commonArgs() {
   const args = ["--no-playlist", "--no-warnings", "--no-progress"];
 
-  if (YTDLP_COOKIES_PATH) {
-    args.push("--cookies", YTDLP_COOKIES_PATH);
+  const cookiesPath = resolveAutoCookiesPath();
+  if (cookiesPath) {
+    args.push("--cookies", cookiesPath);
   }
 
   if (YTDLP_PROXY) {
@@ -180,8 +206,8 @@ export async function getMediaInfo(url) {
   return normalizeInfo(JSON.parse(stdout));
 }
 
-/**
- * Monta o seletor de formatos do yt-dlp.
+/** 
+ * Determina o seletor de formatos do yt-dlp.
  *
  * O vídeo retrato (9:16) é o caso que falhava: o TikTok entrega 720x1280 e o
  * yt-dlp chama de `height` o lado vertical (1280), então filtrar apenas por
@@ -225,10 +251,10 @@ export function buildFormatSelector(height) {
 function buildFileName(title, artist, extension) {
   const base = `${title || "Mídia"} - ${artist || "Artista desconhecido"}`;
 
-  return `${base.replace(/[\\/:*?"<>|]/g, "_").slice(0, 170)}.${extension}`;
+  return `${base.replace(/[\\/:*?\"<>|]/g, "_").slice(0, 170)}.${extension}`;
 }
 
-/**
+/** 
  * Traduz o erro cru do yt-dlp em uma mensagem útil para o log e para o grupo.
  *
  * @param {{ stderr?: string, message?: string }} error
@@ -304,7 +330,7 @@ async function pickOutputPath(stdout, id) {
   return path.resolve(DOWNLOAD_DIR, match.at(-1));
 }
 
-/**
+/** 
  * Baixa a mídia com o yt-dlp.
  *
  * @param {string} url
