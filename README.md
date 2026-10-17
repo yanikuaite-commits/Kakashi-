@@ -1,25 +1,14 @@
 # 🤖 Kakashi Bot
 
-![Kakashi Bot](./assets/images/takeshi-bot.png)
+![Kakashi Bot](./assets/images/Kakashi-bot.png)
 
-[![Version](https://img.shields.io/badge/Vers%C3%A3o-8.11.0-blue)](https://github.com/guiireal/takeshi-bot)
-[![Tests](https://github.com/guiireal/takeshi-bot-private/actions/workflows/test.yml/badge.svg)](https://github.com/guiireal/takeshi-bot-private/actions/workflows/test.yml)
+[![Version](https://img.shields.io/badge/Vers%C3%A3o-9.0.0-beta-blue)](https://github.com/yanikuaite-commits/Kakashi-)
 
 > Base para bots de WhatsApp multifuncional com diversos comandos prontos.
 
 [![Node.js](https://img.shields.io/badge/Node.js-24-green?logo=node.js)](https://nodejs.org/en)
 [![Baileys](https://img.shields.io/badge/Baileys-7.0.0.rc14-purple?logo=whatsapp)](https://github.com/WhiskeySockets/Baileys)
 [![FFMPEG](https://img.shields.io/badge/FFMPEG-Latest-orange?logo=ffmpeg)](https://ffmpeg.org/)
-
-## 🧪 Testando a versão 9.0.0-beta (migração para Zapo)
-
-Estamos migrando a base do Baileys para o [Zapo](https://zapo.to/). Se quiser testar a versão beta antes do lançamento oficial, clone a branch `9-beta`:
-
-```sh
-git clone -b 9-beta https://github.com/guiireal/takeshi-bot.git
-```
-
-Use por sua conta e risco, pode conter instabilidades.
 
 ## Desenvolvida do zero, no vídeo
 
@@ -29,7 +18,7 @@ Use por sua conta e risco, pode conter instabilidades.
 
 ## 📋 Sumário
 
-1. [Idiomas Disponíveis](#-acesse-o-takeshi-bot-em-outros-idiomas)
+1. [Idiomas Disponíveis](#-outros-idiomas)
 2. [Atenção](#-atenção)
 3. [Sobre o Projeto](#sobre-este-projeto)
 4. [Instalação](#instalação-no-termux)
@@ -54,10 +43,6 @@ Use por sua conta e risco, pode conter instabilidades.
 18. [Inscreva-se no canal](#inscreva-se-no-canal)
 19. [Contribuindo com o projeto](#contribuindo-com-o-projeto)
 20. [Licença e Disclaimer](#licença)
-
-## 🌐 Acesse o Kakashi Bot em outros idiomas
-
-- 🇪🇸 [**Versión en Español**](https://github.com/guiireal/takeshi-bot-espanol)
 
 ## ⚠ Atenção
 
@@ -210,7 +195,7 @@ menor ou a versão em áudio.
 
 ## Sobre este projeto
 
-Este projeto não possui qualquer vínculo oficial com o WhatsApp. Ele foi desenvolvido de forma independente para interações automatizadas por meio da plataforma.
+Este projeto não possui qualquer vínculo oficial com o WhatsApp. O Kakashi Bot foi desenvolvido de forma independente para interações automatizadas por meio da plataforma.
 
 Não nos responsabilizamos por qualquer uso indevido deste bot. É de responsabilidade exclusiva do usuário garantir que sua utilização esteja em conformidade com os termos de uso do WhatsApp e a legislação vigente.
 
@@ -246,13 +231,13 @@ cd ~/storage
 4 - Clone o repositório.
 
 ```sh
-git clone https://github.com/guiireal/takeshi-bot.git
+git clone https://github.com/yanikuaite-commits/Kakashi-.git
 ```
 
 5 - Entre na pasta que foi clonada.
 
 ```sh
-cd takeshi-bot
+cd Kakashi-
 ```
 
 6 - Habilite permissões de leitura e escrita (faça apenas 1x esse passo).
@@ -383,13 +368,13 @@ cd $env:USERPROFILE\Desktop
 6 - Clone o repositório.
 
 ```sh
-git clone https://github.com/guiireal/takeshi-bot.git
+git clone https://github.com/yanikuaite-commits/Kakashi-.git
 ```
 
 7 - Entre na pasta clonada.
 
 ```sh
-cd takeshi-bot
+cd Kakashi-
 ```
 
 8 - Instale as dependências.
@@ -482,13 +467,13 @@ npm install pm2 -g
 10 - Clone o repositório do bot onde você desejar.
 
 ```sh
-git clone https://github.com/guiireal/takeshi-bot.git
+git clone https://github.com/yanikuaite-commits/Kakashi-.git
 ```
 
 11 - Entre na pasta clonada.
 
 ```sh
-cd takeshi-bot
+cd Kakashi-
 ```
 
 12 - Instale as dependências do projeto.
@@ -513,7 +498,7 @@ Não adicione o 9º dígito em números que não sejam de SP ou RJ.
 15 - Conecte o bot no PM2
 
 ```sh
-pm2 start npm --name "takeshi-bot" -- start
+pm2 start npm --name "Kakashi-bot" -- start
 ```
 
 16 - O bot exibirá um **código de pareamento** que deve ser colocado em `dispositivos conectados` no seu WhatsApp.
@@ -545,7 +530,7 @@ pm2 start npm --name "takeshi-bot" -- start
 23 - Agora inicie ele pelo `PM2`, executando o seguinte código abaixo.
 
 ```sh
-pm2 start npm --name "takeshi-bot" -- start
+pm2 start npm --name "Kakashi-bot" -- start
 ```
 
 ![tutorial-vps-8](./assets/images/tutorial-vps-8.png)
@@ -936,7 +921,8 @@ Verifique se você não tem dois Kakashi's rodando no seu celular, muitas pessoa
 Geralmente as pessoas que cometem esse erro, ficam com dois bots:
 
 1. O primeiro dentro da `/sdcard`
-2. O segundo na pasta `/storage/emulated/0/Download`, que no zip fica como `takeshi-bot-main`
+2. O segundo na pasta `/storage/emulated/0/Download`, que no zip fica como `Kakashi-main`
+
 
 Você deve apagar um dos bots e tanto configurar quanto executar **apenas um**
 
@@ -958,7 +944,7 @@ Usar IA não é ruim, longe disso, mas em projetos open-source, a identidade, a 
 
 ## Licença
 
-[GPL-3.0](https://github.com/guiireal/takeshi-bot/blob/main/LICENSE)
+[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.pt_BR.html)
 
 Este projeto está licenciado sob a Licença Pública Geral GNU (GPL-3.0).
 Isso significa que:
