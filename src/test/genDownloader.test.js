@@ -156,16 +156,20 @@ test("comando envia vídeo e apaga temporário mesmo com erro de envio", async (
   } };
   const message = { key: { remoteJid: "group@g.us" } };
   await command.handle({ socket: sock, webMessage: message, fullArgs: `${baseUrl}/source` });
-  assert.equal(messages[0].caption, "Vídeo baixado via GenDownload");
+  // Primeiro vem o aviso de download no molde único (com rodapé), depois o vídeo.
+  assert.match(messages[0].text, /┌─〔 ⏳ .*CARREGANDO/);
+  assert.ok(messages[0].text.endsWith("© Made by Yanik Uaite"));
+  const videoMessage = messages.find((data) => data.video);
+  assert.ok(videoMessage, "o comando deve enviar o vídeo baixado");
   assert.equal(mediaRequests.at(-1), "/video?quality=720");
-  await assert.rejects(stat(messages[0].video.url), { code: "ENOENT" });
+  await assert.rejects(stat(videoMessage.video.url), { code: "ENOENT" });
 
   await handleDownload({ sendMessage: async (_jid, data) => {
     if (data.video) throw new Error("Falha WhatsApp");
     messages.push(data);
   } }, message, [`${baseUrl}/source`]);
   assert.match(messages.at(-1).text, /Falha WhatsApp/);
-  assert.equal((await readdir(dirname(messages[0].video.url))).length, 0);
+  assert.equal((await readdir(dirname(videoMessage.video.url))).length, 0);
 });
 
 test("erro da API, formato inválido e limite geram mensagens úteis", async () => {

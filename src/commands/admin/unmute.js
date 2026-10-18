@@ -7,6 +7,7 @@
 import { PREFIX } from "../../config.js";
 import { DangerError, WarningError } from "../../errors/index.js";
 import { checkIfMemberIsMuted, unmuteMember } from "../../utils/database.js";
+import { moderationMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "unmute",
@@ -34,6 +35,10 @@ export default {
       throw new WarningError("Este usuário não está silenciado!");
     }
     unmuteMember(remoteJid, userId);
-    await sendSuccessReply("Usuário desmutado com sucesso!");
+    await sendSuccessReply(
+      moderationMessage({
+        resumo: `🛡️ @${userId.split("@")[0]} foi dessilenciado do grupo.`,
+      }),
+    );
   },
 };

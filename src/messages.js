@@ -7,9 +7,9 @@
  *
  * @author Dev Gui
  */
-export const welcomeMessage = "Seja bem vindo ao nosso grupo, @member!";
-export const exitMessage =
-  "Poxa, @member saiu do grupo... Sentiremos sua falta!";
+export const welcomeMessage =
+  "👋 Bem-vindo(a) @member ao *{grupo}*!\n📜 Lê as regras com {prefixo}regras";
+export const exitMessage = "👋 @member saiu do grupo. Até à próxima!";
 
 export function clearChat() {
   return `🗑️${"\n".repeat(1891)}🗑️`;

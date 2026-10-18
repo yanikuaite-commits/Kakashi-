@@ -1,6 +1,7 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
 import { askGroq } from "../../../services/ai.js";
+import { aiMessage } from "../../../utils/formatMessage.js";
 
 export default {
   name: "gemini",
@@ -23,10 +24,12 @@ export default {
 
     const responseText = await askGroq(remoteJid, text);
 
+    const framedResponse = aiMessage({ pergunta: text, resposta: responseText });
+
     if (waitingMessage) {
-      await sendEditedReply(responseText, waitingMessage);
+      await sendEditedReply(framedResponse, waitingMessage);
     } else {
-      await sendSuccessReply(responseText);
+      await sendSuccessReply(framedResponse);
     }
   },
 };

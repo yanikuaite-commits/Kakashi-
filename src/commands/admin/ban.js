@@ -2,6 +2,7 @@ import { BOT_LID, OWNER_LID, PREFIX } from "../../config.js";
 import { DangerError, InvalidParameterError } from "../../errors/index.js";
 import { onlyNumbers } from "../../utils/index.js";
 import { errorLog } from "../../utils/logger.js";
+import { moderationMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "ban",
@@ -68,7 +69,12 @@ ${PREFIX}ban (mencionando uma mensagem)`,
       );
 
       await sendSuccessReact();
-      await sendReply("Membro removido com sucesso!");
+      await sendReply(
+        moderationMessage({
+          resumo: `🛡️ *@${memberToRemoveLid.split("@")[0]}* foi removido do grupo.`,
+        }),
+        [memberToRemoveLid],
+      );
     } catch (error) {
       errorLog(error);
       await sendErrorReply(

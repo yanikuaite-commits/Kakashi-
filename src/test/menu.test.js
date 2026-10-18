@@ -10,7 +10,9 @@ const chatId = "menu-test@g.us";
 
 test("menu principal mostra navegação curta e pesquisa fica nos downloads", () => {
   const main = menuMessage(chatId, "", "Pessoa *legal*");
-  assert.match(main, /Usuário: Pessoa legal/);
+  assert.match(main, /\*Usuário:\* Pessoa legal/);
+  assert.match(main, /┌─〔 🌐 \*KAKASHI BOT • MENU\* 〕─┐/);
+  assert.ok(main.endsWith("© Made by Yanik Uaite"));
   assert.match(main, /\.menu download/);
   assert.doesNotMatch(main, /\.yt-mp4/);
   assert.match(menuMessage(chatId, "download"), /\.yt <termo>/);

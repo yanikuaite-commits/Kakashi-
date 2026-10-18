@@ -1,5 +1,6 @@
-import { BOT_NAME, DAILY_FREE_CREDITS } from "./config.js";
+import { DAILY_FREE_CREDITS } from "./config.js";
 import { getPrefix } from "./utils/database.js";
+import { formatMessage } from "./utils/formatMessage.js";
 import { formatCommand } from "./utils/index.js";
 
 export const MENU_CATEGORIES = [
@@ -137,14 +138,32 @@ export function menuMessage(groupJid, section = "", userName = "Você") {
     const items = category.commands.map(([usage, hint]) => {
       const [name, ...parameters] = usage.split(" ");
       const display = [name.replaceAll("-", " "), ...parameters].join(" ");
-      return `├ ${prefix}${display}${hint ? ` — ${hint}` : ""}`;
+      return `${prefix}${display}${hint ? ` — ${hint}` : ""}`;
     });
-    return `╭━━━ ⚡ *${BOT_NAME}* ⚡\n┃ ${category.icon} *${category.label.toUpperCase()}*\n${category.intro ? `┃ ${category.intro}\n` : ""}┣━━━━━━━━━━━━━━━━━━\n${items.join("\n")}\n╰━━ Voltar: ${prefix}menu`;
+
+    const campos = [];
+    if (category.intro) campos.push(category.intro, "");
+    campos.push(...items, "", `💡 *Volta:* ${prefix}menu`);
+
+    return formatMessage({ icone: category.icon, titulo: category.label, campos });
   }
 
   const safeName = String(userName || "Você").replace(/[\r\n*_~`]/g, "").slice(0, 32);
   const categories = MENU_CATEGORIES.map(({ key: name, label, icon }) =>
-    `├ *${prefix}menu ${name}* — ${icon} ${label}`);
+    `${prefix}menu ${name} — ${icon} ${label}`);
 
-  return `╭━━━ ⚡ *${BOT_NAME}* ⚡\n┃ MENU PRINCIPAL\n┣ 👤 Usuário: ${safeName}\n┣ 🟢 Status: Online\n┣ 📱 Chat: ${groupJid?.endsWith("@g.us") ? "Grupo" : "Privado"}\n┣━━━━━━━━━━━━━━━━━━\n┃ 📚 *CATEGORIAS*\n${categories.join("\n")}\n╰━━ Escolha: ${prefix}menu download`;
+  return formatMessage({
+    icone: "🌐",
+    titulo: "Menu",
+    campos: [
+      `👤 *Usuário:* ${safeName}`,
+      `🟢 *Status:* Online`,
+      `📱 *Chat:* ${groupJid?.endsWith("@g.us") ? "Grupo" : "Privado"}`,
+      "",
+      `📚 *CATEGORIAS*`,
+      ...categories,
+      "",
+      `💡 *Escolha:* ${prefix}menu download`,
+    ],
+  });
 }

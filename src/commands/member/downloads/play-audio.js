@@ -16,6 +16,7 @@ export default {
     sendAudioDocumentFromFile,
     sendAudioFromFile,
     fullArgs,
+    webMessage,
     remoteJid,
     sendSuccessReact,
     sendReply,
@@ -28,7 +29,12 @@ export default {
 
     let data;
     try {
-      await sendReply(downloadingMessage({ fileType: "áudio" }));
+      await sendReply(
+        downloadingMessage({
+          fileType: "áudio",
+          usuario: webMessage?.pushName,
+        }),
+      );
       data = await downloadByCommand("play-audio", fullArgs);
       await sendSuccessReact();
       await sendAudioFromFile(data.filePath, false, true);

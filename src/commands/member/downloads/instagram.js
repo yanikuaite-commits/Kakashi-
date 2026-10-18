@@ -17,6 +17,7 @@ export default {
     sendVideoFromFile,
     sendReply,
     fullArgs,
+    webMessage,
     sendWaitReact,
     sendSuccessReact,
     sendErrorReply,
@@ -33,7 +34,13 @@ export default {
 
     let data;
     try {
-      await sendReply(downloadingMessage({ fileType: "vídeo" }));
+      await sendReply(
+        downloadingMessage({
+          fileType: "vídeo",
+          usuario: webMessage?.pushName,
+          plataforma: "Instagram",
+        }),
+      );
       data = await downloadByCommand("instagram", fullArgs);
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);

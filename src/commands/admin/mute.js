@@ -8,6 +8,7 @@ import { BOT_LID, OWNER_LID, PREFIX } from "../../config.js";
 import { DangerError } from "../../errors/index.js";
 import { checkIfMemberIsMuted, muteMember } from "../../utils/database.js";
 import { onlyNumbers } from "../../utils/index.js";
+import { moderationMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "mute",
@@ -83,7 +84,9 @@ export default {
     muteMember(remoteJid, userId);
 
     await sendSuccessReply(
-      `@${targetUserNumber} foi mutado com sucesso neste grupo!`,
+      moderationMessage({
+        resumo: `🛡️ @${targetUserNumber} foi silenciado do grupo.`,
+      }),
       [userId]
     );
   },

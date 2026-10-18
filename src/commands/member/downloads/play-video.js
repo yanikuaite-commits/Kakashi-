@@ -23,6 +23,7 @@ export default {
     sendVideoFromFile,
     sendReply,
     fullArgs,
+    webMessage,
     sendSuccessReact,
     sendErrorReply,
     remoteJid,
@@ -43,7 +44,12 @@ export default {
         return;
       }
 
-      await sendReply(downloadingMessage({ fileType: "vídeo" }));
+      await sendReply(
+        downloadingMessage({
+          fileType: "vídeo",
+          usuario: webMessage?.pushName,
+        }),
+      );
       data = await downloadByCommand("play-video", source);
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);

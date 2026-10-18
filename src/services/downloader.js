@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { DEFAULT_VIDEO_HEIGHT, PENDING_DOWNLOAD_TTL_MS } from "../config.js";
+import { downloadMessage } from "../utils/formatMessage.js";
 import { downloadWithGenDownload } from "../utils/genDownloader.js";
 import { errorLog } from "../utils/logger.js";
 import { chargeMediaCredits, withCreditsContext } from "./credits.js";
@@ -194,5 +195,17 @@ export async function handlePendingResolution({
 }
 
 export function resolutionMenu() {
-  return "Qual resolução você quer?\n1. 360p\n2. 480p\n3. 720p (recomendado)\n4. 1080p\n5. Best\nResponda com o número";
+  return downloadMessage({
+    extra: [
+      "📌 *Escolha a qualidade desejada:*",
+      "",
+      "1. 360p",
+      "2. 480p",
+      "3. 720p (recomendado)",
+      "4. 1080p",
+      "5. Best",
+      "",
+      "✨ Responde apenas com o número!",
+    ].join("\n"),
+  });
 }

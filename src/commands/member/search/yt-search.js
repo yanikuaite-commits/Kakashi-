@@ -1,9 +1,21 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError, WarningError } from "../../../errors/index.js";
 import { searchYouTube } from "../../../services/youtube-search.js";
+import { formatMessage } from "../../../utils/formatMessage.js";
 
 export function formatYouTubeResult(video, index, prefix = PREFIX) {
-  return `🎬 *RESULTADO ${index + 1}*\n━━━━━━━━━━━━━━━━━━\n📌 *${video.title}*\n⏱️ ${video.duration}\n🔗 ${video.url}\n━━━━━━━━━━━━━━━━━━\n💡 Use ${prefix}play audio ou ${prefix}play video com o link (ou sem prefixo).`;
+  return formatMessage({
+    icone: "📥",
+    titulo: `Download • Resultado ${index + 1}`,
+    campos: [
+      `📌 *Título:* ${video.title}`,
+      `⏳ *Duração:* ${video.duration}`,
+      `🌐 *Fonte:* YouTube`,
+      `🔗 *Link:* ${video.url}`,
+      "",
+      `💡 Usa ${prefix}play audio ou ${prefix}play video com o link.`,
+    ],
+  });
 }
 
 export async function sendYouTubeResults(videos, { sendImageFromURL, sendReply, prefix }) {

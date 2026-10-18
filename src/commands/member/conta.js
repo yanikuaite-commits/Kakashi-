@@ -6,6 +6,7 @@ import {
 } from "../../services/credits.js";
 import { getPrefix } from "../../utils/database.js";
 import { onlyNumbers } from "../../utils/index.js";
+import { panelMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "conta",
@@ -30,7 +31,13 @@ export default {
     const section = String(parts[0] || "").toLowerCase();
 
     if (section === "custos" || section === "precos" || section === "preços") {
-      return sendReply(costsMessage({ prefix }));
+      return sendReply(
+        panelMessage({
+          icone: "📋",
+          titulo: "Tabela de custos",
+          campos: [costsMessage({ prefix })],
+        }),
+      );
     }
 
     // O dono pode consultar a conta de outro usuário. No privado o userLid vem
@@ -49,6 +56,12 @@ export default {
       .replace(/[\r\n*_~`]/g, "")
       .slice(0, 32);
 
-    await sendSuccessReply(accountMessage({ account, name, prefix }));
+    await sendSuccessReply(
+      panelMessage({
+        icone: "💳",
+        titulo: "Créditos",
+        campos: [accountMessage({ account, name, prefix })],
+      }),
+    );
   },
 };

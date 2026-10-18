@@ -1,9 +1,10 @@
 import { PREFIX } from "../../config.js";
-import { downloadByCommand, resolveDownloadSource } from "../services/downloader.js";
-import { downloadingMessage } from "../services/download-message.js";
+import { InvalidParameterError, WarningError } from "../../errors/index.js";
+import { downloadByCommand, resolveDownloadSource } from "../../services/downloader.js";
+import { downloadingMessage } from "../../services/download-message.js";
 import fs from "node:fs/promises";
-import { errorLog } from "../utils/logger.js";
-import { InvalidParameterError, WarningError } from "../errors/index.js";
+import { errorMessage, loadingMessage } from "../../utils/formatMessage.js";
+import { errorLog } from "../../utils/logger.js";
 
 export async function handleDownload(socket, webMessage, args, options = {}) {
   const fullArgs = args.join(" ");
@@ -19,7 +20,12 @@ export async function handleDownload(socket, webMessage, args, options = {}) {
     }
 
     await socket.sendMessage(socket.remoteJid || webMessage.remoteJid, {
-      text: options.downloadingMessage ? options.downloadingMessage({ fileType: "vídeo" }) : "⬇️ Baixando...",
+      text: options.downloadingMessage
+        ? options.downloadingMessage({
+            fileType: "vídeo",
+            usuario: webMessage?.pushName,
+          })
+        : loadingMessage({ usuario: webMessage?.pushName }),
     });
 
     data = await downloadByCommand("baixar", source);
@@ -31,7 +37,7 @@ export async function handleDownload(socket, webMessage, args, options = {}) {
   } catch (error) {
     errorLog(error);
     await socket.sendMessage(socket.remoteJid || webMessage.remoteJid, {
-      text: `❌ Erro! ${error.message}`,
+      text: errorMessage(error.message),
       quoted: webMessage,
     });
   } finally {

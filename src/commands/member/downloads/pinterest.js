@@ -16,6 +16,7 @@ export default {
    */
   handle: async ({
     fullArgs,
+    webMessage,
     sendWaitReact,
     sendSuccessReact,
     sendErrorReply,
@@ -30,7 +31,13 @@ export default {
 
     let data;
     try {
-      await sendReply(downloadingMessage({ fileType: "vídeo" }));
+      await sendReply(
+        downloadingMessage({
+          fileType: "vídeo",
+          usuario: webMessage?.pushName,
+          plataforma: "Pinterest",
+        }),
+      );
       data = await downloadByCommand("pinterest", fullArgs.trim());
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath, `📌 Resultado para: ${fullArgs}`);

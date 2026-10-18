@@ -3,6 +3,7 @@ import { DangerError, InvalidParameterError } from "../../errors/index.js";
 import { onlyNumbers } from "../../utils/index.js";
 import { errorLog } from "../../utils/logger.js";
 import { addWarn, getWarnLimit } from "../../utils/warnSystem.js";
+import { moderationMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "warn",
@@ -51,9 +52,11 @@ export default {
       const limit = getWarnLimit(remoteJid);
 
       await sendReply(
-        `⚠️ *@${targetLid.split("@")[0]}* foi advertido!\n` +
-          `Motivo: _"${reason}"_\n` +
-          `Total: ${newCount}/${limit} advertências`,
+        moderationMessage({
+          resumo: `🛡️ *@${targetLid.split("@")[0]}* foi advertido.`,
+          motivo: reason,
+          detalhes: [`📊 *Total:* ${newCount}/${limit} advertências`],
+        }),
         [targetLid],
       );
 
@@ -61,7 +64,11 @@ export default {
         await socket.groupParticipantsUpdate(remoteJid, [targetLid], "remove");
 
         await sendReply(
-          "❌ Limite de advertências atingido. Usuário removido.",
+          moderationMessage({
+            resumo: `🛡️ *@${targetLid.split("@")[0]}* foi removido do grupo.`,
+            motivo: "atingiu o limite de advertências",
+          }),
+          [targetLid],
         );
       }
     } catch (error) {

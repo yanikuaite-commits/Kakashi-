@@ -1,6 +1,6 @@
-import { PREFIX } from "../../config.js";
+import { PREFIX } from "../../../config.js";
 import { handleDownload } from "../download.js";
-import { downloadingMessage } from "../services/download-message.js";
+import { downloadingMessage } from "../../../services/download-message.js";
 
 export default {
   name: "baixar",

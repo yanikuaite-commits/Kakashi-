@@ -1,6 +1,7 @@
 import { PREFIX } from "../../config.js";
 import { isGroup, onlyNumbers } from "../../utils/index.js";
 import { errorLog } from "../../utils/logger.js";
+import { moderationMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "rebaixar",
@@ -29,7 +30,12 @@ export default {
     const userId = args[0] ? `${onlyNumbers(args[0])}@lid` : null;
     try {
       await socket.groupParticipantsUpdate(remoteJid, [userId], "demote");
-      await sendSuccessReply("Usuário rebaixado com sucesso!");
+      await sendSuccessReply(
+        moderationMessage({
+          resumo: `🛡️ @${userId.split("@")[0]} foi rebaixado a membro comum.`,
+        }),
+        [userId],
+      );
     } catch (error) {
       errorLog(`Erro ao rebaixar administrador: ${error.message}`);
       await sendErrorReply(

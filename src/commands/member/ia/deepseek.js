@@ -1,6 +1,7 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
 import { askGroq } from "../../../services/ai.js";
+import { aiMessage } from "../../../utils/formatMessage.js";
 
 export default {
   name: "deepseek",
@@ -23,6 +24,6 @@ export default {
 
     const responseText = await askGroq(remoteJid, text);
 
-    await sendSuccessReply(responseText);
+    await sendSuccessReply(aiMessage({ pergunta: text, resposta: responseText }));
   },
 };

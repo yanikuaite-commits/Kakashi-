@@ -2,6 +2,7 @@ import axios from "axios";
 import { PREFIX, SPIDER_API_BASE_URL } from "../../config.js";
 import { DangerError } from "../../errors/index.js";
 import { getSpiderApiToken } from "../../utils/database.js";
+import { panelMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "saldo",
@@ -38,11 +39,17 @@ export default {
         ? Number(requests_left).toLocaleString("pt-BR")
         : "0";
 
-    await sendSuccessReply(`🤖 *Saldo da Spider X API*
-      
-📦 *Plano:* ${plan}
-📊 *Resumo:* ${formattedUsed}/${formattedTotal}
-🔢 *Requests restantes:* ${formattedLeft}
-📅 *Validade do plano:* ${day}/${month}/${year}`);
+    await sendSuccessReply(
+      panelMessage({
+        icone: "🔧",
+        titulo: "Saldo Spider X API",
+        campos: [
+          `📦 *Plano:* ${plan}`,
+          `📊 *Resumo:* ${formattedUsed}/${formattedTotal}`,
+          `🔢 *Requests restantes:* ${formattedLeft}`,
+          `📅 *Validade do plano:* ${day}/${month}/${year}`,
+        ],
+      }),
+    );
   },
 };

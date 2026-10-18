@@ -24,6 +24,7 @@ export default {
     sendAudioFromFile,
     sendReply,
     fullArgs,
+    webMessage,
     sendWaitReact,
     sendSuccessReact,
     sendErrorReply,
@@ -38,7 +39,13 @@ export default {
 
     let data;
     try {
-      await sendReply(downloadingMessage({ fileType: "áudio" }));
+      await sendReply(
+        downloadingMessage({
+          fileType: "áudio",
+          usuario: webMessage?.pushName,
+          plataforma: "TikTok",
+        }),
+      );
       data = await downloadByCommand("tik-tok-audio", fullArgs);
       await sendSuccessReact();
       await sendAudioFromFile(data.filePath);

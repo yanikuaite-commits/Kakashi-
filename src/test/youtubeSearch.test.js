@@ -31,7 +31,12 @@ test("filtra canais, vídeos inválidos e retorna no máximo cinco resultados", 
     thumbnail: "https://i.ytimg.com/vi/sample00000/1.jpg",
     artist: "Canal",
   });
-  assert.match(formatYouTubeResult(results[0], 0), /RESULTADO 1.*\n━━━━━━━━━━━━━━━━━━\n📌 \*Vídeo 1\*\n⏱️ 3:00\n🔗 https:\/\/www.youtube.com\/watch\?v=sample00000/);
+  const formatted = formatYouTubeResult(results[0], 0);
+  assert.match(formatted, /┌─〔 📥 \*KAKASHI BOT • DOWNLOAD • RESULTADO 1\* 〕─┐/);
+  assert.match(formatted, /📌 \*Título:\* Vídeo 1/);
+  assert.match(formatted, /⏳ \*Duração:\* 3:00/);
+  assert.match(formatted, /🔗 \*Link:\* https:\/\/www.youtube.com\/watch\?v=sample00000/);
+  assert.ok(formatted.endsWith("© Made by Yanik Uaite"));
 });
 
 test("cada resultado envia foto e texto separados e continua sem foto", async () => {

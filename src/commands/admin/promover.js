@@ -1,6 +1,7 @@
 import { PREFIX } from "../../config.js";
 import { isGroup, onlyNumbers } from "../../utils/index.js";
 import { errorLog } from "../../utils/logger.js";
+import { moderationMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "promover",
@@ -31,7 +32,12 @@ export default {
     try {
       await socket.groupParticipantsUpdate(remoteJid, [userLid], "promote");
 
-      await sendSuccessReply("Usuário promovido com sucesso!");
+      await sendSuccessReply(
+        moderationMessage({
+          resumo: `🛡️ @${userLid.split("@")[0]} foi promovido a administrador.`,
+        }),
+        [userLid],
+      );
     } catch (error) {
       errorLog(`Erro ao promover usuário: ${error.message}`);
       await sendErrorReply(

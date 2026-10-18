@@ -2,10 +2,9 @@ import { DAILY_FREE_CREDITS, PREFIX } from "../../config.js";
 import { InvalidParameterError } from "../../errors/index.js";
 import { ownerContactLine } from "../../services/credits.js";
 import { getPrefix } from "../../utils/database.js";
+import { formatMessage } from "../../utils/formatMessage.js";
 
 const CREDITS_FLOW = `
-💳 *COMO FUNCIONAM OS CRÉDITOS*
-
 Cada função do bot gasta créditos.
 
 🎁 Você recebe ${DAILY_FREE_CREDITS} créditos grátis por dia.
@@ -37,13 +36,18 @@ export default {
     const section = fullArgs.trim().toLowerCase();
 
     if (["creditos", "credito", "credits", "conta", "carteira"].includes(section)) {
-      return sendReply(CREDITS_FLOW.trim());
+      return sendReply(
+        formatMessage({
+          icone: "💳",
+          titulo: "Créditos",
+          campos: [CREDITS_FLOW.trim()],
+        }),
+      );
     }
 
     if (section) {
       const helpByCategory = {
-        download: `📥 *DOWNLOADS*
-Use comandos de download respondendo ou enviando links.
+        download: `Use comandos de download respondendo ou enviando links.
 
 ${prefix}baixar <link>
 ${prefix}instagram <link>
@@ -53,30 +57,41 @@ ${prefix}tiktok-audio <link>
 ${prefix}xtwitter <link>
 ${prefix}pinterest <link>
 
-⚠ Cada download gasta créditos (veja ${prefix}conta - ${prefix}conta custos).
-      `.trim(),
+⚠ Cada download gasta créditos (veja ${prefix}conta - ${prefix}conta custos).`.trim(),
       };
+
+      const categoryIcons = { download: "📥" };
+      const categoryTitles = { download: "Downloads" };
 
       const content = helpByCategory[section];
       if (!content) {
         throw new InvalidParameterError(
-          `Categoria desconhecida. Use ${prefix}help para ver o tema de créditos.`,
+          `Categoria desconhecida. Use ${prefix}help para ver o tema de crédritos.`,
         );
       }
 
-      return sendReply(content);
+      return sendReply(
+        formatMessage({
+          icone: categoryIcons[section] || "📖",
+          titulo: categoryTitles[section] || section,
+          campos: [content],
+        }),
+      );
     }
 
     return sendReply(
-      `📖 *COMANDOS DISPONÍVEIS*
-
-${prefix}menu — ver categorias
+      formatMessage({
+        icone: "📖",
+        titulo: "Ajuda",
+        campos: [
+          `${prefix}menu — ver categorias
 ${prefix}conta — seus créditos e estatísticas
 ${prefix}conta custos — tabela de custos das funções
 ${prefix}help creditos — como funcionam os créditos
 
-💡 Dica: para ver todos os comandos, use ${prefix}menu.
-      `.trim(),
+💡 Dica: para ver todos os comandos, use ${prefix}menu.`,
+        ],
+      }),
     );
   },
 };

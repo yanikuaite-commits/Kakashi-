@@ -19,6 +19,7 @@ export default {
     sendVideoFromFile,
     sendReply,
     fullArgs,
+    webMessage,
     sendWaitReact,
     sendSuccessReact,
     sendErrorReply,
@@ -35,7 +36,13 @@ export default {
 
     let data;
     try {
-      await sendReply(downloadingMessage({ fileType: "vídeo" }));
+      await sendReply(
+        downloadingMessage({
+          fileType: "vídeo",
+          usuario: webMessage?.pushName,
+          plataforma: "X (Twitter)",
+        }),
+      );
       data = await downloadByCommand("x-twitter", fullArgs);
       await sendSuccessReact();
       await sendVideoFromFile(data.filePath);

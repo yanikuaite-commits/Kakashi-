@@ -4,12 +4,17 @@
  *
  * @author Dev Gui
  */
-import { BOT_EMOJI, ONLY_GROUP_ID } from "../config.js";
+import { BOT_EMOJI, ONLY_GROUP_ID, PREFIX } from "../config.js";
 import {
   DangerError,
   InvalidParameterError,
   WarningError,
 } from "../errors/index.js";
+import {
+  moderationMessage,
+  permissionMessage,
+  usageMessage,
+} from "./formatMessage.js";
 import {
   checkPermission,
   hasTypeAndCommand,
@@ -40,7 +45,7 @@ import {
   isActiveGroup,
   isActiveOnlyAdmins,
 } from "./database.js";
-import { findCommandInMessage } from "./index.js";
+import { findCommandInMessage, onlyNumbers } from "./index.js";
 import { errorLog } from "./logger.js";
 
 /**
@@ -86,7 +91,11 @@ export async function dynamicCommand(paramsHandler, startProcess) {
       await socket.groupParticipantsUpdate(remoteJid, [userLid], "remove");
 
       await sendReply(
-        "Anti-link ativado! Você foi removido por enviar um link!"
+        moderationMessage({
+          resumo: `🛡️ *@${onlyNumbers(userLid)}* foi removido do grupo.`,
+          motivo: "enviou um link com o anti-link ativado",
+        }),
+        [userLid],
       );
 
       await socket.sendMessage(remoteJid, {
@@ -153,7 +162,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
 
     if (!(await checkPermission({ type, ...invocation }))) {
       await sendErrorReply(
-        "Você não tem permissão para executar este comando!"
+        permissionMessage("🚫 Você não tem permissão para executar este comando!")
       );
       return;
     }
@@ -162,9 +171,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
       isActiveOnlyAdmins(remoteJid) &&
       !(await isAdmin({ remoteJid, userLid, socket }))
     ) {
-      await sendWarningReply(
-        "Somente administradores podem executar comandos!"
-      );
+      await sendWarningReply(permissionMessage());
       return;
     }
   }
@@ -183,7 +190,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
 
       if (!(await checkPermission({ type, ...invocation }))) {
         await sendErrorReply(
-          "Você não tem permissão para executar este comando!"
+          permissionMessage("🚫 Você não tem permissão para executar este comando!")
         );
         return;
       }
@@ -215,7 +222,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   }
 
   if (isPrivate && !isOwner && type !== "member") {
-    await sendErrorReply("Você não tem permissão para executar este comando!");
+    await sendErrorReply(permissionMessage("🚫 Você não tem permissão para executar este comando!"));
     return;
   }
 
@@ -279,7 +286,15 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     }
 
     if (error instanceof InvalidParameterError) {
-      await sendWarningReply(`Parâmetros inválidos! ${error.message}`);
+      const usage = command?.usage?.split("\n")[0];
+      const prettyUsage =
+        usage && usage.startsWith(PREFIX)
+          ? `${groupPrefix}${usage.slice(PREFIX.length)}`
+          : usage;
+
+      await sendWarningReply(
+        usageMessage({ usage: prettyUsage, detalhe: error.message }),
+      );
     } else if (error instanceof WarningError) {
       await sendWarningReply(error.message);
     } else if (error instanceof DangerError) {
@@ -291,19 +306,11 @@ export async function dynamicCommand(paramsHandler, startProcess) {
       const isSpiderAPIError = url.includes("api.spiderx.com.br");
 
       await sendErrorReply(
-        `Ocorreu um erro ao executar uma chamada remota para ${
-          isSpiderAPIError ? "a Spider X API" : url
-        } no comando ${command.name}!
-      
-📄 *Detalhes*: ${messageText}`
+        `Chamada remota falhou (${isSpiderAPIError ? "Spider X API" : url}) no comando ${command.name}: ${messageText}`,
       );
     } else {
       errorLog("Erro ao executar comando", error);
-      await sendErrorReply(
-        `Ocorreu um erro ao executar o comando ${command.name}!
-      
-📄 *Detalhes*: ${error.message}`
-      );
+      await sendErrorReply(`No comando ${command.name}: ${error.message}`);
     }
   }
 }

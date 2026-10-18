@@ -4,6 +4,7 @@
  * @author Dev Gui
  */
 import { PREFIX } from "../../config.js";
+import { formatMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "ping",
@@ -15,9 +16,7 @@ export default {
    * @param {CommandHandleProps} props
    */
   handle: async ({ sendReply, sendReact, startProcess, commandName }) => {
-    const response = commandName === "ping"
-      ? "🏓 Pong!"
-      : "🏓 Ping!";
+    const response = commandName === "ping" ? "🏓 *Pong!*" : "🏓 *Ping!*";
 
     await sendReact("🏓");
 
@@ -29,9 +28,16 @@ export default {
 
     const ping = Date.now() - startProcess;
 
-    await sendReply(`${response}
-
-📶 Velocidade de resposta: ${ping}ms
-⏱️ Uptime: ${h}h ${m}m ${s}s`);
+    await sendReply(
+      formatMessage({
+        icone: "🏓",
+        titulo: "Ping",
+        campos: [
+          response,
+          `📶 *Velocidade:* ${ping}ms`,
+          `⏱️ *Uptime:* ${h}h ${m}m ${s}s`,
+        ],
+      }),
+    );
   },
 };
