@@ -1,6 +1,5 @@
 node_modules
 .git
-assets/auth
 assets/temp
 database/*.json
 tmp
