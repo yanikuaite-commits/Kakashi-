@@ -327,7 +327,9 @@ const normalizeNativeFlowButton = (button, index) => {
                 }),
                 header: buildInteractiveHeader(message, m),
                 nativeFlowMessage: WAProto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
-                    buttons: nativeButtons
+                    buttons: nativeButtons,
+                    messageParamsJson: '{}',
+                    messageVersion: 1
                 })
             };
             if (hasOptionalProperty(message, 'footer') && !!message.footer) {
@@ -377,7 +379,9 @@ const normalizeNativeFlowButton = (button, index) => {
     if (hasOptionalProperty(message, 'interactiveButtons') && !!message.interactiveButtons) {
         const interactiveMessage = {
             nativeFlowMessage: WAProto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
-                buttons: message.interactiveButtons.map(normalizeNativeFlowButton)
+                buttons: message.interactiveButtons.map(normalizeNativeFlowButton),
+                messageParamsJson: '{}',
+                messageVersion: 1
             })
         };
         if (hasNonNullishProperty(message, 'text') || hasOptionalProperty(message, 'caption')) {
@@ -548,6 +552,28 @@ const normalizeNativeFlowButton = (button, index) => {
         }
     }`,
         "hasOptionalProperty(message, 'buttons')",
+        filePath
+    );
+
+    contents = replaceRequired(
+        contents,
+        `buttons: nativeButtons
+                })`,
+        `buttons: nativeButtons,
+                    messageParamsJson: '{}',
+                    messageVersion: 1
+                })`,
+        filePath
+    );
+
+    contents = replaceRequired(
+        contents,
+        `buttons: message.interactiveButtons.map(normalizeNativeFlowButton)
+            })`,
+        `buttons: message.interactiveButtons.map(normalizeNativeFlowButton),
+                messageParamsJson: '{}',
+                messageVersion: 1
+            })`,
         filePath
     );
 

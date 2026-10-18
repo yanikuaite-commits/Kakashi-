@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { generateWAMessageContent } from "baileys";
 import {
   copyButton,
   createInteractiveActionId,
@@ -22,6 +23,32 @@ test("interactive builders preserve IDs and produce Baileys payloads", () => {
   assert.equal(urlButton("Canal", "javascript:alert(1)"), null);
   assert.equal(copyButton("Copiar", "https://example.com").name, "cta_copy");
   assert.equal(singleSelectList({ text: "Escolhe", title: "Menu", sections: [] }).buttonText, "Selecionar");
+});
+
+test("simple and native buttons include required native-flow metadata", async () => {
+  const contents = await Promise.all([
+    generateWAMessageContent(
+      {
+        text: "Teste",
+        buttons: [{ buttonId: "kmenu:test", buttonText: { displayText: "Abrir" } }],
+      },
+      {},
+    ),
+    generateWAMessageContent(
+      {
+        text: "Teste",
+        interactiveButtons: [quickReplyButton("Abrir", "kmenu:test")],
+      },
+      {},
+    ),
+  ]);
+
+  for (const content of contents) {
+    const flow = content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage;
+    assert.equal(flow.messageVersion, 1);
+    assert.equal(flow.messageParamsJson, "{}");
+    assert.match(flow.buttons[0].buttonParamsJson, /kmenu:test/);
+  }
 });
 
 test("envio interativo usa fallback numerado quando o envio falha", async () => {
