@@ -2,6 +2,7 @@ import { DAILY_FREE_CREDITS } from "./config.js";
 import { getPrefix } from "./utils/database.js";
 import { formatMessage } from "./utils/formatMessage.js";
 import { formatCommand } from "./utils/index.js";
+import { numberedFallback } from "./utils/interactive.js";
 
 export const MENU_CATEGORIES = [
   {
@@ -166,4 +167,79 @@ export function menuMessage(groupJid, section = "", userName = "Você") {
       `💡 *Escolha:* ${prefix}menu download`,
     ],
   });
+}
+
+export function buildInteractiveMenuPayload(groupJid, section = "", userName = "Você") {
+  const prefix = getPrefix(groupJid);
+  const key = formatCommand(String(section).trim());
+  const category = MENU_CATEGORIES.find(({ key: name, aliases }) =>
+    key === name || aliases.includes(key));
+
+  const rows = category
+    ? category.commands.map(([usage, hint]) => {
+        const [commandName, ...params] = String(usage).split(" ");
+        const command = `${prefix}${[commandName, ...params].join(" ")}`.trim();
+        return {
+          title: commandName.replaceAll("-", " "),
+          description: hint || "Abrir comando",
+          rowId: command,
+        };
+      })
+    : MENU_CATEGORIES.map(({ key: name, label, icon, intro }) => ({
+        title: `${icon} ${label}`,
+        description: intro || `Abrir ${label.toLowerCase()}`,
+        rowId: `${prefix}menu ${name}`,
+      }));
+
+  if (!rows.length) return null;
+
+  const fallbackOptions = rows.map(({ title, description }, index) => ({
+    number: String(index + 1),
+    title: `${title}${description ? ` — ${description}` : ""}`,
+  }));
+
+  const content = {
+    text: category
+      ? formatMessage({
+          icone: category.icon,
+          titulo: category.label,
+          campos: [
+            category.intro || `📚 Comandos da categoria ${category.label}`,
+            "",
+            ...rows.map(({ title, description }) => `• ${title}${description ? ` — ${description}` : ""}`),
+            "",
+            `💡 *Volta:* ${prefix}menu`,
+          ],
+        })
+      : formatMessage({
+          icone: "🌐",
+          titulo: "Menu",
+          campos: [
+            `👤 *Usuário:* ${String(userName || "Você").replace(/[\r\n*_~`]/g, "").slice(0, 32)}`,
+            "",
+            `📚 *CATEGORIAS*`,
+            ...rows.map(({ title }) => `• ${title}`),
+            "",
+            `💡 *Escolha:* ${prefix}menu download`,
+          ],
+        }),
+    title: category ? category.label : "Menu principal",
+    footer: "© Made by Yanik Uaite",
+    buttonText: category ? "Abrir comando" : "Abrir categoria",
+    sections: [{
+      title: category ? category.label : "Categorias",
+      rows: rows.map(({ title, description, rowId }) => ({ title, description, rowId })),
+    }],
+    viewOnce: true,
+  };
+
+  return {
+    content,
+    fallbackText: numberedFallback(fallbackOptions),
+    responseMappings: rows.map(({ rowId }) => ({ id: rowId, target: rowId })),
+    fallbackActions: fallbackOptions.map(({ number, title }) => {
+      const row = rows[Number(number) - 1];
+      return { number, id: row?.rowId ?? title };
+    }),
+  };
 }
