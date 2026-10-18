@@ -1,5 +1,7 @@
 /** Helpers para montar e enviar mensagens interativas com fallback em texto. */
 import { randomUUID } from "node:crypto";
+import { ensureFrame, withFooter } from "./formatMessage.js";
+import { errorLog } from "./logger.js";
 
 export const INTERACTIVE_MENU_TTL_MS = 2 * 60 * 1000;
 
@@ -231,10 +233,17 @@ export async function sendInteractiveWithFallback({
     });
     return true;
   } catch (error) {
-    onSendError?.(error);
+    if (onSendError) {
+      onSendError(error);
+    } else {
+      errorLog(
+        `Falha ao enviar mensagem interativa para ${chatId}: ${error.message || error}`,
+      );
+    }
     if (!sendReply || !fallbackText) return false;
 
     try {
+      if (!sendReply) throw new Error("sendReply indisponível");
       await sendReply(fallbackText);
       registerMenu({
         chatId,
@@ -245,8 +254,33 @@ export async function sendInteractiveWithFallback({
         sendReply,
       });
       return true;
-    } catch {
-      return false;
+    } catch (replyError) {
+      errorLog(
+        `O fallback via sendReply falhou para ${chatId}: ${replyError.message || replyError}; a tentar envio direto.`,
+      );
+
+      try {
+        await socket.sendMessage(chatId, {
+          text: withFooter(ensureFrame(fallbackText)),
+        });
+        registerMenu({
+          chatId,
+          ownerId,
+          ids: idsFromContent(content),
+          responseMappings,
+          fallbackActions,
+          sendReply,
+        });
+        return true;
+      } catch (fallbackError) {
+        errorLog(
+          `O fallback direto também falhou para ${chatId}: ${fallbackError.message || fallbackError}`,
+        );
+        throw new Error(
+          `Falha no menu interativo e no fallback: ${fallbackError.message || fallbackError}`,
+          { cause: fallbackError },
+        );
+      }
     }
   }
 }

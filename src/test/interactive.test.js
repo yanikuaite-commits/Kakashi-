@@ -70,16 +70,35 @@ test("envio interativo usa fallback numerado quando o envio falha", async () => 
   assert.match(fallback, /Responde apenas com o número/);
 });
 
-test("envio interativo retorna false quando o envio e o fallback falham", async () => {
-  const sent = await sendInteractiveWithFallback({
+test("envio interativo propaga falha quando o fallback também falha", async () => {
+  await assert.rejects(sendInteractiveWithFallback({
     socket: { sendMessage: async () => { throw new Error("sem suporte"); } },
     chatId: "grupo@g.us",
     content: { text: "menu" },
     fallbackText: "Escolhe 1",
     sendReply: async () => { throw new Error("sem conexão"); },
+  }), /Falha no menu interativo e no fallback: sem suporte/);
+});
+
+test("fallback tenta envio direto se sendReply falhar", async () => {
+  const sentMessages = [];
+  const sent = await sendInteractiveWithFallback({
+    socket: {
+      sendMessage: async (_chatId, content) => {
+        if (content.text !== "menu") sentMessages.push(content);
+        else throw new Error("sem suporte interativo");
+      },
+    },
+    chatId: "grupo-fallback-direto@g.us",
+    content: { text: "menu" },
+    fallbackText: "1. Opção",
+    sendReply: async () => { throw new Error("presença indisponível"); },
   });
 
-  assert.equal(sent, false);
+  assert.equal(sent, true);
+  assert.equal(sentMessages.length, 1);
+  assert.ok(sentMessages[0].text.endsWith(RODAPE));
+  assert.match(sentMessages[0].text, /1\. Opção/);
 });
 
 test("rodapé fica no fim e dentro do limite máximo do WhatsApp", () => {
