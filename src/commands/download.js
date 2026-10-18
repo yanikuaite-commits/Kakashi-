@@ -1,11 +1,14 @@
 import fs from "node:fs/promises";
 import { downloadVideo } from "../services/downloader.js";
+import { downloadMessage, errorMessage, usageMessage } from "../utils/formatMessage.js";
 
 export async function handleDownload(sock, message, args) {
   const jid = message.key.remoteJid;
   const url = args[0];
   if (!url) {
-    await sock.sendMessage(jid, { text: "Informe o link do vídeo. Exemplo: baixar https://exemplo.com/video" });
+    await sock.sendMessage(jid, {
+      text: usageMessage({ usage: "baixar https://exemplo.com/video" }),
+    });
     return;
   }
 
@@ -16,12 +19,17 @@ export async function handleDownload(sock, message, args) {
     await sock.sendMessage(jid, {
       video: { url: filePath },
       mimetype: result.mimetype,
-      caption: "Vídeo baixado via GenDownload",
+      caption: downloadMessage({
+        titulo: result.title,
+        canal: result.artist,
+        plataforma: "Download",
+        extra: "✅ Feito! Aqui está o vídeo que pediste 🎉",
+      }),
     });
     console.log("Vídeo enviado com sucesso.");
   } catch (error) {
     console.error("Erro ao baixar vídeo com GenDownload:", error);
-    await sock.sendMessage(jid, { text: `Não consegui baixar este vídeo: ${error.message}` });
+    await sock.sendMessage(jid, { text: errorMessage(error.message) });
   } finally {
     if (filePath) await fs.rm(filePath, { force: true });
   }

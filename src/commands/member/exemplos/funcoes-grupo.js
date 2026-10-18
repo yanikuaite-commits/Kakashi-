@@ -19,8 +19,6 @@ export default {
     getGroupOwner,
     getGroupParticipants,
     getGroupAdmins,
-    socket,
-    remoteJid,
   }) => {
     await sendReact("👥");
 
@@ -41,10 +39,10 @@ export default {
 
     const groupOwner = await getGroupOwner();
     if (groupOwner) {
-      await socket.sendMessage(remoteJid, {
-        text: `👑 *Dono do grupo:* @${groupOwner.split("@")[0]}`,
-        mentions: [groupOwner],
-      });
+      await sendReply(
+        `👑 *Dono do grupo:* @${groupOwner.split("@")[0]}`,
+        [groupOwner],
+      );
     }
 
     await delay(3000);
@@ -59,10 +57,10 @@ export default {
       const adminList = admins
         .map((admin) => `@${admin.split("@")[0]}`)
         .join(", ");
-      await socket.sendMessage(remoteJid, {
-        text: `👮 *Administradores (${admins.length}):*\n${adminList}`,
-        mentions: admins,
-      });
+      await sendReply(
+        `👮 *Administradores (${admins.length}):*\n${adminList}`,
+        admins,
+      );
     } else {
       await sendReply("👮 *Nenhum administrador encontrado.*");
     }

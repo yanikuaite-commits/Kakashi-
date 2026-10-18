@@ -3,7 +3,11 @@ import { InvalidParameterError, WarningError } from "../../errors/index.js";
 import { downloadByCommand, resolveDownloadSource } from "../../services/downloader.js";
 import { downloadingMessage } from "../../services/download-message.js";
 import fs from "node:fs/promises";
-import { errorMessage, loadingMessage } from "../../utils/formatMessage.js";
+import {
+  downloadMessage,
+  errorMessage,
+  loadingMessage,
+} from "../../utils/formatMessage.js";
 import { errorLog } from "../../utils/logger.js";
 
 export async function handleDownload(socket, webMessage, args, options = {}) {
@@ -32,7 +36,13 @@ export async function handleDownload(socket, webMessage, args, options = {}) {
     await socket.sendMessage(socket.remoteJid || webMessage.remoteJid, { react: { text: "✅", key: webMessage.key } });
     await socket.sendMessage(socket.remoteJid || webMessage.remoteJid, {
       video: { url: data.filePath },
-      caption: "",
+      caption: downloadMessage({
+        titulo: data.title,
+        canal: data.artist,
+        plataforma: data.platform || "Vídeo",
+        usuario: webMessage?.pushName,
+        extra: "✅ Feito! Aqui está o vídeo que pediste 🎉",
+      }),
     });
   } catch (error) {
     errorLog(error);

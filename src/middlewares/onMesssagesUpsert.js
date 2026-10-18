@@ -24,6 +24,7 @@ import { handleAfkReferences } from "./afkHandler.js";
 import { onGroupParticipantsUpdate } from "./onGroupParticipantsUpdate.js";
 import { handlePendingDocOffer, handlePendingResolution } from "../services/downloader.js";
 import { handleAudioFormatReply } from "../utils/audioFormatMenu.js";
+import { handleInteractiveMenuReply } from "../utils/interactive.js";
 
 export async function onMessagesUpsert({ socket, messages, startProcess }) {
   if (!messages.length) {
@@ -151,16 +152,48 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         continue;
       }
 
+      const interactiveReply = await handleInteractiveMenuReply({
+        chatId: commonFunctions.remoteJid,
+        senderId:
+          commonFunctions.userLid ||
+          (!commonFunctions.remoteJid.endsWith("@g.us")
+            ? commonFunctions.remoteJid
+            : ""),
+        text: commonFunctions.fullMessage,
+        sendReply: commonFunctions.sendReply,
+      });
+
+      if (interactiveReply?.handled) {
+        continue;
+      }
+
+      let commandFunctions = commonFunctions;
+      if (interactiveReply?.selectedId) {
+        commandFunctions = loadCommonFunctions({
+          socket,
+          webMessage: {
+            ...webMessage,
+            message: {
+              ...webMessage.message,
+              conversation: interactiveReply.selectedId,
+            },
+          },
+        });
+      }
+
       await customMiddleware({
         socket,
         webMessage,
         type: "message",
-        commonFunctions,
+        commonFunctions: commandFunctions,
       });
 
-      await handleAfkReferences({ webMessage, commonFunctions });
+      await handleAfkReferences({
+        webMessage,
+        commonFunctions: commandFunctions,
+      });
 
-      await dynamicCommand(commonFunctions, startProcess);
+      await dynamicCommand(commandFunctions, startProcess);
     } catch (error) {
       if (badMacHandler.handleError(error, "message-processing")) {
         continue;

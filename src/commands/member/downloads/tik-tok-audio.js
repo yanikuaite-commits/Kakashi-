@@ -2,6 +2,7 @@ import { PREFIX } from "../../../config.js";
 import { InvalidParameterError, WarningError } from "../../../errors/index.js";
 import { downloadByCommand } from "../../../services/downloader.js";
 import { downloadingMessage } from "../../../services/download-message.js";
+import { startAudioFormatMenu } from "../../../utils/audioFormatMenu.js";
 import fs from "node:fs/promises";
 import { errorLog } from "../../../utils/logger.js";
 
@@ -21,13 +22,15 @@ export default {
    * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
-    sendAudioFromFile,
     sendReply,
     fullArgs,
     webMessage,
     sendWaitReact,
     sendSuccessReact,
     sendErrorReply,
+    socket,
+    remoteJid,
+    userLid,
   }) => {
     if (!fullArgs.length) {
       throw new InvalidParameterError("Você precisa enviar uma URL do TikTok!");
@@ -48,7 +51,25 @@ export default {
       );
       data = await downloadByCommand("tik-tok-audio", fullArgs);
       await sendSuccessReact();
-      await sendAudioFromFile(data.filePath);
+      const sent = await startAudioFormatMenu({
+        socket,
+        chatId: remoteJid,
+        ownerLid: userLid,
+        ownerName: webMessage?.pushName,
+        sendReply,
+        payload: {
+          filePath: data.filePath,
+          fileName: data.fileName,
+          title: data.title,
+          artist: data.artist,
+          duration: data.duration,
+          platform: "TikTok",
+          thumbnail: data.thumbnail,
+          mimetype: "audio/mpeg",
+        },
+      });
+      if (!sent) await sendErrorReply("Não consegui abrir as opções de formato do áudio.");
+      data.filePath = sent ? null : data.filePath;
     } catch (error) {
       errorLog(error);
       await sendErrorReply(error.message);

@@ -1,5 +1,10 @@
 import { delay } from "baileys";
 import { PREFIX } from "../../../config.js";
+import { formatMessage, RODAPE } from "../../../utils/formatMessage.js";
+import {
+  numberedFallback,
+  sendInteractiveWithFallback,
+} from "../../../utils/interactive.js";
 
 export default {
   name: "enviar-carrossel",
@@ -20,33 +25,64 @@ export default {
 
     await delay(3000);
 
-    await socket.sendMessage(remoteJid, {
-      text: "🎨 Galeria de Exemplos",
-      footer: "Deslize para ver todos os cards →",
-      cards: [
+    const cards = [
         {
           title: "🖼️ Card 1: Imagem de Exemplo",
           image: {
             url: "https://api.spiderx.com.br/storage/samples/sample-image.jpg",
           },
-          caption: "Esta é a primeira imagem do carrossel",
+          caption: formatMessage({
+            icone: "🖼️",
+            titulo: "Card 1",
+            campos: ["Esta é a primeira imagem do carrossel."],
+          }),
         },
         {
           title: "📸 Card 2: Outra Imagem",
           image: {
             url: "https://api.spiderx.com.br/assets/images/logo.png",
           },
-          caption: "Segunda imagem com descrição diferente",
+          caption: formatMessage({
+            icone: "📸",
+            titulo: "Card 2",
+            campos: ["Segunda imagem com descrição diferente."],
+          }),
         },
         {
           title: "🎭 Card 3: Terceira Opção",
           image: {
             url: "https://api.spiderx.com.br/storage/samples/sample-image.jpg",
           },
-          caption: "Outro exemplo de card no carrossel",
+          caption: formatMessage({
+            icone: "🎭",
+            titulo: "Card 3",
+            campos: ["Outro exemplo de card no carrossel."],
+          }),
         },
-      ],
-      viewOnce: true,
+    ];
+
+    await sendInteractiveWithFallback({
+      socket,
+      chatId: remoteJid,
+      content: {
+        text: formatMessage({
+          icone: "🎠",
+          titulo: "Galeria de exemplos",
+          campos: ["Desliza para ver os cards."],
+          rodape: null,
+        }),
+        footer: RODAPE,
+        cards,
+        viewOnce: true,
+      },
+      fallbackText: numberedFallback(
+        cards.map((card, index) => ({
+          number: String(index + 1),
+          title: card.title,
+        })),
+        "Este cliente não apresenta carrosséis; as descrições estão acima.",
+      ),
+      sendReply,
     });
 
     await delay(3000);

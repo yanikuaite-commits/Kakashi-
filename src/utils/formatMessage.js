@@ -104,10 +104,18 @@ export function ensureFrame(text, options = {}) {
 export function withFooter(text = "") {
   const value = String(text ?? "");
 
-  if (!value || value.includes(RODAPE)) return value;
-  if (value.length + RODAPE.length + 2 > 4096) return value;
+  if (!value) return value;
 
-  return `${value}\n\n${RODAPE}`;
+  const trimmed = value.trimEnd();
+  if (trimmed.endsWith(RODAPE)) return trimmed;
+
+  const maxContentLength = 4096 - RODAPE.length - 2;
+  let content = trimmed;
+  if (content.length > maxContentLength) {
+    content = content.slice(0, maxContentLength).trimEnd();
+  }
+
+  return `${content}\n\n${RODAPE}`;
 }
 
 /* ════════════ TEMPLATES PRONTOS ════════════ */

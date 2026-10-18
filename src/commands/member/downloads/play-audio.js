@@ -57,6 +57,8 @@ export default {
         fileName: data.fileName,
         title: data.title,
         artist: data.artist,
+        duration: data.duration,
+        platform: /youtube\.com|youtu\.be/i.test(url) ? "YouTube" : "Link direto",
         thumbnail: data.thumbnail,
         mimetype: data.mimetype,
       },

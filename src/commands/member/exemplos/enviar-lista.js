@@ -1,5 +1,12 @@
 import { delay } from "baileys";
 import { PREFIX } from "../../../config.js";
+import { formatMessage, RODAPE } from "../../../utils/formatMessage.js";
+import {
+  clearInteractiveMenu,
+  createInteractiveActionId,
+  numberedFallback,
+  sendInteractiveWithFallback,
+} from "../../../utils/interactive.js";
 
 export default {
   name: "enviar-lista",
@@ -15,11 +22,22 @@ export default {
     sendReply,
     sendReact,
     prefix,
+    userLid,
   }) => {
     await sendReact("📋");
 
     const triggerCommand = (parametro) =>
       `${prefix || PREFIX}exemplo-gatilho ${parametro}`;
+    const ownerId =
+      userLid || (remoteJid.endsWith("@g.us") ? "" : remoteJid);
+    clearInteractiveMenu(remoteJid, ownerId);
+    const listOptions = [
+      { number: "1", label: "Imagem", target: triggerCommand("imagem") },
+      { number: "2", label: "Vídeo", target: triggerCommand("video") },
+      { number: "3", label: "Áudio", target: triggerCommand("audio") },
+      { number: "4", label: "Botões", target: triggerCommand("botoes") },
+      { number: "5", label: "Carrossel", target: triggerCommand("carrossel") },
+    ].map((option) => ({ ...option, id: createInteractiveActionId() }));
 
     await delay(2000);
 
@@ -29,29 +47,37 @@ export default {
 
     await delay(3000);
 
-    await socket.sendMessage(remoteJid, {
-      text: "Escolha uma categoria para ver exemplos",
-      title: "Menu de exemplos",
-      footer: "Lista de opções",
-      buttonText: "Abrir lista",
-      sections: [
+    await sendInteractiveWithFallback({
+      socket,
+      chatId: remoteJid,
+      content: {
+        text: formatMessage({
+          icone: "📋",
+          titulo: "Menu de exemplos",
+          campos: ["Escolhe uma categoria para ver exemplos:"],
+          rodape: null,
+        }),
+        title: "Menu de exemplos",
+        footer: RODAPE,
+        buttonText: "Abrir lista",
+        sections: [
         {
           title: "Mídias",
           rows: [
             {
               title: "Imagem",
               description: "Exemplos de envio de imagens",
-              rowId: triggerCommand("imagem"),
+                rowId: listOptions[0].id,
             },
             {
               title: "Vídeo",
               description: "Exemplos de envio de vídeos",
-              rowId: triggerCommand("video"),
+                rowId: listOptions[1].id,
             },
             {
               title: "Áudio",
               description: "Exemplos de envio de áudios",
-              rowId: triggerCommand("audio"),
+                rowId: listOptions[2].id,
             },
           ],
         },
@@ -61,17 +87,31 @@ export default {
             {
               title: "Botões",
               description: "Exemplos com botões",
-              rowId: triggerCommand("botoes"),
+                rowId: listOptions[3].id,
             },
             {
               title: "Carrossel",
               description: "Exemplos em formato de cards",
-              rowId: triggerCommand("carrossel"),
+                rowId: listOptions[4].id,
             },
           ],
         },
-      ],
-      viewOnce: true,
+        ],
+        viewOnce: true,
+      },
+      fallbackText: numberedFallback(
+        listOptions.map(({ number, label, target }) => ({
+          number,
+          title: `${label}: ${target}`,
+        })),
+      ),
+      fallbackActions: listOptions.map(({ number, target }) => ({
+        number,
+        id: target,
+      })),
+      responseMappings: listOptions.map(({ id, target }) => ({ id, target })),
+      ownerId,
+      sendReply,
     });
 
     await delay(3000);

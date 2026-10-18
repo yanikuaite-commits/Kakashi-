@@ -111,6 +111,9 @@ export function loadCommonFunctions({ socket, webMessage }) {
     return await download(webMessage, fileName, "video", "mp4");
   };
 
+  const formatCaption = (caption) =>
+    caption ? withFooter(ensureFrame(caption)) : "";
+
   const sendText = async (text, mentions) => {
     await sendTypingState();
 
@@ -121,7 +124,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
     }
 
     return await socket.sendMessage(remoteJid, {
-      text: `${BOT_EMOJI} ${withFooter(ensureFrame(text))}`,
+      text: formatCaption(text),
       ...optionalParams,
     });
   };
@@ -134,7 +137,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
     }
 
     return await socket.sendMessage(remoteJid, {
-      text: `${BOT_EMOJI} ${withFooter(ensureFrame(text))}`,
+      text: formatCaption(text),
       ...optionalParams,
       edit: messageToEdit.key,
     });
@@ -151,7 +154,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
 
     return await socket.sendMessage(
       remoteJid,
-      { text: `${BOT_EMOJI} ${withFooter(ensureFrame(text))}`, ...optionalParams },
+      { text: formatCaption(text), ...optionalParams },
       { quoted: JSON.parse(JSON.stringify(webMessage)) },
     );
   };
@@ -166,7 +169,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
     return await socket.sendMessage(
       remoteJid,
       {
-        text: `${BOT_EMOJI} ${withFooter(ensureFrame(text))}`,
+        text: formatCaption(text),
         ...optionalParams,
         edit: messageToEdit.key,
       },
@@ -311,7 +314,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
         remoteJid,
         {
           image: fs.readFileSync(file),
-          caption: caption ? `${BOT_EMOJI} ${withFooter(caption)}` : "",
+          caption: formatCaption(caption),
           ...optionalParams,
         },
         {
@@ -342,7 +345,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
         remoteJid,
         {
           image: { url },
-          caption: caption ? `${BOT_EMOJI} ${withFooter(caption)}` : "",
+          caption: formatCaption(caption),
           ...optionalParams,
         },
         { url, ...quotedObject },
@@ -371,7 +374,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
         remoteJid,
         {
           image: buffer,
-          caption: caption ? `${BOT_EMOJI} ${withFooter(caption)}` : "",
+          caption: formatCaption(caption),
           ...optionalParams,
         },
         {
@@ -401,7 +404,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
       remoteJid,
       {
         video: fs.readFileSync(file),
-        caption: caption ? `${BOT_EMOJI} ${withFooter(caption)}` : "",
+        caption: formatCaption(caption),
         ...optionalParams,
       },
       {
@@ -547,7 +550,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
       remoteJid,
       {
         video: { url },
-        caption: caption ? `${BOT_EMOJI} ${withFooter(caption)}` : "",
+        caption: formatCaption(caption),
         ...optionalParams,
       },
       { url, ...quotedObject },
@@ -573,7 +576,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
       remoteJid,
       {
         video: fs.readFileSync(file),
-        caption: caption ? `${BOT_EMOJI} ${withFooter(caption)}` : "",
+        caption: formatCaption(caption),
         gifPlayback: true,
         ...optionalParams,
       },
@@ -602,7 +605,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
       remoteJid,
       {
         video: { url },
-        caption: caption ? `${BOT_EMOJI} ${withFooter(caption)}` : "",
+        caption: formatCaption(caption),
         gifPlayback: true,
         ...optionalParams,
       },
@@ -629,7 +632,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
       remoteJid,
       {
         video: buffer,
-        caption: caption ? `${BOT_EMOJI} ${withFooter(caption)}` : "",
+        caption: formatCaption(caption),
         gifPlayback: true,
         ...optionalParams,
       },
@@ -688,7 +691,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
         document: fs.readFileSync(filePath),
         mimetype,
         fileName: fileName || "musica.mp3",
-        caption: withFooter(`Título: ${title}\nArtista: ${artist}`),
+        caption: formatCaption(`Título: ${title}\nArtista: ${artist}`),
         ...(jpegThumbnail ? { jpegThumbnail } : {}),
       },
       quotedObject,
@@ -757,7 +760,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
       remoteJid,
       {
         video: buffer,
-        caption: caption ? `${BOT_EMOJI} ${withFooter(caption)}` : "",
+        caption: formatCaption(caption),
         ...optionalParams,
       },
       {

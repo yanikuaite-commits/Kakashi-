@@ -3,6 +3,7 @@ import { PREFIX } from "../../config.js";
 import { InvalidParameterError } from "../../errors/index.js";
 import { getRandomName, getRandomNumber } from "../../utils/index.js";
 import { toMp3 } from "../../services/converter.js";
+import { startAudioFormatMenu } from "../../utils/audioFormatMenu.js";
 
 export default {
   name: "to-mp3",
@@ -18,8 +19,11 @@ export default {
     webMessage,
     sendWaitReact,
     sendSuccessReact,
-    sendAudioFromFile,
     downloadVideo,
+    socket,
+    remoteJid,
+    userLid,
+    sendReply,
   }) => {
     if (!isVideo) {
       throw new InvalidParameterError(
@@ -34,9 +38,21 @@ export default {
     const output = await toMp3(videoPath);
 
     await sendSuccessReact();
-    await sendAudioFromFile(output);
+    await startAudioFormatMenu({
+      socket,
+      chatId: remoteJid,
+      ownerLid: userLid,
+      ownerName: webMessage?.pushName,
+      sendReply,
+      payload: {
+        filePath: output,
+        fileName: "audio-convertido.mp3",
+        title: "Áudio convertido",
+        artist: "",
+        mimetype: "audio/mpeg",
+      },
+    });
 
-    fs.unlinkSync(output);
     fs.unlinkSync(videoPath);
   },
 };

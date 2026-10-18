@@ -21,7 +21,15 @@
  * @author Dev Gui
  */
 import fs from "node:fs/promises";
-import { RODAPE, formatMessage } from "./formatMessage.js";
+import { RODAPE, downloadMessage, formatMessage } from "./formatMessage.js";
+import {
+  copyButton,
+  numberedFallback as buildNumberedFallback,
+  quickReplyButton,
+  sendInteractiveWithFallback,
+  singleSelectList,
+  urlButton,
+} from "./interactive.js";
 import { errorLog } from "./logger.js";
 
 // TTL da pendência: 2 minutos para escolher o formato.
@@ -55,14 +63,16 @@ const CHOICES = [
   {
     token: "fmt:docname",
     number: "4",
-    title: "📄 Documento nomeado",
-    description: "Documento intitulado: título - artista",
+    title: "📄 Documento com título",
+    description: "O título será usado como nome do ficheiro .mp3",
     fallback: "Responde apenas com o número 👇",
     confirm: null,
   },
 ];
 
 const MENU_TOKEN = "fmt:menu";
+const DEFAULT_CHANNEL_URL =
+  "https://www.youtube.com/@devgui_?sub_confirmation=1";
 
 // Pendências por `${chatId}:${ownerLid}`.
 const pendingFormats = new Map();
@@ -102,13 +112,7 @@ function removeFile(filePath) {
 }
 
 function numberedFallback() {
-  return [
-    "Não consegui abrir a lista 😕",
-    "",
-    ...CHOICES.map((choice) => `${choice.number}. ${choice.title}`),
-    "",
-    "Responde apenas com o número 👇",
-  ].join("\n");
+  return buildNumberedFallback(CHOICES);
 }
 
 function formatListMessage() {
@@ -118,19 +122,45 @@ function formatListMessage() {
     rowId: choice.token,
   }));
 
-  return {
-    text: "Escolhe o formato do áudio",
+  return singleSelectList({
+    text: formatMessage({
+      icone: "🎵",
+      titulo: "Formato do áudio",
+      campos: ["Escolhe como queres receber:"],
+      rodape: null,
+    }),
     title: "Formato do áudio",
     footer: RODAPE,
-    buttonText: "Abrir lista",
+    buttonText: "Selecionar",
     sections: [
       {
         title: "Formatos",
         rows,
       },
     ],
-    viewOnce: true,
-  };
+  });
+}
+
+function safeAudioFileName(title) {
+  const name = String(title || "Áudio")
+    .replace(/\.mp3$/i, "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .trim()
+    .slice(0, 120);
+  return `${name || "audio"}.mp3`;
+}
+
+function formatDuration(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60);
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function getOwnerId(chatId, ownerLid) {
+  if (ownerLid) return ownerLid;
+  return chatId.endsWith("@g.us") ? "" : chatId;
 }
 
 /**
@@ -147,9 +177,17 @@ export async function startAudioFormatMenu({
   sendReply,
   payload,
   url = "",
+  channelUrl = DEFAULT_CHANNEL_URL,
 }) {
+  const ownerId = getOwnerId(chatId, ownerLid);
+  if (!ownerId) {
+    await removeFile(payload?.filePath);
+    await sendReply("🚫 Não consegui confirmar quem fez o pedido. Envia o comando novamente.");
+    return false;
+  }
+
   // Um novo pedido substitui o anterior do mesmo utilizador no mesmo chat.
-  const key = pendingKey(chatId, ownerLid);
+  const key = pendingKey(chatId, ownerId);
   const previous = pendingFormats.get(key);
   if (previous) {
     dropPending(previous);
@@ -159,7 +197,7 @@ export async function startAudioFormatMenu({
   const pending = {
     key,
     chatId,
-    ownerLid: ownerLid || "sem-lid",
+    ownerLid: ownerId,
     ownerName: sanitizeName(ownerName) || "dono do pedido",
     sendReply,
     payload: { ...payload },
@@ -180,68 +218,46 @@ export async function startAudioFormatMenu({
 
   pendingFormats.set(key, pending);
 
-  const campos = [`📌 *Título:* ${payload.title || "Áudio"}`];
-  if (payload.artist) campos.push(`🎤 *Artista:* ${payload.artist}`);
-  campos.push(
-    "",
-    "✅ Download concluído! escolhe como queres receber:",
-    ...CHOICES.map((choice) => `${choice.number}. ${choice.title}`),
-    "",
-    "⬇️ Toca em *Escolher Formato* para abrir a lista 👇",
-  );
-
-  const caption = formatMessage({
-    icone: "🎵",
-    titulo: "Áudio pronto",
-    campos,
+  const caption = downloadMessage({
+    titulo: payload.title || "Áudio",
+    canal: payload.artist,
+    duracao: formatDuration(payload.duration),
+    plataforma: payload.platform,
+    usuario: pending.ownerName,
+    extra: "✨ Escolhe o formato desejado abaixo!",
   });
 
-  const interactiveButtons = [
-    {
-      name: "quick_reply",
-      buttonParamsJson: JSON.stringify({
-        display_text: "🎛️ Escolher Formato",
-        id: MENU_TOKEN,
-      }),
-    },
-  ];
+  const interactiveButtons = [quickReplyButton("🎛️ Escolher Formato", MENU_TOKEN)];
+  const channelButton = urlButton("📢 Canal", channelUrl);
+  if (channelButton) interactiveButtons.push(channelButton);
 
   if (url) {
-    interactiveButtons.push({
-      name: "cta_copy",
-      buttonParamsJson: JSON.stringify({
-        display_text: "📋 Copiar link",
-        copy_code: url,
-      }),
-    });
+    interactiveButtons.push(copyButton("📋 Copiar link", url));
   }
 
-  try {
-    const content = {
-      caption,
-      footer: RODAPE,
-      interactiveButtons,
-      viewOnce: true,
-    };
+  const content = { interactiveButtons, viewOnce: true };
 
-    if (payload.thumbnail) {
-      content.image = { url: payload.thumbnail };
-    } else {
-      content.text = caption;
-      delete content.caption;
-    }
-
-    await socket.sendMessage(chatId, content);
-    return true;
-  } catch (error) {
-    errorLog(`Erro ao enviar o card de formato do áudio: ${error.message}`);
-    try {
-      await sendReply(numberedFallback());
-      return true;
-    } catch {
-      return false;
-    }
+  if (payload.thumbnail) {
+    content.image = { url: payload.thumbnail };
+    content.caption = caption;
+  } else {
+    content.text = caption;
   }
+
+  const sent = await sendInteractiveWithFallback({
+    socket,
+    chatId,
+    content,
+    fallbackText: numberedFallback(),
+    sendReply,
+    onSendError: (error) =>
+      errorLog(`Erro ao enviar o card de formato do áudio: ${error.message}`),
+  });
+  if (!sent) {
+    dropPending(pending);
+    await removeFile(pending.payload?.filePath);
+  }
+  return sent;
 }
 
 async function deliverFormat(pending, choice, helpers) {
@@ -269,14 +285,11 @@ async function deliverFormat(pending, choice, helpers) {
         artist,
         thumbnail,
         true,
-        mimetype,
+        "audio/mpeg",
       );
       break;
     case "fmt:docname": {
-      const named =
-        title && artist
-          ? `${title} - ${artist}.mp3`
-          : fileName || "musica.mp3";
+      const named = safeAudioFileName(title || fileName);
       await helpers.sendAudioDocumentFromFile(
         filePath,
         named,
@@ -284,7 +297,7 @@ async function deliverFormat(pending, choice, helpers) {
         artist,
         thumbnail,
         true,
-        mimetype,
+        "audio/mpeg",
       );
       break;
     }
@@ -328,7 +341,8 @@ export async function handleAudioFormatReply({
     return false;
   }
 
-  const own = pendingFormats.get(pendingKey(chatId, senderLid));
+  const senderId = senderLid || getOwnerId(chatId, "");
+  const own = senderId ? pendingFormats.get(pendingKey(chatId, senderId)) : null;
   const pending = own || findFirstInChat(chatId);
 
   // Nada pendente neste chat: deixa o fluxo normal seguir.
@@ -336,7 +350,8 @@ export async function handleAudioFormatReply({
 
   // Outro utilizador tocou num botão/respondeu com número: não consome.
   if (!own) {
-    const mentions = pending.ownerLid ? [pending.ownerLid] : undefined;
+    const mentions =
+      pending.ownerLid && pending.ownerLid !== chatId ? [pending.ownerLid] : undefined;
     await sendReply(
       `🚫 Este menu de formato é de @${pending.ownerName}! Só quem pediu pode escolher.`,
       mentions,
@@ -345,12 +360,15 @@ export async function handleAudioFormatReply({
   }
 
   if (value === MENU_TOKEN) {
-    try {
-      await socket.sendMessage(chatId, formatListMessage());
-    } catch (error) {
-      errorLog(`Erro ao enviar a lista de formato: ${error.message}`);
-      await sendReply(numberedFallback()).catch(() => {});
-    }
+    await sendInteractiveWithFallback({
+      socket,
+      chatId,
+      content: formatListMessage(),
+      fallbackText: numberedFallback(),
+      sendReply,
+      onSendError: (error) =>
+        errorLog(`Erro ao enviar a lista de formato: ${error.message}`),
+    });
     return true;
   }
 

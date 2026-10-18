@@ -20,6 +20,7 @@ export default {
     sendErrorReply,
     sendWaitReply,
     sendSuccessReact,
+    sendImageFromURL,
   }) => {
     if (!isGroup(remoteJid)) {
       throw new InvalidParameterError(
@@ -76,11 +77,7 @@ export default {
 
       await sendSuccessReact();
 
-      await socket.sendMessage(remoteJid, {
-        image: { url: profilePicUrl },
-        caption: mensagem,
-        mentions: mentions,
-      });
+      await sendImageFromURL(profilePicUrl, mensagem, mentions);
     } catch (error) {
       console.error(error);
       sendErrorReply("Ocorreu um erro ao tentar verificar o perfil.");

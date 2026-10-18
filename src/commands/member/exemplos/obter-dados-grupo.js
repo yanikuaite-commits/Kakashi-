@@ -15,8 +15,6 @@ export default {
     sendErrorReply,
     getGroupMetadata,
     isGroup,
-    socket,
-    remoteJid,
   }) => {
     await sendReact("👥");
 
@@ -71,10 +69,10 @@ export default {
             )
             .join("\n");
 
-        await socket.sendMessage(remoteJid, {
-          text: adminList,
-          mentions: admins.map((admin) => admin.id),
-        });
+        await sendReply(
+          adminList,
+          admins.map((admin) => admin.id),
+        );
       }
 
       await delay(3000);

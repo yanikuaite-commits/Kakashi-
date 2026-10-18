@@ -6,6 +6,7 @@
  */
 import { PREFIX } from "../../config.js";
 import { InvalidParameterError } from "../../errors/index.js";
+import { formatMessage } from "../../utils/formatMessage.js";
 
 export default {
   name: "fake-chat",
@@ -59,7 +60,13 @@ export default {
 
     await socket.sendMessage(
       remoteJid,
-      { text: responseText },
+      {
+        text: formatMessage({
+          icone: "💬",
+          titulo: "Resposta de teste",
+          campos: [responseText],
+        }),
+      },
       { quoted: fakeQuoted }
     );
   },
