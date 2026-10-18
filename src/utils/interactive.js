@@ -38,6 +38,27 @@ export function copyButton(label, value) {
   };
 }
 
+/**
+ * Botão nativeFlow `single_select`: abre a lista de opções direto do card.
+ *
+ * @param {string} label texto do botão
+ * @param {Array<{title: string, rows: Array<{id: string, title: string, description?: string}>}>} sections
+ * @param {{title?: string}} [options] título interno da lista
+ */
+export function singleSelectButton(label, sections, { title } = {}) {
+  if (!Array.isArray(sections) || !sections.some((section) => section.rows?.length)) {
+    return null;
+  }
+
+  return {
+    name: "single_select",
+    buttonParamsJson: JSON.stringify({
+      title: title || label,
+      sections,
+    }),
+  };
+}
+
 export function singleSelectList({
   text,
   title,

@@ -6,7 +6,7 @@ import { dirname } from "node:path";
 import { after, before, test } from "node:test";
 import { downloadWithGenDownload } from "../utils/genDownloader.js";
 import { handleDownload } from "../commands/download.js";
-import { downloadAudio, downloadVideo, downloadByCommand, resolveDownloadSource, setPendingResolution, takePendingResolution, handlePendingResolution, setPendingDocOffer, handlePendingDocOffer } from "../services/downloader.js";
+import { downloadAudio, downloadVideo, downloadByCommand, resolveDownloadSource, setPendingDocOffer, handlePendingDocOffer } from "../services/downloader.js";
 import command from "../commands/member/downloads/download.js";
 import playVideo from "../commands/member/downloads/play-video.js";
 import { findCommandImport, formatCommand } from "../utils/index.js";
@@ -126,7 +126,7 @@ test("play pesquisa antes do GenDownload mas aceita links diretos", async () => 
   await assert.rejects(downloadByCommand("play-video", "sem resultado", async () => []), /Nenhum vídeo encontrado/);
 });
 
-test("play video pesquisa o primeiro resultado e pede resolução antes do download", async () => {
+test("play video pesquisa o primeiro resultado e abre o card de qualidade", async () => {
   const found = await resolveDownloadSource("play-video", "Minha pesquisa", async (term, limit) => {
     assert.equal(term, "Minha pesquisa");
     assert.equal(limit, 1);
@@ -134,18 +134,26 @@ test("play video pesquisa o primeiro resultado e pede resolução antes do downl
   });
   assert.equal(found.source, `${baseUrl}/source`);
 
-  const replies = [];
+  const sent = [];
   await playVideo.handle({
-    remoteJid: "play-video-test",
+    socket: { sendMessage: async (_jid, content) => sent.push(content) },
+    remoteJid: "play-video-test@g.us",
+    userLid: "dono@lid",
     fullArgs: "https://www.youtube.com/watch?v=exemplo",
-    sendReply: async (message) => replies.push(message),
+    sendReply: async () => {},
   });
-  assert.match(replies[0], /1\. 360p/);
-  assert.match(replies[0], /5\. Best/);
-  assert.deepEqual(takePendingResolution("play-video-test", "3"), {
-    source: "https://www.youtube.com/watch?v=exemplo",
-    height: 720,
-  });
+
+  // O vídeo ainda não é baixado: primeiro vem o card interativo.
+  const card = sent[0];
+  assert.match(card.text, /┌─〔 📥 .*DOWNLOAD/);
+  assert.match(card.text, /📌 \*Título:\* Vídeo/);
+  assert.match(card.text, /🌐 \*Fonte:\* YouTube/);
+  const buttons = card.interactiveButtons.map((button) => JSON.parse(button.buttonParamsJson));
+  assert.equal(buttons[0].id, "vfmt:menu");
+  assert.ok(
+    buttons.some(({ copy_code }) => copy_code === "https://www.youtube.com/watch?v=exemplo"),
+    "o card deve oferecer o link do vídeo",
+  );
 });
 
 test("comando envia vídeo e apaga temporário mesmo com erro de envio", async () => {
@@ -183,24 +191,6 @@ test("erro da API, formato inválido e limite geram mensagens úteis", async () 
   await assert.rejects(downloadWithGenDownload(`${baseUrl}/metadata-all-large`), /100 MB/);
   await assert.rejects(downloadWithGenDownload(`${baseUrl}/large`), /100 MB/);
   await assert.rejects(downloadWithGenDownload(`${baseUrl}/image`), /mídia compatível/);
-});
-
-test("menu pendente remove arquivo mesmo quando o envio falha", async () => {
-  setPendingResolution("chat", `${baseUrl}/source`);
-  let pendingPath;
-  const replies = [];
-  const handled = await handlePendingResolution({
-    chatId: "chat",
-    text: "3",
-    sendReply: async (text) => { replies.push(text); },
-    sendVideoFromFile: async (filePath) => {
-      pendingPath = filePath;
-      throw new Error("Falha no envio");
-    },
-  });
-  assert.equal(handled, true);
-  assert.match(replies.at(-1), /Falha no envio/);
-  await assert.rejects(stat(pendingPath), { code: "ENOENT" });
 });
 
 test("oferta de documento é respondida com 1 ou 2 e apaga o MP3", async (t) => {

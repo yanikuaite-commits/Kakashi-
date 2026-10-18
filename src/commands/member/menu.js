@@ -1,9 +1,11 @@
 import path from "node:path";
 import { ASSETS_DIR, PREFIX } from "../../config.js";
 import { InvalidParameterError } from "../../errors/index.js";
-import { buildInteractiveMenuPayload, menuMessage } from "../../menu.js";
+import { menuMessage } from "../../menu.js";
 import { getPrefix } from "../../utils/database.js";
-import { sendInteractiveWithFallback } from "../../utils/interactive.js";
+import { startGuidedMenu } from "../../interactive/flow.js";
+import { CATEGORIES } from "../../interactive/menuRegistry.js";
+import { sendMainMenu } from "../../utils/mainMenu.js";
 
 export default {
   name: "menu",
@@ -22,36 +24,72 @@ export default {
     sendImageFromFile,
     sendReply,
     userLid,
+    isOwner,
   }) => {
-    const section = String(fullArgs || "").trim();
-    const caption = menuMessage(remoteJid, section, webMessage?.pushName);
-    const interactive = buildInteractiveMenuPayload(remoteJid, section, webMessage?.pushName);
-
-    if (section && !caption && !interactive) {
-      throw new InvalidParameterError(`Categoria desconhecida. Use ${getPrefix(remoteJid)}menu para ver as opções.`);
-    }
-
     if (typeof sendSuccessReact === "function") {
-      await sendSuccessReact();
+      await sendSuccessReact().catch(() => {});
     }
 
-    if (socket && typeof sendReply === "function" && interactive) {
-      const ownerId = userLid || (remoteJid.endsWith("@g.us") ? "" : remoteJid);
-      await sendInteractiveWithFallback({
-        socket,
-        chatId: remoteJid,
-        content: interactive.content,
-        fallbackText: interactive.fallbackText,
-        fallbackActions: interactive.fallbackActions,
-        responseMappings: interactive.responseMappings,
-        ownerId,
-        sendReply,
-      });
-      return;
+    const section = String(fullArgs || "").trim();
+    const chave = section.toLowerCase();
+    const categoria = section
+      ? CATEGORIES.find(
+          (item) => item.id === chave || item.aliases.includes(chave),
+        )
+      : null;
+
+    if (section && !categoria) {
+      throw new InvalidParameterError(
+        `Categoria desconhecida. Use ${getPrefix(remoteJid)}menu para ver as opções.`,
+      );
     }
+
+    const ownerId =
+      userLid || (remoteJid.endsWith("@g.us") ? "" : remoteJid);
+
+    if (socket && typeof sendReply === "function" && ownerId) {
+      const permissions = isOwner ? { isOwner: true, isAdmin: true } : undefined;
+
+      // `.menu <categoria>` continua a abrir o card da categoria.
+      if (categoria) {
+        const sent = await startGuidedMenu({
+          socket,
+          chatId: remoteJid,
+          ownerId,
+          ownerName: webMessage?.pushName,
+          sendReply,
+          webMessage,
+          section: categoria.id,
+          permissions,
+        });
+
+        if (sent) return;
+      } else {
+        // `.menu` abre o card visual principal (com fallbacks).
+        const sent = await sendMainMenu(socket, remoteJid, {
+          ownerId,
+          ownerName: webMessage?.pushName,
+          sendReply,
+          webMessage,
+          permissions,
+          timestamp: webMessage?.messageTimestamp,
+        });
+
+        if (sent) return;
+      }
+    }
+
+    // Sem socket (ou sem autor confirmado): mantém o card de texto antigo.
+    const caption = menuMessage(
+      remoteJid,
+      categoria ? categoria.id : section,
+      webMessage?.pushName,
+    );
 
     if (!caption) {
-      throw new InvalidParameterError(`Categoria desconhecida. Use ${getPrefix(remoteJid)}menu para ver as opções.`);
+      throw new InvalidParameterError(
+        `Categoria desconhecida. Use ${getPrefix(remoteJid)}menu para ver as opções.`,
+      );
     }
 
     if (typeof sendImageFromFile === "function") {

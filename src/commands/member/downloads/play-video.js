@@ -4,10 +4,9 @@ import {
   downloadByCommand,
   isYouTubeUrl,
   resolveDownloadSource,
-  resolutionMenu,
-  setPendingResolution,
 } from "../../../services/downloader.js";
 import { downloadingMessage } from "../../../services/download-message.js";
+import { startVideoFormatMenu } from "../../../utils/videoFormatMenu.js";
 import fs from "node:fs/promises";
 import { errorLog } from "../../../utils/logger.js";
 
@@ -20,6 +19,7 @@ export default {
    * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
+    socket,
     sendVideoFromFile,
     sendReply,
     fullArgs,
@@ -27,6 +27,7 @@ export default {
     sendSuccessReact,
     sendErrorReply,
     remoteJid,
+    userLid,
   }) => {
     if (!fullArgs.length) {
       throw new InvalidParameterError(
@@ -37,10 +38,24 @@ export default {
     let data;
     try {
       const source = fullArgs.trim();
+
+      // Pesquisa por nome ou link do YouTube: mostra o menu de qualidade.
       if (!/^https?:\/\//i.test(source) || isYouTubeUrl(source)) {
         const resolved = await resolveDownloadSource("play-video", source);
-        setPendingResolution(remoteJid, resolved.source);
-        await sendReply(resolutionMenu());
+
+        await startVideoFormatMenu({
+          socket,
+          chatId: remoteJid,
+          ownerLid: userLid,
+          ownerName: webMessage?.pushName,
+          sendReply,
+          source: resolved.source,
+          title: resolved.match?.title,
+          artist: resolved.match?.artist,
+          duration: resolved.match?.duration,
+          thumbnail: resolved.match?.thumbnail,
+          url: resolved.match?.url || source.match(/https?:\/\/\S+/)?.[0] || "",
+        });
         return;
       }
 

@@ -58,7 +58,7 @@ export const MENU_CATEGORIES = [
     commands: [
       ["yt <termo>", "5 resultados com fotos"],
       ["play-audio <nome ou link>", "pesquisa ou link"],
-      ["play-video <nome ou link>", "escolha a resolução"],
+      ["play-video <nome ou link>", "escolha a qualidade"],
       ["baixar <link>", "vídeo de várias plataformas"],
       ["instagram <link>"], ["facebook <link>"],
       ["tik-tok <link>"], ["tik-tok-audio <link>"],

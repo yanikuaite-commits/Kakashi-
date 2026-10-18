@@ -49,6 +49,31 @@ export const ASSETS_DIR = path.resolve(__dirname, "..", "assets");
 // Diretório de arquivos temporários.
 export const TEMP_DIR = path.resolve(__dirname, "..", "assets", "temp");
 
+// ==========================================================================
+// MENU PRINCIPAL (card visual do .menu)
+// ==========================================================================
+// Nome mostrado no card é o BOT_NAME acima; o criador aparece no card e no
+// rodapé.
+export const MAIN_MENU_CREATOR = process.env.MAIN_MENU_CREATOR || "Yanik Uaite";
+
+// Número do dono com DDI, só dígitos (ex.: 258840000000). Vazio esconde o
+// botão "👑 Dono" (https://wa.me/NUMERO).
+export const MAIN_MENU_OWNER_NUMBER = process.env.MAIN_MENU_OWNER_NUMBER || "";
+
+// Canal oficial do botão "📢 Canal". Vazio esconde o botão.
+export const MAIN_MENU_CHANNEL_URL =
+  process.env.MAIN_MENU_CHANNEL_URL ||
+  "https://www.youtube.com/@devgui_?sub_confirmation=1";
+
+// Imagem do cabeçalho: caminho local OU URL https. Vazio = card sem imagem.
+export const MAIN_MENU_IMAGE =
+  process.env.MAIN_MENU_IMAGE ||
+  path.join(ASSETS_DIR, "images", "takeshi-bot.png");
+
+// Rodapé exato do card interativo.
+export const MAIN_MENU_FOOTER =
+  process.env.MAIN_MENU_FOOTER || `© ${BOT_NAME} • Escolha abaixo`;
+
 // Timeout em milissegundos por evento (evita banimento).
 export const TIMEOUT_IN_MILLISECONDS_BY_EVENT = 500;
 

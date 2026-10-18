@@ -780,7 +780,8 @@ const patchSocket = () => {
         const interactive = message?.interactiveMessage;
         const buttons = interactive?.nativeFlowMessage?.buttons ||
             interactive?.carouselMessage?.cards?.[0]?.nativeFlowMessage?.buttons;
-        return buttons?.[0]?.name || 'quick_reply';
+        return buttons?.find(button => button?.name === 'single_select')?.name ||
+            buttons?.[0]?.name || 'quick_reply';
     };
     const getButtonType = (message) => {
         if (message?.buttonsMessage) {
@@ -816,6 +817,16 @@ const patchSocket = () => {
         return {};
     };`,
         'const hasNativeFlowNode =',
+        filePath
+    );
+    // Cards com cta_url + single_select + cta_url precisam do nó "mixed"
+    // independente da ordem dos botões, por isso o single_select é procurado
+    // em toda a lista (instalações antigas ainda tinham só buttons[0]).
+    contents = replaceRequired(
+        contents,
+        "        return buttons?.[0]?.name || 'quick_reply';",
+        `        return buttons?.find(button => button?.name === 'single_select')?.name ||
+            buttons?.[0]?.name || 'quick_reply';`,
         filePath
     );
 

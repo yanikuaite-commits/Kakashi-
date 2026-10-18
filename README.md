@@ -173,15 +173,115 @@ também aceitam espaços, como `play video`, `anti link` e `set prefix`.
 A pesquisa por texto no YouTube usa `youtube-search-api`
 e envia até cinco resultados em mensagens individuais: uma imagem de thumbnail
 e uma mensagem com título, duração e link para cada vídeo. Use `yt <termo>`;
-`play audio <termo ou link>` envia áudio e `play video <termo ou link>` permite
-escolher a resolução de vídeos do YouTube (1 a 5) antes do download. Links de
-outras plataformas em `play video` baixam diretamente. `pinterest` exige URL.
+`play audio <termo ou link>` envia áudio e `play video <termo ou link>` abre o
+card “📥 Download” com o botão **🎛️ Escolher Qualidade**: a lista single-select
+traz 360p, 480p, 720p (recomendado), 1080p e Best, e o vídeo só é baixado depois
+da escolha (o menu tem timeout de 2 minutos). Só quem pediu pode escolher; se a
+lista não abrir, responda com o número de 1 a 5. Links de outras plataformas em
+`play video` baixam diretamente. `pinterest` exige URL.
 Downloads têm timeout de cinco minutos e limite de 100 MB por arquivo;
 os fallbacks de ATTP e os ajustes de IA ficam em `src/config.js`: modelos/temperatura da Groq (`GROQ_*`) e imagem da Google (`GEMINI_*`).
 
+### Menu principal visual (`.menu`)
+
+O `.menu` abre um card com imagem de cabeçalho, o molde “🌐 / INFORMAÇÕES”,
+rodapé `© Kakashi Bot • Escolha abaixo` e três botões:
+
+| Botão | Ação |
+| --- | --- |
+| 👑 Dono | `cta_url` para `https://wa.me/<número do dono>` |
+| 🔰 Ver Menus 🔰 | `single_select` com as categorias (id `cat:<categoria>`) |
+| 📢 Canal | `cta_url` para o canal oficial |
+
+Valores dinâmicos: `@usuario` (com `mentions` real), data/hora no fuso
+**Africa/Maputo**, dia da semana em português e `Velocidade` (diferença entre
+o `messageTimestamp` da mensagem e o envio, em segundos com 4 casas).
+
+Configuração (todas em `src/config.js`, com override por variável de ambiente):
+
+| Variável | Para quê |
+| --- | --- |
+| `BOT_NAME` | nome no card |
+| `MAIN_MENU_CREATOR` | criador (card e rodapé) |
+| `MAIN_MENU_OWNER_NUMBER` | número do dono, só dígitos com DDI (vazio esconde o botão Dono) |
+| `MAIN_MENU_CHANNEL_URL` | link do canal (vazio esconde o botão Canal) |
+| `MAIN_MENU_IMAGE` | caminho local **ou** URL https da imagem (vazio = sem imagem) |
+| `MAIN_MENU_FOOTER` | texto do rodapé |
+
+Exemplo: `MAIN_MENU_OWNER_NUMBER=258840000000`, `MAIN_MENU_IMAGE=https://.../menu.png`.
+
+Fallbacks, nesta ordem (o formato usado vai para o console como `[menu] ...`):
+card nativeFlow com imagem → card nativeFlow sem imagem (se a imagem falhar) →
+lista clássica (`listMessage`) com as categorias → texto com o mesmo visual e as
+categorias numeradas (“Responde com o número”). O menu de texto/imagem antigo
+continua como último recurso quando o socket não permite o card.
+
+O `cta_url` é suportado pelo Baileys deste repo (`normalizeNativeFlowButton`
+adianta `merchant_url` e o nó `biz/native_flow` é injetado no relay). O
+`scripts/patch-baileys.mjs` procura o botão `single_select` em **toda** a lista
+de botões (não só no primeiro), para injetar o nó `mixed` + `quality_control`
+mesmo com o `cta_url` do Dono antes dele; sem esse ajuste o botão de lista não
+abre em alguns clientes. A linha de “cupom” da captura de referência **não** foi
+implementada: cupom é recurso de mensagens de template/business, não existe no
+nativeFlow.
+
+### Fluxo guiado do menu (4 passos)
+
+O `src/menu.js` continua a ser o catálogo de texto; o fluxo guiado vive em
+`src/interactive/` e reaproveita os comandos existentes (nenhuma lógica de
+download/IA é duplicada).
+
+1. **Menu principal** — `.menu` envia o card com **[👑 Dono]** (só o dono),
+   **[📚 Ver Menus]** e **[📢 Canal]**.
+2. **Categoria** — “Ver Menus” abre a lista single-select de categorias. Ao
+escolher, o card mostra ícone, mini descrição, resumo
+   (`N funções • Prefixo [ / ]`) e os botões **[📂 Abrir Funções]**,
+   **[🏠 Menu Principal]** e **[📢 Canal]**.
+3. **Função** — o card da função diz o que enviar, mostra o atalho direto
+   (`/tik-tok https://...`) e os botões **[🔙 Voltar às Funções]**,
+   **[🏠 Menu Principal]** e **[❌ Cancelar]**.
+4. **Execução** — a próxima mensagem do mesmo utilizador/chat é a entrada da
+   função. O link é validado, o bot responde “⏳ Já estou a tratar do teu
+   pedido, @usuario...”, corre o comando real e termina com
+   **[🔁 Outro link] [🔙 Voltar às Funções] [🏠 Menu Principal]**.
+
+Regras do fluxo:
+
+- IDs: `menu:main`, `menu:categories[:n]`, `cat:<id>`, `fnlist:<cat>[:n]`,
+  `fn:<cat>:<funcao>`, `back:<cat>`, `run:<cat>:<funcao>`, `cancel`.
+- Estado por `chatId:ownerId`, TTL de 2 minutos; um comando com prefixo cancela
+  o estado e executa normalmente.
+- Só o autor usa os botões; outro membro recebe “🚫 Este menu é de @usuario”.
+- Link inválido avisa e **mantém** o estado (basta reenviar).
+- Fallback sem botões: o mesmo conteúdo em texto numerado (1, 2, 3…) é aceite;
+  o formato usado em cada envio é registado no console (`[fluxo] ...`).
+- Categorias **Dono** (só dono) e **Administração/Proteção** (admin ou dono)
+  só aparecem para quem tem permissão.
+
+O `play video`/`play audio` continuam a abrir os menus de qualidade/formato
+depois do link, como antes.
+
+#### Como adicionar uma função nova
+
+Só é preciso editar `src/interactive/menuRegistry.js`:
+
+```js
+entry("download", "kwai", "kwai", {
+  titulo: "Kwai",
+  icone: "🎬",
+  descricao: "Baixa vídeos do Kwai.",
+  guia: "Envie o link do vídeo do Kwai.",
+  aceita: "link", // link | texto | midia | nenhum
+  exemplo: "https://kwai.com/...",
+  validador: (valor) => /kwai\.com/i.test(valor),
+});
+```
+
+O comando indicado tem de existir em `src/commands/member`.
+
 ### Teste manual dos comandos migrados
 
-1. `play video <nome ou link YouTube>` e responda `1` a `5` para escolher resolução.
+1. `play video <nome ou link YouTube>`, toque em **Escolher Qualidade** (ou responda `1` a `5`) e confirme o vídeo na qualidade escolhida.
 2. `play audio <nome ou link>` envia áudio; `facebook`, `instagram`, `tik tok` e `pinterest` aceitam links reais.
 3. `!baixar`/`!download` e `tik tok audio` com links; `play video <link não YouTube>` baixa diretamente.
 4. `yt <termo>` envia até cinco resultados separados com imagem e descrição.

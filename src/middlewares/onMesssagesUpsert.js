@@ -4,9 +4,9 @@
  *
  * @author Dev Gui
  */
-import { DEVELOPER_MODE } from "../config.js";
+import { DEVELOPER_MODE, PREFIX } from "../config.js";
 import { badMacHandler } from "../utils/badMacHandler.js";
-import { checkIfMemberIsMuted } from "../utils/database.js";
+import { checkIfMemberIsMuted, getPrefix } from "../utils/database.js";
 import { dynamicCommand } from "../utils/dynamicCommand.js";
 import {
   GROUP_PARTICIPANT_ADD,
@@ -22,9 +22,11 @@ import { recordMessageEnvelope } from "../utils/messageEnvelopeRegistry.js";
 import { hasPaymentMessage } from "../utils/paymentMessage.js";
 import { handleAfkReferences } from "./afkHandler.js";
 import { onGroupParticipantsUpdate } from "./onGroupParticipantsUpdate.js";
-import { handlePendingDocOffer, handlePendingResolution } from "../services/downloader.js";
+import { handlePendingDocOffer } from "../services/downloader.js";
 import { handleAudioFormatReply } from "../utils/audioFormatMenu.js";
 import { handleInteractiveMenuReply } from "../utils/interactive.js";
+import { handleVideoFormatReply } from "../utils/videoFormatMenu.js";
+import { handleGuidedFlow } from "../interactive/flow.js";
 
 export async function onMessagesUpsert({ socket, messages, startProcess }) {
   if (!messages.length) {
@@ -119,12 +121,43 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         continue;
       }
 
-      if (await handlePendingResolution({
+      // Fluxo guiado (menu → categoria → função → execução).
+      if (await handleGuidedFlow({
+        socket,
         chatId: commonFunctions.remoteJid,
-        jid: commonFunctions.userLid,
+        senderId: commonFunctions.userLid,
+        senderName: webMessage?.pushName,
         text: commonFunctions.fullMessage,
+        webMessage,
+        commonFunctions,
         sendReply: commonFunctions.sendReply,
-        sendVideoFromFile: commonFunctions.sendVideoFromFile,
+        dispatch: async ({ comando, input, args }) => {
+          const prefixo = getPrefix(commonFunctions.remoteJid) || PREFIX;
+          const comandoCompleto = [
+            `${prefixo}${comando}`,
+            args,
+            input,
+          ]
+            .filter(Boolean)
+            .join(" ");
+
+          const syntheticMessage = {
+            ...webMessage,
+            message: {
+              ...webMessage.message,
+              conversation: comandoCompleto,
+            },
+          };
+
+          const functions = loadCommonFunctions({
+            socket,
+            webMessage: syntheticMessage,
+          });
+
+          if (!functions) return;
+
+          await dynamicCommand(functions, startProcess);
+        },
       })) {
         continue;
       }
@@ -148,6 +181,20 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         sendErrorReply: commonFunctions.sendErrorReply,
         sendAudioFromFile: commonFunctions.sendAudioFromFile,
         sendAudioDocumentFromFile: commonFunctions.sendAudioDocumentFromFile,
+      })) {
+        continue;
+      }
+
+      if (await handleVideoFormatReply({
+        chatId: commonFunctions.remoteJid,
+        senderLid: commonFunctions.userLid,
+        senderName: webMessage?.pushName,
+        text: commonFunctions.fullMessage,
+        socket,
+        jid: commonFunctions.userLid,
+        sendReply: commonFunctions.sendReply,
+        sendErrorReply: commonFunctions.sendErrorReply,
+        sendVideoFromFile: commonFunctions.sendVideoFromFile,
       })) {
         continue;
       }
