@@ -23,6 +23,7 @@ import { hasPaymentMessage } from "../utils/paymentMessage.js";
 import { handleAfkReferences } from "./afkHandler.js";
 import { onGroupParticipantsUpdate } from "./onGroupParticipantsUpdate.js";
 import { handlePendingDocOffer, handlePendingResolution } from "../services/downloader.js";
+import { handleAudioFormatReply } from "../utils/audioFormatMenu.js";
 
 export async function onMessagesUpsert({ socket, messages, startProcess }) {
   if (!messages.length) {
@@ -131,6 +132,20 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         chatId: commonFunctions.remoteJid,
         text: commonFunctions.fullMessage,
         sendReply: commonFunctions.sendReply,
+        sendAudioDocumentFromFile: commonFunctions.sendAudioDocumentFromFile,
+      })) {
+        continue;
+      }
+
+      if (await handleAudioFormatReply({
+        chatId: commonFunctions.remoteJid,
+        senderLid: commonFunctions.userLid,
+        senderName: webMessage?.pushName,
+        text: commonFunctions.fullMessage,
+        socket,
+        sendReply: commonFunctions.sendReply,
+        sendErrorReply: commonFunctions.sendErrorReply,
+        sendAudioFromFile: commonFunctions.sendAudioFromFile,
         sendAudioDocumentFromFile: commonFunctions.sendAudioDocumentFromFile,
       })) {
         continue;

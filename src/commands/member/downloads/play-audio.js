@@ -1,7 +1,8 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
-import { downloadByCommand, setPendingDocOffer } from "../../../services/downloader.js";
+import { downloadByCommand } from "../../../services/downloader.js";
 import { downloadingMessage } from "../../../services/download-message.js";
+import { startAudioFormatMenu } from "../../../utils/audioFormatMenu.js";
 import fs from "node:fs/promises";
 
 export default {
@@ -13,11 +14,11 @@ export default {
    * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
-    sendAudioDocumentFromFile,
-    sendAudioFromFile,
+    socket,
     fullArgs,
     webMessage,
     remoteJid,
+    userLid,
     sendSuccessReact,
     sendReply,
   }) => {
@@ -37,23 +38,29 @@ export default {
       );
       data = await downloadByCommand("play-audio", fullArgs);
       await sendSuccessReact();
-      await sendAudioFromFile(data.filePath, false, true);
     } catch (error) {
       if (data?.filePath) await fs.rm(data.filePath, { force: true }).catch(() => {});
       throw error;
     }
 
-    setPendingDocOffer(remoteJid, {
-      filePath: data.filePath,
-      fileName: data.fileName,
-      title: data.title,
-      artist: data.artist,
-      thumbnail: data.thumbnail,
-      mimetype: data.mimetype,
-    });
+    // Link direto (quando o pedido já era uma URL, o match vem sem url).
+    const url = data.url || fullArgs.match(/https?:\/\/\S+/)?.[0] || "";
 
-    await sendReply(
-      "Quer que eu mande essa música também como *documento MP3*?\n\n1. ✅ Sim, manda como documento\n2. ❌ Não precisa\n\nResponda com o número 👇",
-    );
+    await startAudioFormatMenu({
+      socket,
+      chatId: remoteJid,
+      ownerLid: userLid,
+      ownerName: webMessage?.pushName,
+      sendReply,
+      payload: {
+        filePath: data.filePath,
+        fileName: data.fileName,
+        title: data.title,
+        artist: data.artist,
+        thumbnail: data.thumbnail,
+        mimetype: data.mimetype,
+      },
+      url,
+    });
   },
 };

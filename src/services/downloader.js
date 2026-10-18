@@ -160,6 +160,7 @@ export async function downloadByCommand(command, value, search = searchYouTube) 
       title: match.title,
       artist: match.artist,
       thumbnail: match.thumbnail,
+      url: match.url,
     } : result;
   }
   return downloadVideo(source);
