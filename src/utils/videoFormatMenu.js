@@ -1,43 +1,35 @@
 /**
- * Menu de qualidade do vídeo do play-video.
+ * Menu de qualidade do vídeo (play-video e fluxo guiado do YouTube Vídeo).
  *
  * Fluxo:
- * 1. `.play video <nome ou link>` resolve o vídeo e, em vez de pedir só um
- *    número, manda o card "📥 Download" (molde padrão + rodapé) com os botões
- *    [🎛️ Escolher Qualidade], [📢 Canal] e [📋 Copiar link] (os dois últimos
- *    quando fazem sentido).
- * 2. Tocar em "Escolher Qualidade" (token `vfmt:menu`) abre a lista
- *    single-select com as 5 qualidades. Se a lista falhar, cai para resposta
- *    numerada 1-5.
- * 3. A escolha fica numa pendência por chat + utilizador (TTL de 2 minutos).
- *    Só aí o vídeo é baixado, no `height` escolhido.
- * 4. Quem não pediu tocar/responder → 🚫 "Este menu é de @usuario",
- *    sem consumir a pendência de quem pediu.
- * 5. Timeout → "⏳ Tempo esgotado..." (nada foi baixado ainda).
+ * 1. O link/termo é guardado como pendância por chat + utilizador (TTL de 2
+ *    minutos) e a LISTA single-select de qualidades é enviada direto — nunca
+ *    mais um card com botões quick_reply (que o WhatsApp descarta em silêncio).
+ * 2. Escolher a qualidade (token `vfmt:height`, ex. `vfmt:720`) baixa o vídeo
+ *    nesse height e envia. Se a lista falhar, cai para resposta numerada 1-5.
+ * 3. Só quem pediu escolhe; timeout → "⏳ Tempo esgotado..." (nada baixado).
+ * 4. Depois do envio com sucesso, `onFinished` (ligado pelo middleware ao fluxo
+ *    guiado) manda o resumo e mantém a função ativa por mais 2 minutos.
  *
- * Os tokens (`vfmt:menu`, `vfmt:720`...) chegam pelo `fullMessage`, que já
- * extrai rowId/buttonId de listas e botões interativos (extractDataFromMessage).
+ * Os tokens (`vfmt:720`...) chegam pelo `fullMessage`, que já extrai
+ * `selected_row_id` das respostas do native flow (extractDataFromMessage).
  *
  * Este menu NÃO usa o registo genérico de `interactive.js`: a escolha dispara
  * um download, não um comando, por isso `handleVideoFormatReply` é chamado
- * antes de `handleInteractiveMenuReply` no middleware.
- *
- * ATENÇÃO: não funciona no WhatsApp Business (limitação do próprio WA).
+ * antes de `handleInteractiveMenuReply` no middleware (e depois do fluxo
+ * guiado, que ignora tokens `vfmt:*`).
  *
  * @author Dev Gui
  */
 import fs from "node:fs/promises";
 import {
   INTERACTIVE_MENU_TTL_MS,
-  copyButton,
   numberedFallback as buildNumberedFallback,
-  quickReplyButton,
   sendInteractiveWithFallback,
   singleSelectList,
-  urlButton,
 } from "./interactive.js";
-import { RODAPE, downloadMessage, formatMessage } from "./formatMessage.js";
-import { errorLog } from "./logger.js";
+import { RODAPE, downloadMessage } from "./formatMessage.js";
+import { errorLog, infoLog } from "./logger.js";
 import { withCreditsContext } from "../services/credits.js";
 import { downloadVideo } from "../services/downloader.js";
 
@@ -87,10 +79,6 @@ const CHOICES = [
   },
 ];
 
-const MENU_TOKEN = "vfmt:menu";
-const DEFAULT_CHANNEL_URL =
-  "https://www.youtube.com/@devgui_?sub_confirmation=1";
-
 // Pendências por `${chatId}:${ownerId}`.
 const pendingFormats = new Map();
 
@@ -131,7 +119,7 @@ function numberedFallback() {
   return buildNumberedFallback(CHOICES);
 }
 
-function formatListMessage() {
+function formatListMessage(textoLista) {
   const rows = CHOICES.map((choice) => ({
     title: choice.title,
     description: choice.description,
@@ -139,18 +127,13 @@ function formatListMessage() {
   }));
 
   return singleSelectList({
-    text: formatMessage({
-      icone: "🎬",
-      titulo: "Qualidade do vídeo",
-      campos: ["Escolhe em que qualidade queres baixar:"],
-      rodape: null,
-    }),
+    text: textoLista,
     title: "Qualidade do vídeo",
     footer: RODAPE,
     buttonText: "Selecionar",
     sections: [
       {
-        title: "Qualidades",
+        title: "Vídeo",
         rows,
       },
     ],
@@ -164,10 +147,11 @@ function platformOf(source) {
 }
 
 /**
- * Guarda a origem do vídeo como pendência e envia o card com os botões.
- * Se o envio falhar, cai para a resposta numerada em texto.
+ * Guarda a origem do vídeo como pendência e envia a LISTA de qualidades
+ * (single_select, sem quick_reply). Se o envio falhar, cai para a resposta
+ * numerada em texto.
  *
- * @returns {Promise<boolean>} true se o card (ou o fallback) foi enviado.
+ * @returns {Promise<boolean>} true se a lista (ou o fallback) foi enviada.
  */
 export async function startVideoFormatMenu({
   socket,
@@ -181,7 +165,8 @@ export async function startVideoFormatMenu({
   duration = "",
   thumbnail = "",
   url = "",
-  channelUrl = DEFAULT_CHANNEL_URL,
+  channelUrl,
+  onFinished,
 }) {
   const ownerId = getOwnerId(chatId, ownerLid);
   if (!ownerId) {
@@ -202,6 +187,7 @@ export async function startVideoFormatMenu({
     ownerName: sanitizeName(ownerName) || "dono do pedido",
     sendReply,
     source,
+    onFinished,
   };
 
   pending.cleanupTimer = setTimeout(() => {
@@ -209,7 +195,7 @@ export async function startVideoFormatMenu({
     pendingFormats.delete(key);
     pending
       .sendReply(
-        "⏳ Tempo esgotado! Nada foi baixado. Usa o comando play video novamente.",
+        "⏳ Tempo esgotado! Nada foi baixado. Usa .menu ou o comando play video novamente.",
       )
       .catch(() => {});
   }, VIDEO_FORMAT_TTL_MS);
@@ -223,45 +209,29 @@ export async function startVideoFormatMenu({
     duracao: duration,
     plataforma: platformOf(source),
     usuario: pending.ownerName,
-    extra: "✨ Escolhe a qualidade desejada abaixo!",
+    extra: "✨ Escolhe a qualidade na lista!",
   });
 
-  const interactiveButtons = [
-    quickReplyButton("🎛️ Escolher Qualidade", MENU_TOKEN),
-  ];
-  const channelButton = urlButton("📢 Canal", channelUrl);
-  if (channelButton) interactiveButtons.push(channelButton);
+  infoLog(
+    `[vfmt] lista de qualidade enviada para "${chatId}" (owner ${ownerId}, fonte "${platformOf(source)}")`,
+  );
 
-  if (url) {
-    interactiveButtons.push(copyButton("📋 Copiar link", url));
-  }
-
-  const content = { interactiveButtons, viewOnce: true };
-
-  if (thumbnail) {
-    content.image = { url: thumbnail };
-    content.caption = caption;
-  } else {
-    content.text = caption;
-  }
-
-  // Sem `ownerId`: a pendência é tratada aqui, não pelo registo genérico de
-  // `interactive.js` (a escolha baixa o vídeo em vez de disparar um comando).
   const sent = await sendInteractiveWithFallback({
     socket,
     chatId,
-    content,
+    // A LISTA É O PRÓPRIO CONTEÚDO (listMessage): sem quick_reply.
+    content: formatListMessage(caption),
     fallbackText: numberedFallback(),
     sendReply,
     onSendError: (error) =>
-      errorLog(`Erro ao enviar o card de qualidade do vídeo: ${error.message}`),
+      errorLog(`Erro ao enviar a lista de qualidade do vídeo: ${error.message}`),
   });
 
   if (!sent) {
     dropPending(pending);
   }
 
-  return sent;
+  return Boolean(sent);
 }
 
 function choiceFromText(value) {
@@ -275,8 +245,10 @@ function choiceFromText(value) {
 }
 
 /**
- * Intercepta toques de botão/lista (tokens `vfmt:*`) e respostas numeradas
- * (1-5) enquanto existe uma pendência de qualidade no chat.
+ * Intercepta escolhas da lista (tokens `vfmt:*`) e respostas numeradas (1-5)
+ * enquanto existe uma pendência de qualidade no chat. A escolha do menu de
+ * qualidade BAIXA e envia o vídeo (um número do card guiado nunca é a resposta
+ * da qualidade e vice-versa: o fluxo guiado ignora tokens vfmt:*).
  *
  * @returns {Promise<boolean>} true se a mensagem foi tratada por aqui.
  */
@@ -290,6 +262,7 @@ export async function handleVideoFormatReply({
   sendReply,
   sendErrorReply,
   sendVideoFromFile,
+  onFinished,
   download = (source, height) => downloadVideo(source, height),
 }) {
   const value = String(text || "").trim();
@@ -320,15 +293,25 @@ export async function handleVideoFormatReply({
     return true;
   }
 
-  if (value === MENU_TOKEN) {
+  infoLog(`[vfmt] escolha recebida "${value}" de ${senderId || "sem-id"}`);
+
+  if (value === "vfmt:menu") {
+    // Compatibilidade: antigo token do card com quick_reply. A lista direta já
+    // foi enviada no talo do menu; manda a lista de novo.
+    const caption = downloadMessage({
+      titulo: "Vídeo",
+      plataforma: platformOf(pending.source),
+      usuario: pending.ownerName,
+      extra: "✨ Escolhe a qualidade na lista!",
+    });
     await sendInteractiveWithFallback({
       socket,
       chatId,
-      content: formatListMessage(),
+      content: formatListMessage(caption),
       fallbackText: numberedFallback(),
       sendReply,
       onSendError: (error) =>
-        errorLog(`Erro ao enviar a lista de qualidade: ${error.message}`),
+        errorLog(`Erro ao reenviar a lista de qualidade: ${error.message}`),
     });
     return true;
   }
@@ -347,6 +330,14 @@ export async function handleVideoFormatReply({
       download(pending.source, choice.height),
     );
     await sendVideoFromFile(result.filePath, `🎬 Vídeo em ${choice.label}`);
+
+    infoLog(
+      `[vfmt] vídeo em ${choice.label} enviado (id ${result?.filePath || "?"}); a chamar onFinished`,
+    );
+    await (pending.onFinished || onFinished)?.({
+      choice,
+      ok: true,
+    }).catch(() => {});
   } catch (error) {
     errorLog(
       `Erro ao baixar o vídeo na qualidade ${choice.token}: ${error.message}`,

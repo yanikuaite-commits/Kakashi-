@@ -1,36 +1,32 @@
 /**
- * Menu de formato do áudio do play-audio.
+ * Menu de formato do áudio (play-audio e fluxo guiado do YouTube Áudio).
  *
- * Fluxo:
- * 1. `.play <música>` baixa o MP3 e, em vez de enviar direto, manda o card com
- *    o molde padrão + rodapé e os botões [🎛️ Escolher Formato] e
- *    [📋 Copiar link] (cta_copy, só quando existe link).
- * 2. Tocar em "Escolher Formato" (token `fmt:menu`) abre a lista single-select
- *    com os 4 formatos. Se a lista falhar, cai para resposta numerada 1-4.
- * 3. A escolha fica numa pendência por chat + utilizador (TTL de 2 minutos).
- *    Envia no formato pedido e apaga o MP3 temporário.
- * 4. Quem não pediu tocar/responder → 🚫 "Este menu é de @usuario",
- *    sem consumir a pendência de quem pediu.
- * 5. Timeout → "⏳ Tempo esgotado..." + limpeza do ficheiro.
+ * Dois modos:
+ * 1. "payload" (direto .play audio): o MP3 já baixa no comando; a pendência
+ *    guarda o ficheiro e envia a LISTA single-select de 4 formatos. Escolher
+ *    (`fmt:audio|ptt|doc|docname`) entrega no formato pedido.
+ * 2. "source" (fluxo guiado): a pendência guarda SÓ o link; escolher o formato
+ *    é o gatilho do download (créditos incluídos), que é entregue no formato
+ *    escolhido. Conguências passam por `withCreditsContext`.
  *
- * Os tokens (`fmt:menu`, `fmt:audio`...) chegam pelo `fullMessage`, que já
- * extrai rowId/buttonId de listas e botões interativos (extractDataFromMessage).
+ * Nunca mais card com quick_reply: a lista é enviada direto (o WhatsApp
+ * descarta quick_reply em silêncio). Fallback numerado 1-4 em texto.
  *
- * ATENÇÃO: não funciona no WhatsApp Business (limitação do próprio WA).
+ * Os tokens (`fmt:*`) chegam pelo `fullMessage` (extractDataFromMessage já lê
+ * o `selected_row_id` das respostas do native flow).
  *
  * @author Dev Gui
  */
 import fs from "node:fs/promises";
-import { RODAPE, downloadMessage, formatMessage } from "./formatMessage.js";
+import { RODAPE, downloadMessage } from "./formatMessage.js";
 import {
-  copyButton,
   numberedFallback as buildNumberedFallback,
-  quickReplyButton,
   sendInteractiveWithFallback,
   singleSelectList,
-  urlButton,
 } from "./interactive.js";
-import { errorLog } from "./logger.js";
+import { errorLog, infoLog } from "./logger.js";
+import { withCreditsContext } from "../services/credits.js";
+import { downloadByCommand } from "../services/downloader.js";
 
 // TTL da pendência: 2 minutos para escolher o formato.
 export const AUDIO_FORMAT_TTL_MS = 2 * 60 * 1000;
@@ -41,7 +37,6 @@ const CHOICES = [
     number: "1",
     title: "🎧 Áudio no chat",
     description: "Manda o MP3 solto no chat",
-    fallback: "Responde apenas com o número 👇",
     confirm: "✅ Áudio enviado no chat!",
   },
   {
@@ -49,7 +44,6 @@ const CHOICES = [
     number: "2",
     title: "🎙️ Nota de voz",
     description: "Manda como nota de voz (PTT)",
-    fallback: "Responde apenas com o número 👇",
     confirm: "✅ Nota de voz enviada!",
   },
   {
@@ -57,22 +51,16 @@ const CHOICES = [
     number: "3",
     title: "📄 Documento MP3",
     description: "Documento com o nome do ficheiro",
-    fallback: "Responde apenas com o número 👇",
-    confirm: null,
+    confirm: "✅ Documento enviado!",
   },
   {
     token: "fmt:docname",
     number: "4",
     title: "📄 Documento com título",
     description: "O título será usado como nome do ficheiro .mp3",
-    fallback: "Responde apenas com o número 👇",
-    confirm: null,
+    confirm: "✅ Documento enviado!",
   },
 ];
-
-const MENU_TOKEN = "fmt:menu";
-const DEFAULT_CHANNEL_URL =
-  "https://www.youtube.com/@devgui_?sub_confirmation=1";
 
 // Pendências por `${chatId}:${ownerLid}`.
 const pendingFormats = new Map();
@@ -115,7 +103,7 @@ function numberedFallback() {
   return buildNumberedFallback(CHOICES);
 }
 
-function formatListMessage() {
+function formatListMessage(textoLista) {
   const rows = CHOICES.map((choice) => ({
     title: choice.title,
     description: choice.description,
@@ -123,18 +111,13 @@ function formatListMessage() {
   }));
 
   return singleSelectList({
-    text: formatMessage({
-      icone: "🎵",
-      titulo: "Formato do áudio",
-      campos: ["Escolhe como queres receber:"],
-      rodape: null,
-    }),
+    text: textoLista,
     title: "Formato do áudio",
     footer: RODAPE,
     buttonText: "Selecionar",
     sections: [
       {
-        title: "Formatos",
+        title: "Áudio",
         rows,
       },
     ],
@@ -163,11 +146,44 @@ function getOwnerId(chatId, ownerLid) {
   return chatId.endsWith("@g.us") ? "" : chatId;
 }
 
+function legendOf(pending, extraPrompt) {
+  return downloadMessage({
+    titulo: pending.kind === "source"
+      ? "Áudio — escolhe o formato"
+      : pending.payload?.title || "Áudio",
+    canal: pending.kind === "source" ? "" : pending.payload?.artist,
+    duracao: pending.kind === "source"
+      ? ""
+      : formatDuration(pending.payload?.duration),
+    plataforma: pending.kind === "source"
+      ? /youtube\.com|youtu\.be/i.test(pending.source || "")
+        ? "YouTube"
+        : "Link direto"
+      : pending.payload?.platform,
+    usuario: pending.ownerName,
+    extra: extraPrompt,
+  });
+}
+
+function normalizePayload(payload) {
+  return {
+    filePath: payload?.filePath || "",
+    fileName: payload?.fileName || "",
+    title: payload?.title || "",
+    artist: payload?.artist || "",
+    thumbnail: payload?.thumbnail || "",
+    mimetype: payload?.mimetype || "audio/mpeg",
+    duration: payload?.duration,
+    platform: payload?.platform || "",
+  };
+}
+
 /**
- * Guarda o MP3 baixado como pendência e envia o card com os botões.
- * Se o envio do card falhar, cai para a resposta numerada em texto.
+ * Guarda o MP3 baixado como pendência e envia a LISTA de formatos
+ * (single_select, sem quick_reply). Cai na resposta numerada em texto se o
+ * envio da lista falhar.
  *
- * @returns {Promise<boolean>} true se o card (ou o fallback) foi enviado.
+ * @returns {Promise<boolean>} true se a lista (ou o fallback) foi enviada.
  */
 export async function startAudioFormatMenu({
   socket,
@@ -177,7 +193,7 @@ export async function startAudioFormatMenu({
   sendReply,
   payload,
   url = "",
-  channelUrl = DEFAULT_CHANNEL_URL,
+  onFinished,
 }) {
   const ownerId = getOwnerId(chatId, ownerLid);
   if (!ownerId) {
@@ -200,8 +216,9 @@ export async function startAudioFormatMenu({
     ownerLid: ownerId,
     ownerName: sanitizeName(ownerName) || "dono do pedido",
     sendReply,
-    payload: { ...payload },
-    url,
+    kind: "payload",
+    payload: normalizePayload(payload),
+    onFinished,
   };
 
   pending.cleanupTimer = setTimeout(() => {
@@ -218,46 +235,102 @@ export async function startAudioFormatMenu({
 
   pendingFormats.set(key, pending);
 
-  const caption = downloadMessage({
-    titulo: payload.title || "Áudio",
-    canal: payload.artist,
-    duracao: formatDuration(payload.duration),
-    plataforma: payload.platform,
-    usuario: pending.ownerName,
-    extra: "✨ Escolhe o formato desejado abaixo!",
-  });
-
-  const interactiveButtons = [quickReplyButton("🎛️ Escolher Formato", MENU_TOKEN)];
-  const channelButton = urlButton("📢 Canal", channelUrl);
-  if (channelButton) interactiveButtons.push(channelButton);
-
-  if (url) {
-    interactiveButtons.push(copyButton("📋 Copiar link", url));
-  }
-
-  const content = { interactiveButtons, viewOnce: true };
-
-  if (payload.thumbnail) {
-    content.image = { url: payload.thumbnail };
-    content.caption = caption;
-  } else {
-    content.text = caption;
-  }
+  infoLog(
+    `[afmt] lista de formato (modo payload) enviada para "${chatId}" (owner ${ownerId})`,
+  );
 
   const sent = await sendInteractiveWithFallback({
     socket,
     chatId,
-    content,
+    // A LISTA É O PRÓPRIO CONTEÚDO (listMessage): sem quick_reply.
+    content: formatListMessage(
+      legendOf(pending, "✨ Escolhe o formato na lista!"),
+    ),
     fallbackText: numberedFallback(),
     sendReply,
     onSendError: (error) =>
-      errorLog(`Erro ao enviar o card de formato do áudio: ${error.message}`),
+      errorLog(`Erro ao enviar a lista de formato do áudio: ${error.message}`),
   });
   if (!sent) {
     dropPending(pending);
     await removeFile(pending.payload?.filePath);
   }
-  return sent;
+  return Boolean(sent);
+}
+
+/**
+ * Modo do fluxo guiado: guarda SÓ o link; a escolha do formato baixa e
+ * entrega o áudio. Devolve true se a lista (ou fallback) foi enviada.
+ */
+export async function startAudioSourceMenu({
+  socket,
+  chatId,
+  ownerLid,
+  ownerName,
+  sendReply,
+  source,
+  jid,
+  onFinished,
+}) {
+  const ownerId = getOwnerId(chatId, ownerLid);
+  if (!ownerId) {
+    await sendReply("🚫 Não consegui confirmar quem fez o pedido. Envia o comando novamente.");
+    return false;
+  }
+
+  const key = pendingKey(chatId, ownerId);
+  const previous = pendingFormats.get(key);
+  if (previous) {
+    dropPending(previous);
+    await removeFile(previous.payload?.filePath);
+  }
+
+  const pending = {
+    key,
+    chatId,
+    ownerLid: ownerId,
+    ownerName: sanitizeName(ownerName) || "dono do pedido",
+    sendReply,
+    kind: "source",
+    source,
+    jid,
+    payload: null,
+    onFinished,
+  };
+
+  pending.cleanupTimer = setTimeout(() => {
+    if (pendingFormats.get(key) !== pending) return;
+    pendingFormats.delete(key);
+    removeFile(pending.payload?.filePath);
+    pending
+      .sendReply(
+        "⏳ Tempo esgotado! Nada foi baixado. Usa .menu ou o comando play audio novamente.",
+      )
+      .catch(() => {});
+  }, AUDIO_FORMAT_TTL_MS);
+  pending.cleanupTimer.unref?.();
+
+  pendingFormats.set(key, pending);
+
+  infoLog(
+    `[afmt] lista de formato (modo source) enviada para "${chatId}" (owner ${ownerId}; download só na escolha)`,
+  );
+
+  const sent = await sendInteractiveWithFallback({
+    socket,
+    chatId,
+    content: formatListMessage(
+      legendOf(pending, "✨ O download acontece só depois da escolha!"),
+    ),
+    fallbackText: numberedFallback(),
+    sendReply,
+    onSendError: (error) =>
+      errorLog(`Erro ao enviar a lista de formato do áudio: ${error.message}`),
+  });
+  if (!sent) {
+    dropPending(pending);
+  }
+  return Boolean(sent);
 }
 
 async function deliverFormat(pending, choice, helpers) {
@@ -306,6 +379,35 @@ async function deliverFormat(pending, choice, helpers) {
   }
 }
 
+async function deliverAndConfirm(pending, choice, helpers, sendReply, sendErrorReply, onFinished) {
+  try {
+    await deliverFormat(pending, choice, helpers);
+    await removeFile(pending.payload?.filePath);
+    if (choice.confirm) {
+      await sendReply(choice.confirm).catch(() => {});
+    }
+    infoLog(
+      `[afmt] áudio entregue em ${choice.token}; a chamar onFinished`,
+    );
+    await (pending.onFinished || onFinished)?.({
+      choice,
+      ok: true,
+    }).catch(() => {});
+  } catch (error) {
+    errorLog(
+      `Erro ao enviar o áudio no formato ${choice.token}: ${error.message}`,
+    );
+    await removeFile(pending.payload?.filePath);
+
+    const expired = /não existe mais|ENOENT/i.test(error.message);
+    await (sendErrorReply || sendReply)(
+      expired
+        ? "❌ O áudio temporário já expirou! Pede de novo com o comando play-audio."
+        : `❌ Não consegui enviar no formato escolhido: ${error.message}`,
+    ).catch(() => {});
+  }
+}
+
 function choiceFromText(value) {
   if (value.startsWith("fmt:")) {
     return CHOICES.find((choice) => choice.token === value) || null;
@@ -317,8 +419,8 @@ function choiceFromText(value) {
 }
 
 /**
- * Intercepta toques de botão/lista (tokens `fmt:*`) e respostas numeradas
- * (1-4) enquanto existe uma pendência de formato no chat.
+ * Intercepta escolhas da lista (tokens `fmt:*`) e respostas numeradas (1-4)
+ * enquanto existe uma pendência de formato no chat.
  *
  * @returns {Promise<boolean>} true se a mensagem foi tratada por aqui.
  */
@@ -328,10 +430,12 @@ export async function handleAudioFormatReply({
   senderName,
   text,
   socket,
+  jid,
   sendReply,
   sendErrorReply,
   sendAudioFromFile,
   sendAudioDocumentFromFile,
+  onFinished,
 }) {
   const value = String(text || "").trim();
   const isToken = value.startsWith("fmt:");
@@ -359,15 +463,20 @@ export async function handleAudioFormatReply({
     return true;
   }
 
-  if (value === MENU_TOKEN) {
+  infoLog(`[afmt] escolha recebida "${value}" de ${senderId || "sem-id"}`);
+
+  if (value === "fmt:menu") {
+    // Compatibilidade: antigo token do card com quick_reply; manda a lista.
     await sendInteractiveWithFallback({
       socket,
       chatId,
-      content: formatListMessage(),
+      content: formatListMessage(
+        legendOf(pending, "✨ Escolhe o formato na lista!"),
+      ),
       fallbackText: numberedFallback(),
       sendReply,
       onSendError: (error) =>
-        errorLog(`Erro ao enviar a lista de formato: ${error.message}`),
+        errorLog(`Erro ao reenviar a lista de formato: ${error.message}`),
     });
     return true;
   }
@@ -375,32 +484,31 @@ export async function handleAudioFormatReply({
   const choice = choiceFromText(value);
   if (!choice) return false;
 
-  dropPending(pending);
+  const helpers = { sendAudioFromFile, sendAudioDocumentFromFile };
 
-  try {
-    await deliverFormat(pending, choice, {
-      sendAudioFromFile,
-      sendAudioDocumentFromFile,
-    });
-
-    await removeFile(pending.payload?.filePath);
-
-    if (choice.confirm) {
-      await sendReply(choice.confirm).catch(() => {});
+  if (pending.kind === "source") {
+    // Download só na escolha; a pendência fica viva enquanto o download corre.
+    if (pending.downloading) return true;
+    pending.downloading = true;
+    try {
+      await sendReply("⬇️ Baixando o áudio...").catch(() => {});
+      const data = await withCreditsContext(pending.jid, () =>
+        downloadByCommand("play-audio", pending.source),
+      );
+      pending.payload = normalizePayload(data);
+      dropPending(pending);
+      await deliverAndConfirm(pending, choice, helpers, sendReply, sendErrorReply, onFinished);
+    } catch (error) {
+      pending.downloading = false;
+      errorLog(`[afmt] falha no download (source): ${error.message}`);
+      await (sendErrorReply || sendReply)(
+        `❌ Não consegui baixar o áudio: ${error.message}`,
+      ).catch(() => {});
     }
-  } catch (error) {
-    errorLog(
-      `Erro ao enviar o áudio no formato ${choice.token}: ${error.message}`,
-    );
-    await removeFile(pending.payload?.filePath);
-
-    const expired = /não existe mais|ENOENT/i.test(error.message);
-    await (sendErrorReply || sendReply)(
-      expired
-        ? "❌ O áudio temporário já expirou! Pede de novo com o comando play-audio."
-        : `❌ Não consegui enviar no formato escolhido: ${error.message}`,
-    ).catch(() => {});
+    return true;
   }
 
+  dropPending(pending);
+  await deliverAndConfirm(pending, choice, helpers, sendReply, sendErrorReply, onFinished);
   return true;
 }

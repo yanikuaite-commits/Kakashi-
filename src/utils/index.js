@@ -37,6 +37,12 @@ function extractInteractiveResponseId(paramsJson) {
       params.selectedId ||
       params.selectedRowId ||
       params.rowId ||
+      // O WhatsApp devolve os IDs do native flow em snake_case
+      // (ex: {"selected_row_id":"cat:download"}); sem isto o toque numa
+      // linha da lista nunca chega ao fluxo guiado e o bot fica em silêncio.
+      params.selected_row_id ||
+      params.selected_id ||
+      params.row_id ||
       params.buttonId ||
       params.button_id ||
       null

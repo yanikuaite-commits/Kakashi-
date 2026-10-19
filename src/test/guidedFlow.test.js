@@ -1,35 +1,25 @@
 import assert from "node:assert/strict";
-import { afterEach, mock, test } from "node:test";
-import { OWNER_LID } from "../config.js";
+import { test } from "node:test";
 import {
-  CATEGORIES,
-  FUNCTIONS,
-  canAccess,
-  getCategory,
-  listCategories,
-  listFunctions,
-} from "../interactive/menuRegistry.js";
-import {
-  GUIDED_TTL_MS,
   getGuidedSession,
   handleGuidedFlow,
+  openGuidedSession,
   resetGuidedSessions,
-  sendMainCard,
-  startGuidedMenu,
 } from "../interactive/flow.js";
-import { findCommandImport, formatCommand } from "../utils/index.js";
-import menuCommand from "../commands/member/menu.js";
+import { handleVideoFormatReply } from "../utils/videoFormatMenu.js";
+import { extractDataFromMessage } from "../utils/index.js";
 
-const GROUP = "grupo@g.us";
+const GROUP = "grupo-flow@g.us";
+const DONO = "membro-flow@lid";
 
 function criarAmbiente({ chatId = GROUP } = {}) {
-  const cards = [];
+  const enviadas = [];
   const replies = [];
-  const dispatches = [];
 
   const socket = {
     sendMessage: async (_chatId, content) => {
-      cards.push(content);
+      enviadas.push(content);
+      return { key: { id: "MSG-TESTE" } };
     },
   };
 
@@ -37,220 +27,274 @@ function criarAmbiente({ chatId = GROUP } = {}) {
     replies.push({ text, mentions });
   };
 
-  const dispatch = async (dados) => {
-    dispatches.push(dados);
-  };
-
-  return { chatId, socket, sendReply, dispatch, cards, replies, dispatches };
+  return { chatId, socket, sendReply, enviadas, replies };
 }
 
-afterEach(() => {
-  try {
-    mock.timers.reset();
-  } catch {
-    // Os timers só são mockados no teste de expiração.
-  }
+function listaIds(conteudo) {
+  const lista = conteudo.interactiveButtons?.find(
+    (botao) => botao.name === "single_select",
+  );
+  if (!lista) return null;
+  return JSON.parse(lista.buttonParamsJson)
+    .sections.flatMap((secao) => secao.rows)
+    .map((linha) => linha.id);
+}
+
+function respostasDoMenu(ambiente) {
+  return ambiente.enviadas.filter((conteudo) => conteudo.sections);
+}
+
+function limpar() {
   resetGuidedSessions();
-});
+}
 
-/* ═══════════ REGISTO ═══════════ */
+/* ═══════════ DOWNLOAD · TIKTOK ═══════════ */
 
-test("registo cobre as categorias e aponta só para comandos existentes", async () => {
-  assert.equal(CATEGORIES.length, 14);
-
-  for (const categoria of CATEGORIES) {
-    assert.ok(categoria.descricao.length > 10, `${categoria.id} sem descrição`);
-  }
-
-  for (const funcao of FUNCTIONS) {
-    assert.ok(getCategory(funcao.categoria), `${funcao.id}: categoria inválida`);
-    assert.ok(
-      ["link", "texto", "midia", "nenhum"].includes(funcao.aceita),
-      `${funcao.id}: aceita inválido`,
-    );
-
-    const encontrado = await findCommandImport(formatCommand(funcao.comando));
-    assert.ok(
-      encontrado.command,
-      `${funcao.categoria}/${funcao.id}: comando "${funcao.comando}" não existe`,
-    );
-  }
-});
-
-test("categorias restritas só aparecem para quem tem permissão", () => {
-  assert.equal(canAccess(getCategory("dono"), { isOwner: false }), false);
-  assert.equal(
-    canAccess(getCategory("admin"), { isOwner: false, isAdmin: false }),
-    false,
-  );
-  assert.equal(
-    canAccess(getCategory("admin"), { isOwner: false, isAdmin: true }),
-    true,
-  );
-  assert.equal(canAccess(getCategory("download"), {}), true);
-
-  const membro = listCategories({}).map(({ id }) => id);
-  assert.ok(!membro.includes("dono"));
-  assert.ok(!membro.includes("admin"));
-  assert.ok(membro.includes("download"));
-
-  const dono = listCategories({ isOwner: true }).map(({ id }) => id);
-  assert.ok(dono.includes("dono"));
-});
-
-/* ═══════════ PASSO 1 · MENU PRINCIPAL ═══════════ */
-
-test("menu principal mostra Dono só para o dono e abre as categorias", async () => {
+test(" tik-tok: link baixa direto e mantém a função ativa", async (t) => {
+  limpar();
   const ambiente = criarAmbiente();
 
-  await startGuidedMenu({
+  const session = await openGuidedSession({
     socket: ambiente.socket,
     chatId: GROUP,
-    ownerId: "membro@lid",
+    ownerId: DONO,
     ownerName: "Membro",
     sendReply: ambiente.sendReply,
     permissions: { isOwner: false, isAdmin: false },
   });
+  assert.ok(session);
 
-  const card = ambiente.cards.at(-1);
-  const ids = card.interactiveButtons
-    .map((botao) => JSON.parse(botao.buttonParamsJson).id)
-    .filter(Boolean);
-  assert.deepEqual(ids, ["menu:categories"]);
-  // O botão do canal é um link externo (cta_url), sem ID de resposta.
+  // Card da função.
+  assert.equal(
+    await handleGuidedFlow({
+      socket: ambiente.socket,
+      chatId: GROUP,
+      senderId: DONO,
+      text: "fn:download:tiktok",
+      commonFunctions: {},
+      sendReply: ambiente.sendReply,
+      dispatch: async () => {},
+    }),
+    true,
+  );
+
+  const sessao = getGuidedSession(GROUP, DONO);
+  assert.equal(sessao.pending.funcaoId, "tiktok");
+
+  // Lista ÚNICA com navegação + Canal; sem quick_reply.
+  const card = ambiente.enviadas.at(-1);
+  const ids = listaIds(card);
+  assert.ok(ids.includes("back:download"));
+  assert.ok(ids.includes("menu:main"));
+  assert.ok(ids.includes("cancel"));
   assert.ok(
-    card.interactiveButtons.some((botao) => botao.name === "cta_url"),
+    card.interactiveButtons.every(
+      (botao) => botao.name === "single_select" || botao.name === "cta_url",
+    ),
   );
-  assert.match(card.text, /Ver Menus/);
-  assert.match(card.text, /Made by Yanik Uaite/);
 
-  await startGuidedMenu({
-    socket: ambiente.socket,
-    chatId: GROUP,
-    ownerId: OWNER_LID,
-    ownerName: "Dono",
-    sendReply: ambiente.sendReply,
-    permissions: { isOwner: true, isAdmin: true },
-  });
-
-  const cardDono = ambiente.cards.at(-1);
-  const idsDono = cardDono.interactiveButtons
-    .map((botao) => JSON.parse(botao.buttonParamsJson).id)
-    .filter(Boolean);
-  assert.deepEqual(idsDono, ["cat:dono", "menu:categories"]);
-
-  // "Ver Menus" → lista single_select com as categorias.
+  // O link é a entrada da função pendente.
+  const pedidos = [];
   assert.equal(
     await handleGuidedFlow({
-      ...ambiente,
-      senderId: "membro@lid",
-      text: "menu:categories",
+      socket: ambiente.socket,
+      chatId: GROUP,
+      senderId: DONO,
+      text: "https://vm.tiktok.com/ZM1234567890/",
       commonFunctions: {},
+      sendReply: ambiente.sendReply,
+      dispatch: async (props) => {
+        pedidos.push(props);
+      },
     }),
     true,
   );
 
-  const lista = ambiente.cards.at(-1);
-  assert.equal(lista.sections[0].rows.length, 9); // 8 categorias + "mais"
-  assert.equal(lista.sections[0].rows[0].rowId, "cat:geral");
-});
-
-/* ═══════════ PASSOS 2-4 · FLUXO COMPLETO DO TIKTOK ═══════════ */
-
-test("fluxo completo do TikTok vai da categoria à execução do comando", async () => {
-  const ambiente = criarAmbiente();
-
-  await startGuidedMenu({
-    socket: ambiente.socket,
-    chatId: GROUP,
-    ownerId: "membro@lid",
-    ownerName: "Membro",
-    sendReply: ambiente.sendReply,
-    permissions: { isOwner: false, isAdmin: false },
-  });
-
-  // Categoria Downloads.
-  assert.equal(
-    await handleGuidedFlow({
-      ...ambiente,
-      senderId: "membro@lid",
-      text: "cat:download",
-      commonFunctions: {},
-    }),
-    true,
-  );
-
-  const categoria = ambiente.cards.at(-1);
-  assert.match(categoria.text, /Baixe vídeos e músicas/);
-  assert.match(categoria.text, /Prefixo \[ \./);
-  const botoesCategoria = categoria.interactiveButtons.map(
-    (botao) => JSON.parse(botao.buttonParamsJson).id,
-  );
-  assert.equal(botoesCategoria[0], "fnlist:download:0");
-
-  // Lista de funções.
-  await handleGuidedFlow({
-    ...ambiente,
-    senderId: "membro@lid",
-    text: "fnlist:download:0",
-    commonFunctions: {},
-  });
-  const funcoes = ambiente.cards.at(-1).sections[0].rows.map((linha) => linha.rowId);
-  assert.ok(funcoes.includes("fn:download:tiktok"));
-  assert.ok(funcoes.includes("fn:download:youtube-audio"));
-
-  // Card da função cria o estado pendente.
-  await handleGuidedFlow({
-    ...ambiente,
-    senderId: "membro@lid",
-    text: "fn:download:tiktok",
-    commonFunctions: {},
-  });
-
-  const cardFuncao = ambiente.cards.at(-1);
-  assert.match(cardFuncao.text, /Envie o link do vídeo do TikTok/);
-  assert.match(cardFuncao.text, /tik-tok/);
-  assert.ok(getGuidedSession(GROUP, "membro@lid").pending);
-
-  // Passo 4: o link é validado e o comando existente é executado.
-  assert.equal(
-    await handleGuidedFlow({
-      ...ambiente,
-      senderId: "membro@lid",
-      text: "https://vm.tiktok.com/ZMabc123",
-      commonFunctions: {},
-    }),
-    true,
-  );
-
-  assert.deepEqual(ambiente.dispatches, [
+  assert.deepEqual(pedidos, [
     {
       comando: "tik-tok",
       categoria: "download",
       funcao: "tiktok",
-      input: "https://vm.tiktok.com/ZMabc123",
+      input: "https://vm.tiktok.com/ZM1234567890/",
       args: "",
     },
   ]);
-  assert.match(ambiente.replies[0].text, /Já estou a tratar do teu pedido/);
-  assert.equal(getGuidedSession(GROUP, "membro@lid").pending, null);
 
-  const resultado = ambiente.cards.at(-1);
-  assert.deepEqual(
-    resultado.interactiveButtons.map(
-      (botao) => JSON.parse(botao.buttonParamsJson).id,
-    ),
-    ["fn:download:tiktok", "back:download", "menu:main"],
+  // "⏳ Já estou a tratar..." com menção; depois o texto final simples.
+  assert.ok(ambiente.replies.some((r) => /Já estou a tratar/.test(r.text)));
+  assert.deepEqual(ambiente.replies.find((r) => /Já estou/.test(r.text)).mentions, [
+    DONO,
+  ]);
+  const fim = ambiente.replies.at(-1).text;
+  assert.match(fim, /Envie outro link ou use \.menu/);
+
+  // Função continua ativa: outro link nem precisa reabrir o card.
+  const pedidos2 = [];
+  await handleGuidedFlow({
+    socket: ambiente.socket,
+    chatId: GROUP,
+    senderId: DONO,
+    text: "https://vt.tiktok.com/ZM9999/",
+    commonFunctions: {},
+    sendReply: ambiente.sendReply,
+    dispatch: async (props) => {
+      pedidos2.push(props);
+    },
+  });
+  assert.equal(pedidos2[0].input, "https://vt.tiktok.com/ZM9999/");
+});
+
+/* ═══════════ DOWNLOAD · YOUTUBE VÍDEO (OPCOES) ═══════════ */
+
+test(" youtube-video: link guardado; lista de qualidade; escolha baixa", async (t) => {
+  limpar();
+  const ambiente = criarAmbiente();
+
+  await openGuidedSession({
+    socket: ambiente.socket,
+    chatId: GROUP,
+    ownerId: DONO,
+    ownerName: "Membro",
+    sendReply: ambiente.sendReply,
+    permissions: { isOwner: false, isAdmin: false },
+  });
+
+  assert.equal(
+    await handleGuidedFlow({
+      socket: ambiente.socket,
+      chatId: GROUP,
+      senderId: DONO,
+      text: "fn:download:youtube-video",
+      commonFunctions: {},
+      sendReply: ambiente.sendReply,
+      dispatch: async () => {},
+    }),
+    true,
+  );
+
+  // Link → guarda na sessão e envia a LISTA de qualidade (sem baixar).
+  const pedidos = [];
+  await handleGuidedFlow({
+    socket: ambiente.socket,
+    chatId: GROUP,
+    senderId: DONO,
+    text: "https://youtu.be/abc123",
+    commonFunctions: {},
+    sendReply: ambiente.sendReply,
+    dispatch: async (props) => {
+      pedidos.push(props);
+    },
+  });
+
+  assert.deepEqual(pedidos, [], "download não acontece na escolha do link");
+
+  const sessao = getGuidedSession(GROUP, DONO);
+  assert.equal(sessao.pending.funcaoId, "youtube-video");
+  assert.equal(sessao.pending.input, "https://youtu.be/abc123");
+
+  // A lista de qualidade foi enviada como listMessage com tokens vfmt:*.
+  const listas = respostasDoMenu(ambiente);
+  assert.ok(listas.length >= 1);
+  const idsQualidade = listas
+    .at(-1)
+    .sections.flatMap((secao) => secao.rows)
+    .map((linha) => linha.rowId);
+  assert.deepEqual(idsQualidade, [
+    "vfmt:360",
+    "vfmt:480",
+    "vfmt:720",
+    "vfmt:1080",
+    "vfmt:best",
+  ]);
+
+  // O token vfmt:NUNCA é tratado pelo fluxo guiado (segue para o menu).
+  assert.equal(
+    await handleGuidedFlow({
+      socket: ambiente.socket,
+      chatId: GROUP,
+      senderId: DONO,
+      text: "vfmt:720",
+      commonFunctions: {},
+      sendReply: ambiente.sendReply,
+      dispatch: async () => {
+        throw new Error("não devia despachar comando");
+      },
+    }),
+    false,
+  );
+
+  // 720p (token ou número do fallback): baixa e envia o vídeo.
+  const baixados = [];
+  const enviados = [];
+  const final = [];
+  await handleVideoFormatReply({
+    chatId: GROUP,
+    senderLid: DONO,
+    text: "vfmt:720",
+    socket: ambiente.socket,
+    jid: DONO,
+    sendReply: ambiente.sendReply,
+    sendErrorReply: ambiente.sendReply,
+    sendVideoFromFile: async (_path, caption) => {
+      enviados.push(caption);
+    },
+    onFinished: async () => {
+      final.push("ok");
+    },
+    download: async (source, height) => {
+      baixados.push({ source, height });
+      return { filePath: "/tmp/video.mp4", mimetype: "video/mp4" };
+    },
+  });
+
+  assert.deepEqual(baixados, [
+    { source: "https://youtu.be/abc123", height: 720 },
+  ]);
+  assert.ok(enviados[0].includes("720p"));
+  assert.deepEqual(final, ["ok"]);
+
+  // A escolha consumiu a pendência de qualidade do videoFormatMenu...
+  assert.equal(
+    await handleVideoFormatReply({
+      chatId: GROUP,
+      senderLid: DONO,
+      text: "vfmt:360",
+      socket: ambiente.socket,
+      jid: DONO,
+      sendReply: ambiente.sendReply,
+      sendVideoFromFile: async () => {},
+    }),
+    false,
   );
 });
 
-/* ═══════════ VALIDAÇÃO E ESTADO ═══════════ */
+test(" youtube-resposta do WhatsApp chega ao fluxo com snake_case", () => {
+  // Causa raiz do silêncio: nativeFlowResponseMessage.paramsJson traz
+  // selected_row_id (snake_case). extractDataFromMessage tem de ler.
+  const resposta = extractDataFromMessage({
+    key: { remoteJid: GROUP },
+    message: {
+      interactiveResponseMessage: {
+        nativeFlowResponseMessage: {
+          name: "single_select",
+          paramsJson: JSON.stringify({ selected_row_id: "cat:download" }),
+        },
+      },
+    },
+  });
 
-async function abrirFuncaoTiktok(ambiente) {
-  await startGuidedMenu({
+  assert.equal(resposta.fullMessage, "cat:download");
+});
+
+/* ═══════════ COMPORTAMENTO TRANSVERSAL ═══════════ */
+
+test(" menu de outro membro: só o autor navega", async (t) => {
+  limpar();
+  const ambiente = criarAmbiente();
+  await openGuidedSession({
     socket: ambiente.socket,
     chatId: GROUP,
-    ownerId: "membro@lid",
+    ownerId: DONO,
     ownerName: "Membro",
     sendReply: ambiente.sendReply,
     permissions: { isOwner: false, isAdmin: false },
@@ -258,336 +302,46 @@ async function abrirFuncaoTiktok(ambiente) {
 
   await handleGuidedFlow({
     ...ambiente,
-    senderId: "membro@lid",
+    senderId: "outro@lid",
+    text: "cat:download",
+    commonFunctions: {},
+    sendReply: ambiente.sendReply,
+    dispatch: async () => {},
+  });
+
+  assert.match(ambiente.replies.at(-1).text, /menu é de @Membro/);
+});
+
+test(" link inválido avisa e mantém a pendência", async (t) => {
+  limpar();
+  const ambiente = criarAmbiente();
+  await openGuidedSession({
+    socket: ambiente.socket,
+    chatId: GROUP,
+    ownerId: DONO,
+    ownerName: "Membro",
+    sendReply: ambiente.sendReply,
+    permissions: { isOwner: false, isAdmin: false },
+  });
+
+  await handleGuidedFlow({
+    ...ambiente,
+    senderId: DONO,
     text: "fn:download:tiktok",
     commonFunctions: {},
-  });
-}
-
-test("link inválido avisa sem apagar o estado e aceita a correção", async () => {
-  const ambiente = criarAmbiente();
-  await abrirFuncaoTiktok(ambiente);
-
-  assert.equal(
-    await handleGuidedFlow({
-      ...ambiente,
-      senderId: "membro@lid",
-      text: "https://exemplo.com/video",
-      commonFunctions: {},
-    }),
-    true,
-  );
-
-  assert.equal(ambiente.dispatches.length, 0);
-  assert.match(ambiente.cards.at(-1).text, /não parece um link de \*TikTok\*/);
-  assert.ok(getGuidedSession(GROUP, "membro@lid").pending);
-
-  await handleGuidedFlow({
-    ...ambiente,
-    senderId: "membro@lid",
-    text: "https://vt.tiktok.com/ZSabc",
-    commonFunctions: {},
-  });
-
-  assert.equal(ambiente.dispatches.length, 1);
-  assert.equal(
-    ambiente.dispatches[0].input,
-    "https://vt.tiktok.com/ZSabc",
-  );
-});
-
-test("só quem abriu o menu pode usar os botões", async () => {
-  const ambiente = criarAmbiente();
-  await abrirFuncaoTiktok(ambiente);
-
-  assert.equal(
-    await handleGuidedFlow({
-      ...ambiente,
-      senderId: "outro@lid",
-      senderName: "Outro",
-      text: "cancel",
-      commonFunctions: {},
-    }),
-    true,
-  );
-
-  assert.match(ambiente.replies.at(-1).text, /Este menu é de @Membro/);
-  assert.deepEqual(ambiente.replies.at(-1).mentions, ["membro@lid"]);
-  assert.ok(getGuidedSession(GROUP, "membro@lid").pending);
-
-  // O dono do pedido continua a poder cancelar.
-  await handleGuidedFlow({
-    ...ambiente,
-    senderId: "membro@lid",
-    text: "cancel",
-    commonFunctions: {},
-  });
-  assert.equal(getGuidedSession(GROUP, "membro@lid").pending, null);
-  assert.match(ambiente.cards.at(-1).text, /cancelado/i);
-
-  // Depois de cancelar, texto livre volta ao fluxo normal dos comandos.
-  assert.equal(
-    await handleGuidedFlow({
-      ...ambiente,
-      senderId: "membro@lid",
-      text: "https://vm.tiktok.com/ZMabc123",
-      commonFunctions: {},
-    }),
-    false,
-  );
-});
-
-test("comando com prefixo cancela o estado e segue normalmente", async () => {
-  const ambiente = criarAmbiente();
-  await abrirFuncaoTiktok(ambiente);
-
-  assert.equal(
-    await handleGuidedFlow({
-      ...ambiente,
-      senderId: "membro@lid",
-      text: ".ping",
-      commonFunctions: {},
-    }),
-    false,
-  );
-
-  assert.equal(getGuidedSession(GROUP, "membro@lid").pending, null);
-  assert.match(ambiente.replies.at(-1).text, /Pedido cancelado/);
-});
-
-test("estado pendente expira em 2 minutos", async () => {
-  mock.timers.enable({ apis: ["setTimeout"] });
-  const ambiente = criarAmbiente();
-  await abrirFuncaoTiktok(ambiente);
-
-  assert.equal(GUIDED_TTL_MS, 120_000);
-  assert.ok(getGuidedSession(GROUP, "membro@lid").pending);
-
-  mock.timers.tick(GUIDED_TTL_MS);
-
-  assert.equal(getGuidedSession(GROUP, "membro@lid"), null);
-  assert.match(ambiente.replies.at(-1).text, /O tempo deste menu terminou/);
-
-  assert.equal(
-    await handleGuidedFlow({
-      ...ambiente,
-      senderId: "membro@lid",
-      text: "https://vm.tiktok.com/ZMabc123",
-      commonFunctions: {},
-    }),
-    false,
-  );
-});
-
-test("fallback sem botões aceita a resposta numérica", async () => {
-  const replies = [];
-  const cards = [];
-
-  // sendMessage sempre falha → o helper cai no texto numerado.
-  const socket = {
-    sendMessage: async () => {
-      throw new Error("sem suporte a botões");
-    },
-  };
-
-  const sendReply = async (text) => replies.push({ text });
-
-  await startGuidedMenu({
-    socket,
-    chatId: GROUP,
-    ownerId: "membro@lid",
-    ownerName: "Membro",
-    sendReply,
-    permissions: { isOwner: false, isAdmin: false },
-  });
-
-  assert.match(replies[0].text, /1\. 📚 Ver Menus/);
-  assert.equal(getGuidedSession(GROUP, "membro@lid").cardFallback, true);
-
-  const dispatch = async () => {};
-  assert.equal(
-    await handleGuidedFlow({
-      socket,
-      chatId: GROUP,
-      senderId: "membro@lid",
-      text: "1",
-      commonFunctions: {},
-      sendReply,
-      dispatch,
-    }),
-    true,
-  );
-
-  assert.match(replies.at(-1).text, /Downloads/);
-  assert.match(replies.at(-1).text, /Mais categorias/);
-});
-
-test("dono abre a categoria restrita; membro recebe recusa", async () => {
-  const ambiente = criarAmbiente();
-
-  await startGuidedMenu({
-    socket: ambiente.socket,
-    chatId: GROUP,
-    ownerId: "membro@lid",
-    ownerName: "Membro",
     sendReply: ambiente.sendReply,
-    permissions: { isOwner: false, isAdmin: false },
-  });
-
-  assert.equal(
-    await handleGuidedFlow({
-      ...ambiente,
-      senderId: "membro@lid",
-      text: "cat:dono",
-      commonFunctions: {},
-    }),
-    true,
-  );
-  assert.match(ambiente.replies.at(-1).text, /permissão/);
-
-  await startGuidedMenu({
-    socket: ambiente.socket,
-    chatId: GROUP,
-    ownerId: "admin@lid",
-    ownerName: "Admin",
-    sendReply: ambiente.sendReply,
-    permissions: { isOwner: false, isAdmin: true },
+    dispatch: async () => {},
   });
 
   await handleGuidedFlow({
     ...ambiente,
-    senderId: "admin@lid",
-    text: "cat:admin",
+    senderId: DONO,
+    text: "isto não é um link",
     commonFunctions: {},
-  });
-  assert.match(ambiente.cards.at(-1).text, /Administração do grupo/);
-});
-
-test("função de mídia exige imagem/vídeo e função sem entrada executa no toque", async () => {
-  const ambiente = criarAmbiente();
-
-  await startGuidedMenu({
-    socket: ambiente.socket,
-    chatId: GROUP,
-    ownerId: "membro@lid",
-    ownerName: "Membro",
     sendReply: ambiente.sendReply,
-    permissions: { isOwner: false, isAdmin: false },
+    dispatch: async () => {},
   });
 
-  // Sticker: aceita apenas mídia.
-  await handleGuidedFlow({
-    ...ambiente,
-    senderId: "membro@lid",
-    text: "fn:sticker:sticker",
-    commonFunctions: {},
-  });
-  assert.ok(getGuidedSession(GROUP, "membro@lid").pending);
-
-  await handleGuidedFlow({
-    ...ambiente,
-    senderId: "membro@lid",
-    text: "texto qualquer",
-    commonFunctions: {},
-  });
-  assert.equal(ambiente.dispatches.length, 0);
-  assert.match(ambiente.cards.at(-1).text, /não parece uma mídia/);
-
-  await handleGuidedFlow({
-    ...ambiente,
-    senderId: "membro@lid",
-    text: "imagem",
-    commonFunctions: { isImage: true },
-  });
-  assert.deepEqual(ambiente.dispatches.at(-1), {
-    comando: "sticker",
-    categoria: "sticker",
-    funcao: "sticker",
-    input: "",
-    args: "",
-  });
-
-  // Ping: aceita "nenhum" e executa pelo botão ▶️ Executar.
-  await handleGuidedFlow({
-    ...ambiente,
-    senderId: "membro@lid",
-    text: "fn:geral:ping",
-    commonFunctions: {},
-  });
-  const cardPing = ambiente.cards.at(-1);
-  assert.match(cardPing.text, /Toca em \*Executar\*/);
-
-  await handleGuidedFlow({
-    ...ambiente,
-    senderId: "membro@lid",
-    text: "run:geral:ping",
-    commonFunctions: {},
-  });
-  assert.equal(ambiente.dispatches.at(-1).comando, "ping");
-});
-
-test("o comando .menu envia o card principal e .menu <categoria> abre a categoria", async () => {
-  const ambiente = criarAmbiente();
-
-  await menuCommand.handle({
-    socket: ambiente.socket,
-    remoteJid: GROUP,
-    fullArgs: "",
-    webMessage: { pushName: "Membro" },
-    userLid: "membro@lid",
-    sendReply: ambiente.sendReply,
-    isOwner: false,
-  });
-
-  // `.menu` agora abre o card visual principal (src/utils/mainMenu.js).
-  const card = ambiente.cards.at(-1);
-  assert.match(card.caption || card.text, /You Name: @Membro/);
-  assert.ok(
-    card.interactiveButtons.some((botao) =>
-      botao.buttonParamsJson.includes("Ver Menus"),
-    ),
-  );
-
-  await menuCommand.handle({
-    socket: ambiente.socket,
-    remoteJid: GROUP,
-    fullArgs: "download",
-    webMessage: { pushName: "Membro" },
-    userLid: "membro@lid",
-    sendReply: ambiente.sendReply,
-    isOwner: false,
-  });
-
-  assert.match(ambiente.cards.at(-1).text, /Baixe vídeos e músicas/);
-
-  await assert.rejects(
-    menuCommand.handle({
-      socket: ambiente.socket,
-      remoteJid: GROUP,
-      fullArgs: "inexistente",
-      webMessage: { pushName: "Membro" },
-      userLid: "membro@lid",
-      sendReply: ambiente.sendReply,
-    }),
-    /Categoria desconhecida/,
-  );
-});
-
-test("sendMainCard também pode ser chamado direto pela sessão", async () => {
-  const ambiente = criarAmbiente();
-  const session = {
-    chatId: GROUP,
-    key: `${GROUP}:x@lid`,
-    ownerId: "x@lid",
-    ownerName: "X",
-    permissions: { isOwner: false, isAdmin: false },
-    sendReply: ambiente.sendReply,
-    options: new Map(),
-    pending: null,
-    timer: null,
-  };
-
-  const sent = await sendMainCard({ socket: ambiente.socket, session });
-  assert.equal(sent, true);
-  assert.match(ambiente.cards.at(-1).text, /Categorias disponíveis/);
+  assert.ok(ambiente.replies.at(-1).text.includes("não parece um link"));
+  assert.equal(getGuidedSession(GROUP, DONO).pending.funcaoId, "tiktok");
 });

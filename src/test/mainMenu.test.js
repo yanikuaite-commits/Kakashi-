@@ -150,13 +150,9 @@ test("botões Dono e Canal são cta_url e Ver Menus é a lista de categorias", (
     "https://example.com/canal",
   );
 
-  // Sem número do dono/canal e sem categorias resta o quick_reply de sempre.
-  assert.deepEqual(
-    buildMainMenuButtons({ ownerNumber: "", channelUrl: "" }).map(
-      (botao) => botao.name,
-    ),
-    ["quick_reply"],
-  );
+  // Sem número do dono/canal e sem categorias não sobra NENHUM botão:
+  // quick_reply é proibido nesta base (não renderiza).
+  assert.deepEqual(buildMainMenuButtons({ ownerNumber: "", channelUrl: "" }), []);
   assert.equal(mainMenuOwnerUrl(""), "");
 });
 
@@ -305,8 +301,10 @@ test("fallbacks: card → lista clássica → texto numerado", async () => {
     }),
     true,
   );
-  // Abriu o card da categoria "Geral" (que também caiu no fallback em texto).
-  assert.match(replies.at(-1).text, /Abrir Funções/);
+  // Abriu o card da categoria "Geral" (que também caiu no fallback em texto):
+  // a lista numerada agora mostra as FUNÇÕES da categoria, não as categorias.
+  assert.match(replies.at(-1).text, /1\. 🏓 Ping/);
+  assert.match(replies.at(-1).text, /2\. 🆘 Suporte/);
 });
 
 test("escolher uma categoria da lista abre as funções dela", async () => {
@@ -340,7 +338,18 @@ test("escolher uma categoria da lista abre as funções dela", async () => {
   );
 
   assert.match(ambiente.cards.at(-1).text, /DOWNLOADS/);
-  assert.match(ambiente.cards.at(-1).text, /Abrir Funções/);
+
+  // O card da categoria traz a lista das FUNÇÕES + navegação no fim.
+  const listaCategoria = ambiente.cards
+    .at(-1)
+    .interactiveButtons.find((botao) => botao.name === "single_select");
+  const idsCategoria = JSON.parse(listaCategoria.buttonParamsJson)
+    .sections.flatMap((secao) => secao.rows)
+    .map((linha) => linha.id);
+  assert.ok(idsCategoria.includes("fn:download:tiktok"));
+  assert.ok(idsCategoria.includes("fn:download:youtube-video"));
+  assert.ok(idsCategoria.includes("menu:categories")); // 🔙 Voltar às categorias
+  assert.ok(idsCategoria.includes("menu:main")); // 🏠 Menu Principal
 });
 
 test("só o autor do menu pode escolher na lista", async () => {
@@ -363,7 +372,7 @@ test("só o autor do menu pode escolher na lista", async () => {
   assert.ok(getGuidedSession(GROUP, "membro@lid"));
 });
 
-test("estado do menu principal expira em 2 minutos", async () => {
+test("estado do menu principal expira em 2 minutos (sem pendência: silêncio)", async () => {
   mock.timers.enable({ apis: ["setTimeout"] });
   const ambiente = criarAmbiente();
   await abrirMenu(ambiente);
@@ -372,7 +381,8 @@ test("estado do menu principal expira em 2 minutos", async () => {
   mock.timers.tick(2 * 60 * 1000);
 
   assert.equal(getGuidedSession(GROUP, "membro@lid"), null);
-  assert.match(ambiente.replies.at(-1).text, /O tempo deste menu terminou/);
+  // Sem função/opção pendente a sessão fecha EM SILÊNCIO.
+  assert.equal(ambiente.replies.length, 0);
 });
 
 test(".menu envia o card novo e mantém .menu <categoria>", async () => {

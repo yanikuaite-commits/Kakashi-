@@ -26,7 +26,7 @@ import { handlePendingDocOffer } from "../services/downloader.js";
 import { handleAudioFormatReply } from "../utils/audioFormatMenu.js";
 import { handleInteractiveMenuReply } from "../utils/interactive.js";
 import { handleVideoFormatReply } from "../utils/videoFormatMenu.js";
-import { handleGuidedFlow } from "../interactive/flow.js";
+import { handleGuidedFlow, resumePendingFunction } from "../interactive/flow.js";
 
 export async function onMessagesUpsert({ socket, messages, startProcess }) {
   if (!messages.length) {
@@ -177,10 +177,20 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         senderName: webMessage?.pushName,
         text: commonFunctions.fullMessage,
         socket,
+        jid: commonFunctions.userLid,
         sendReply: commonFunctions.sendReply,
         sendErrorReply: commonFunctions.sendErrorReply,
         sendAudioFromFile: commonFunctions.sendAudioFromFile,
         sendAudioDocumentFromFile: commonFunctions.sendAudioDocumentFromFile,
+        // Depois do áudio enviado, mantém a função do fluxo guiado ativa
+        // ("Envie outro link ...") por mais 2 minutos.
+        onFinished: async () => {
+          await resumePendingFunction({
+            chatId: commonFunctions.remoteJid,
+            senderId: commonFunctions.userLid,
+            sendReply: commonFunctions.sendReply,
+          });
+        },
       })) {
         continue;
       }
@@ -195,6 +205,15 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         sendReply: commonFunctions.sendReply,
         sendErrorReply: commonFunctions.sendErrorReply,
         sendVideoFromFile: commonFunctions.sendVideoFromFile,
+        // Depois do vídeo enviado, mantém a função do fluxo guiado ativa
+        // ("Envie outro link ...") por mais 2 minutos.
+        onFinished: async () => {
+          await resumePendingFunction({
+            chatId: commonFunctions.remoteJid,
+            senderId: commonFunctions.userLid,
+            sendReply: commonFunctions.sendReply,
+          });
+        },
       })) {
         continue;
       }

@@ -11,13 +11,6 @@ export function createInteractiveActionId() {
   return `kmenu:${randomUUID()}`;
 }
 
-export function quickReplyButton(label, id) {
-  return {
-    name: "quick_reply",
-    buttonParamsJson: JSON.stringify({ display_text: label, id }),
-  };
-}
-
 export function urlButton(label, url) {
   try {
     if (new URL(url).protocol !== "https:") return null;
@@ -243,8 +236,14 @@ export async function sendInteractiveWithFallback({
   responseMappings = [],
   fallbackActions = [],
 }) {
+  /**
+   * Envia o conteúdo (card nativeFlow com `interactiveButtons` só com
+   * `single_select` + `cta_url`, ou lista clássica) e devolve o resultado do
+   * `socket.sendMessage` (objeto com `key.id`), para os logs do fluxo guiado.
+   * No fallback em texto devolve `true`.
+   */
   try {
-    await socket.sendMessage(chatId, content);
+    const sent = await socket.sendMessage(chatId, content);
     registerMenu({
       chatId,
       ownerId,
@@ -252,7 +251,7 @@ export async function sendInteractiveWithFallback({
       responseMappings,
       sendReply,
     });
-    return true;
+    return sent || true;
   } catch (error) {
     if (onSendError) {
       onSendError(error);

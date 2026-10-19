@@ -22,7 +22,7 @@ import {
 export default {
   name: "suporte",
   description: "Suporte inteligente do Kakashi usando IA treinada",
-  commands: ["suporte", "help", "ajuda"],
+  commands: ["suporte", "ajuda"],
   usage: `${PREFIX}suporte como instalar o Kakashi no Termux?
 
 Você também pode enviar uma imagem com o comando ${PREFIX}suporte

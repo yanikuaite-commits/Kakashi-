@@ -3,8 +3,7 @@
  *
  * Este ficheiro é a ÚNICA fonte de verdade das funções guiadas:
  *
- *   { id, categoria, titulo, icone, descricao, guia, aceita, comando, exemplo, validador, args }
- *
+ *   { id, categoria, titulo, icone, descricao, guia, aceita, comando, exemplo, validador, args, opcoes } *
  * - `aceita`: "link" | "texto" | "midia" | "nenhum"
  *   - link   → a próxima mensagem tem de ser um link (e passar no `validador`)
  *   - texto  → qualquer texto com 2+ caracteres (aceita também links)
@@ -14,6 +13,10 @@
  *   nenhuma lógica de download/IA é duplicada).
  * - `validador`: opcional, recebe o texto e devolve boolean.
  * - `args`: opcional, argumentos fixos (ex.: `conta custos`).
+ * - `opcoes`: opcional, `{ tipo: "video" }` ou `{ tipo: "audio" }`. Funções com
+ *   este campo NÃO executam direto: guardam o link na sessão e enviam a lista
+ *   de qualidade/formato (videoFormatMenu / audioFormatMenu); o download só
+ *   acontece depois da escolha.
  *
  * Para ADICIONAR uma função nova basta acrescentar uma entrada aqui:
  *
@@ -107,6 +110,9 @@ export const FUNCTIONS = [
     guia: "Envie o link ou o nome do vídeo.",
     aceita: "texto",
     exemplo: "https://youtu.be/...",
+    // TEM QUE TER MENU DE QUALIDADE (360p...1080p): depois do link o fluxo
+    // guarda o vídeo e manda a lista de qualidade (videoFormatMenu).
+    opcoes: { tipo: "video" },
   }),
   entry("download", "youtube-audio", "play-audio", {
     titulo: "YouTube Áudio",
@@ -116,6 +122,9 @@ export const FUNCTIONS = [
     guia: "Envie o link ou o nome da música.",
     aceita: "texto",
     exemplo: "https://youtu.be/...",
+    // TEM QUE TER MENU DE FORMATO (áudio/nota de voz/documento):
+    // o download só acontece depois da escolha (audioFormatMenu).
+    opcoes: { tipo: "audio" },
   }),
   entry("download", "facebook", "facebook", {
     titulo: "Facebook",

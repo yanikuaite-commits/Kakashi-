@@ -7,18 +7,21 @@ import {
   handleInteractiveMenuReply,
   INTERACTIVE_MENU_TTL_MS,
   numberedFallback,
-  quickReplyButton,
   sendInteractiveWithFallback,
+  singleSelectButton,
   singleSelectList,
   urlButton,
 } from "../utils/interactive.js";
 import { RODAPE, withFooter } from "../utils/formatMessage.js";
 
 test("interactive builders preserve IDs and produce Baileys payloads", () => {
-  assert.deepEqual(JSON.parse(quickReplyButton("Abrir", "menu:open").buttonParamsJson), {
-    display_text: "Abrir",
-    id: "menu:open",
-  });
+  // Nesta base só single_select e cta_url renderizam: quick_reply é proibido.
+  const listaBtn = singleSelectButton("Abrir", [
+    { title: "Opções", rows: [{ id: "menu:open", title: "Abrir" }] },
+  ]);
+  assert.equal(listaBtn.name, "single_select");
+  const listaParams = JSON.parse(listaBtn.buttonParamsJson);
+  assert.equal(listaParams.sections[0].rows[0].id, "menu:open");
   assert.equal(urlButton("Canal", "https://example.com").name, "cta_url");
   assert.equal(urlButton("Canal", "javascript:alert(1)"), null);
   assert.equal(copyButton("Copiar", "https://example.com").name, "cta_copy");
@@ -37,7 +40,11 @@ test("simple and native buttons include required native-flow metadata", async ()
     generateWAMessageContent(
       {
         text: "Teste",
-        interactiveButtons: [quickReplyButton("Abrir", "kmenu:test")],
+        interactiveButtons: [
+          singleSelectButton("Abrir", [
+            { title: "Opções", rows: [{ id: "kmenu:test", title: "Abrir" }] },
+          ]),
+        ],
       },
       {},
     ),
@@ -200,7 +207,7 @@ test("token consumido não pode ser reutilizado depois do menu", async () => {
     socket: { sendMessage: async () => {} },
     chatId: "menu-expiry-test@g.us",
     ownerId: "autor",
-    content: { interactiveButtons: [quickReplyButton("Abrir", token)] },
+    content: { buttons: [{ buttonId: token, buttonText: { displayText: "Abrir" } }] },
     responseMappings: [{ id: token, target: ".exemplo-gatilho opcao1" }],
     sendReply: async (text) => replies.push(text),
   });

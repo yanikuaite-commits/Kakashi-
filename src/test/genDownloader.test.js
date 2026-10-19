@@ -5,7 +5,7 @@ import { readFile, readdir, rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { after, before, test } from "node:test";
 import { downloadWithGenDownload } from "../utils/genDownloader.js";
-import { handleDownload } from "../commands/download.js";
+import { handleDownload } from "../utils/legacy-download.js";
 import { downloadAudio, downloadVideo, downloadByCommand, resolveDownloadSource, setPendingDocOffer, handlePendingDocOffer } from "../services/downloader.js";
 import command from "../commands/member/downloads/download.js";
 import playVideo from "../commands/member/downloads/play-video.js";
@@ -143,16 +143,15 @@ test("play video pesquisa o primeiro resultado e abre o card de qualidade", asyn
     sendReply: async () => {},
   });
 
-  // O vídeo ainda não é baixado: primeiro vem o card interativo.
+  // O vídeo ainda não é baixado: primeiro vem a LISTA de qualidade direta
+  // (quick_reply é proibido nesta base).
   const card = sent[0];
-  assert.match(card.text, /┌─〔 📥 .*DOWNLOAD/);
+  assert.match(card.text, /📥 .*DOWNLOAD/);
   assert.match(card.text, /📌 \*Título:\* Vídeo/);
   assert.match(card.text, /🌐 \*Fonte:\* YouTube/);
-  const buttons = card.interactiveButtons.map((button) => JSON.parse(button.buttonParamsJson));
-  assert.equal(buttons[0].id, "vfmt:menu");
-  assert.ok(
-    buttons.some(({ copy_code }) => copy_code === "https://www.youtube.com/watch?v=exemplo"),
-    "o card deve oferecer o link do vídeo",
+  assert.deepEqual(
+    card.sections[0].rows.map((row) => row.rowId),
+    ["vfmt:360", "vfmt:480", "vfmt:720", "vfmt:1080", "vfmt:best"],
   );
 });
 

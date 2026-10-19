@@ -1,40 +1,46 @@
 /**
  * Fluxo guiado em 4 passos (menu → categoria → função → execução).
  *
- * IDs usados nos botões/linhas:
+ * IDs usados nas linhas das listas:
  *   menu:main            → card principal
- *   menu:categories[:n]  → lista de categorias (com paginação)
- *   cat:<id>             → card da categoria
- *   fnlist:<cat>[:n]     → lista de funções da categoria (paginação)
- *   fn:<cat>:<funcao>    → card da função + estado pendente
+ *   menu:categories      → lista de categorias
+ *   cat:<id>             → card da categoria (com a lista das FUNÇÕES)
+ *   fnlist:<cat>         → compatibilidade: alias de cat:<id>
  *   back:<cat>           → volta às funções da categoria
+ *   fn:<cat>:<funcao>    → card da função + estado pendente
  *   run:<cat>:<funcao>   → executa função sem entrada (`aceita: "nenhum"`)
  *   cancel               → cancela o estado pendente
+ *
+ * REGRA DE BOTÕES: nesta base SÓ `single_select` (lista) e `cta_url` renderizam.
+ * Cada card = texto + UMA lista single_select + botão cta_url "📢 Canal".
+ * `quick_reply`, `buttonsMessage` e `templateButtons` ficam PROIBIDOS: são
+ * silenciosamente descartados pelo WhatsApp.
  *
  * O estado fica num Map por `chatId:ownerId`, com TTL de 2 minutos. A execução
  * reaproveita os comandos existentes: quem chama passa `dispatch`, que monta a
  * mensagem sintética e corre o `dynamicCommand` (prefixo, permissões, créditos,
- * erros e refluxo). Nada de lógica de download/IA é duplicada aqui.
+ * erros e refluxo). Funções com `opcoes` (qualidade/formato) não usam `dispatch`:
+ * guardam o link na sessão e abrem o menu de qualidade/formato em lista
+ * (videoFormatMenu / audioFormatMenu), que baixa só depois da escolha.
  *
  * @author Dev Gui
  */
-import { PREFIX } from "../config.js";
+import { MAIN_MENU_OWNER_NUMBER, PREFIX } from "../config.js";
 import { getPrefix } from "../utils/database.js";
-import {
-  RODAPE,
-  formatMessage,
-  loadingMessage,
-} from "../utils/formatMessage.js";
+import { RODAPE, formatMessage } from "../utils/formatMessage.js";
 import {
   INTERACTIVE_MENU_TTL_MS,
   numberedFallback,
-  quickReplyButton,
   sendInteractiveWithFallback,
+  singleSelectButton,
   singleSelectList,
   urlButton,
 } from "../utils/interactive.js";
 import { errorLog, infoLog } from "../utils/logger.js";
 import { isAdmin, isBotOwner, isOwnerInPrivateChat } from "../middlewares/index.js";
+import { resolveDownloadSource } from "../services/downloader.js";
+import { startVideoFormatMenu } from "../utils/videoFormatMenu.js";
+import { startAudioSourceMenu } from "../utils/audioFormatMenu.js";
 import {
   CATEGORIES,
   canAccess,
@@ -63,6 +69,9 @@ const TOKEN_PREFIXES = [
   "run:",
   "cancel",
 ];
+
+/** Tokens dos menus de qualidade/formato que NÃO são do fluxo guiado. */
+const OUTSIDE_TOKEN_PREFIXES = ["vfmt:", "fmt:"];
 
 /** Sessões abertas: `chatId:ownerId` → sessão. */
 const sessions = new Map();
@@ -97,15 +106,22 @@ function clearPending(session) {
   if (session) session.pending = null;
 }
 
+/**
+ * TTL da sessão. O aviso "⏳ O tempo deste menu terminou" só é enviado quando
+ * havia função (ou opção de qualidade/formato) à espera de resposta; caso
+ * contrário a sessão fecha em silêncio.
+ */
 function touch(session) {
   if (session.timer) clearTimeout(session.timer);
 
   session.timer = setTimeout(() => {
     if (sessions.get(session.key) !== session) return;
+    const tinhaPendente = Boolean(session.pending);
     dropSession(session);
+    if (!tinhaPendente) return;
     Promise.resolve(
       session.sendReply?.(
-        "⏳ O tempo deste menu terminou. Envia o comando novamente para recomeçar.",
+        "⏳ O tempo deste menu terminou. Envia .menu para recomeçar.",
       ),
     ).catch(() => {});
   }, GUIDED_TTL_MS);
@@ -188,18 +204,29 @@ function isUrlLike(value) {
   }
 }
 
-function paginate(items, page, size) {
-  const pages = Math.max(1, Math.ceil(items.length / size));
-  const atual = Math.min(Math.max(Number(page) || 0, 0), pages - 1);
-  return {
-    rows: items.slice(atual * size, atual * size + size),
-    page: atual,
-    pages,
-  };
+/**
+ * Divide as linhas em seções de até 10 linhas (limite das listas do WhatsApp).
+ * Uma seção a mais só é criada se houver linhas de verdade para lá.
+ */
+function emSecoes(title, rows, tamanho = 10) {
+  if (!rows.length) return [];
+  const secoes = [];
+  for (let inicio = 0; inicio < rows.length; inicio += tamanho) {
+    secoes.push({
+      title: secoes.length ? `${title} (continuação)` : title,
+      rows: rows.slice(inicio, inicio + tamanho),
+    });
+  }
+  return secoes;
+}
+
+function canalButton() {
+  return urlButton("📢 Canal", CHANNEL_URL);
 }
 
 /**
- * Envia um card com botões ou lista, com fallback numerado e log do formato.
+ * Envia um card (texto + UMA lista single_select + Canal) com fallback numerado.
+ * Loga o formato enviado e o id da mensagem devolvida.
  */
 async function deliver({ socket, session, content, options, label }) {
   const fallbackText = numberedFallback(options);
@@ -226,39 +253,55 @@ async function deliver({ socket, session, content, options, label }) {
 
   session.cardFallback = fallbackUsed;
 
+  const sentId = sent?.key?.id || sent?.message?.key?.id || null;
   infoLog(
     `[fluxo] ${label} enviado como ${
       fallbackUsed ? "fallback em texto" : "mensagem interativa"
-    }`,
+    }${sentId ? ` (id ${sentId})` : ""}`,
   );
 
   if (sent) touch(session);
   return sent;
 }
 
-/* ═══════════ PASSOS 1 E 2 · MENU E CATEGORIAS ═══════════ */
+/* ═══════════ PASSO 1 · MENU PRINCIPAL ═══════════ */
 
 export async function sendMainCard({ socket, session }) {
   const categorias = listCategories(session.permissions).filter(
     (categoria) => categoria.id !== "dono" || session.permissions.isOwner,
   );
 
-  const options = [];
+  const rows = categorias.map((categoria) => ({
+    id: `cat:${categoria.id}`,
+    title: `${categoria.icone} ${categoria.titulo}`,
+    description: categoria.descricao,
+  }));
+
+  const options = rows.map((linha, index) => ({
+    number: String(index + 1),
+    title: linha.title,
+    id: linha.id,
+  }));
+
   const buttons = [];
 
-  if (session.permissions.isOwner) {
-    options.push({ number: "1", title: "👑 Dono", id: "cat:dono" });
-    buttons.push(quickReplyButton("👑 Dono", "cat:dono"));
-  }
-
-  options.push({
-    number: String(options.length + 1),
-    title: "📚 Ver Menus",
-    id: IDS.categories,
+  const verMenus = singleSelectButton("📚 Ver Menus", emSecoes("Categorias", rows), {
+    title: "Categorias",
   });
-  buttons.push(quickReplyButton("📚 Ver Menus", IDS.categories));
+  if (verMenus) buttons.push(verMenus);
 
-  const canal = urlButton("📢 Canal", CHANNEL_URL);
+  // Dono (se houver número configurado) e Canal são cta_url.
+  const dono = String(MAIN_MENU_OWNER_NUMBER || "").replace(/\D/g, "");
+  if (dono) {
+    buttons.push({
+      name: "cta_url",
+      buttonParamsJson: JSON.stringify({
+        display_text: "👑 Dono",
+        url: `https://wa.me/${dono}`,
+      }),
+    });
+  }
+  const canal = canalButton();
   if (canal) buttons.push(canal);
 
   const content = {
@@ -283,94 +326,58 @@ export async function sendMainCard({ socket, session }) {
   return deliver({ socket, session, content, options, label: IDS.main });
 }
 
-export async function sendCategoriesCard({ socket, session, page = 0 }) {
-  const categorias = listCategories(session.permissions);
-  const { rows, page: atual, pages } = paginate(categorias, page, 8);
-
-  const linhas = rows.map((categoria) => ({
-    title: `${categoria.icone} ${categoria.titulo}`,
-    description: categoria.descricao,
-    rowId: `cat:${categoria.id}`,
-  }));
-
-  const options = linhas.map((linha, index) => ({
-    number: String(index + 1),
-    title: linha.title,
-    id: linha.rowId,
-  }));
-
-  if (pages > 1) {
-    const proxima = atual + 1 >= pages ? 0 : atual + 1;
-    linhas.push({
-      title: proxima === 0 ? "🔄 Voltar ao início" : "➡️ Mais categorias",
-      description: `Página ${proxima + 1} de ${pages}`,
-      rowId: `${IDS.categories}:${proxima}`,
-    });
-    options.push({
-      number: String(options.length + 1),
-      title: "Mais categorias",
-      id: `${IDS.categories}:${proxima}`,
-    });
-  }
-
-  const content = singleSelectList({
-    text: formatMessage({
-      icone: "📚",
-      titulo: "Categorias",
-      campos: [
-        "Escolhe a categoria para ver as funções:",
-        "",
-        ...rows.map(
-          (categoria) => `${categoria.icone} *${categoria.titulo}* — ${categoria.descricao}`,
-        ),
-      ],
-    }),
-    title: "Categorias",
-    footer: RODAPE,
-    buttonText: "Abrir categoria",
-    sections: [{ title: "Categorias", rows: linhas }],
-  });
-
-  return deliver({
-    socket,
-    session,
-    content,
-    options,
-    label: `${IDS.categories} (página ${atual + 1})`,
-  });
+export async function sendCategoriesCard({ socket, session }) {
+  return sendMainCard({ socket, session });
 }
+
+/* ═══════════ PASSO 2 · CARD DA CATEGORIA (COM A LISTA DE FUNÇÕES) ═══════════ */
 
 export async function sendCategoryCard({ socket, session, categoria }) {
   const funcoes = listFunctions(categoria.id);
   const prefixo = prefixOf(session.chatId);
 
-  const options = [];
+  // Lista das funções da categoria + navegação no fim (regras do pedido).
+  const rows = funcoes.map((funcao) => ({
+    id: `fn:${categoria.id}:${funcao.id}`,
+    title: `${funcao.icone} ${funcao.titulo}`,
+    description: funcao.descricao,
+  }));
+
+  rows.push({
+    id: IDS.categories,
+    title: "🔙 Voltar às categorias",
+    description: "Ver as outras categorias",
+  });
+  rows.push({
+    id: IDS.main,
+    title: "🏠 Menu Principal",
+    description: "Voltar ao início",
+  });
+
+  const secoes = emSecoes(
+    `${categoria.icone} ${categoria.titulo}`,
+    rows.slice(0, funcoes.length),
+  );
+  const navegacao = rows.slice(funcoes.length);
+  secoes.push({ title: "Navegação", rows: navegacao });
+
+  const options = rows.map((linha, index) => ({
+    number: String(index + 1),
+    title: linha.title,
+    id: linha.id,
+  }));
+
   const buttons = [];
 
-  if (funcoes.length) {
-    options.push({
-      number: "1",
-      title: "📂 Abrir Funções",
-      id: `fnlist:${categoria.id}:0`,
-    });
-    buttons.push(
-      quickReplyButton("📂 Abrir Funções", `fnlist:${categoria.id}:0`),
-    );
-  }
+  const lista = singleSelectButton(
+    "📂 Funções",
+    secoes,
+    { title: `${categoria.titulo} · Funções` },
+  );
+  if (lista) buttons.push(lista);
 
-  options.push({
-    number: String(options.length + 1),
-    title: "🏠 Menu Principal",
-    id: IDS.main,
-  });
-  buttons.push(quickReplyButton("🏠 Menu Principal", IDS.main));
-
-  const canal = urlButton("📢 Canal", CHANNEL_URL);
+  const canal = canalButton();
   if (canal) buttons.push(canal);
-
-  const resumo = `${funcoes.length} ${
-    funcoes.length === 1 ? "função" : "funções"
-  } • Prefixo [ ${prefixo} ]`;
 
   const content = {
     text: formatMessage({
@@ -379,15 +386,20 @@ export async function sendCategoryCard({ socket, session, categoria }) {
       campos: [
         categoria.descricao,
         "",
-        `📦 *Resumo:* ${resumo}`,
-        funcoes.length
-          ? "💡 Toque em *Abrir Funções* e escolha."
-          : `💡 Ainda não há funções guiadas aqui. Use *${prefixo}menu* ou o comando direto.`,
+        `📦 *Resumo:* ${funcoes.length} ${
+          funcoes.length === 1 ? "função" : "funções"
+        } • Prefixo [ ${prefixo} ]`,
+        "💡 Abre a lista e escolhe a função.",
       ],
     }),
     interactiveButtons: buttons,
     viewOnce: true,
   };
+
+  // Sem funções (categoria recém-criada) o bot durmiente escolhe o card principal.
+  if (!lista) {
+    return sendMainCard({ socket, session });
+  }
 
   return deliver({
     socket,
@@ -398,87 +410,16 @@ export async function sendCategoryCard({ socket, session, categoria }) {
   });
 }
 
-export async function sendFunctionsCard({
-  socket,
-  session,
-  categoria,
-  page = 0,
-}) {
-  const funcoes = listFunctions(categoria.id);
-  if (!funcoes.length) {
-    return sendCategoryCard({ socket, session, categoria });
-  }
+/* ═══════════ COMPATIBILIDADE · LISTA DE FUNÇÕES ═══════════ */
 
-  const { rows, page: atual, pages } = paginate(funcoes, page, 7);
-
-  const linhas = rows.map((funcao) => ({
-    title: `${funcao.icone} ${funcao.titulo}`,
-    description: funcao.descricao,
-    rowId: `fn:${categoria.id}:${funcao.id}`,
-  }));
-
-  const options = linhas.map((linha, index) => ({
-    number: String(index + 1),
-    title: linha.title,
-    id: linha.rowId,
-  }));
-
-  if (pages > 1) {
-    const proxima = atual + 1 >= pages ? 0 : atual + 1;
-    linhas.push({
-      title: proxima === 0 ? "🔄 Voltar ao início" : "➡️ Mais funções",
-      description: `Página ${proxima + 1} de ${pages}`,
-      rowId: `fnlist:${categoria.id}:${proxima}`,
-    });
-    options.push({
-      number: String(options.length + 1),
-      title: "Mais funções",
-      id: `fnlist:${categoria.id}:${proxima}`,
-    });
-  }
-
-  linhas.push({
-    title: "🏠 Menu Principal",
-    description: "Voltar ao início",
-    rowId: IDS.main,
-  });
-  options.push({
-    number: String(options.length + 1),
-    title: "Menu Principal",
-    id: IDS.main,
-  });
-
-  const content = singleSelectList({
-    text: formatMessage({
-      icone: categoria.icone,
-      titulo: `${categoria.titulo} · Funções`,
-      campos: [
-        categoria.descricao,
-        "",
-        ...rows.map(
-          (funcao) => `${funcao.icone} *${funcao.titulo}* — ${funcao.descricao}`,
-        ),
-      ],
-    }),
-    title: `${categoria.titulo} · Funções`,
-    footer: RODAPE,
-    buttonText: "Escolher função",
-    sections: [{ title: "Funções", rows: linhas }],
-  });
-
-  return deliver({
-    socket,
-    session,
-    content,
-    options,
-    label: `fnlist:${categoria.id} (página ${atual + 1})`,
-  });
+export async function sendFunctionsCard({ socket, session, categoria }) {
+  return sendCategoryCard({ socket, session, categoria });
 }
 
 /* ═══════════ PASSO 3 · CARD DA FUNÇÃO ═══════════ */
 
 export async function sendFunctionCard({ socket, session, categoria, funcao }) {
-  session.pending = { categoriaId: categoria.id, funcaoId: funcao.id };
+  session.pending = { categoriaId: categoria.id, funcaoId: funcao.id, input: null };
   touch(session);
 
   const prefixo = prefixOf(session.chatId);
@@ -487,44 +428,49 @@ export async function sendFunctionCard({ socket, session, categoria, funcao }) {
       funcao.aceita === "nenhum" ? "" : ` ${funcao.exemplo || ""}`
     }`.trim();
 
-  const options = [];
-  const buttons = [];
+  // Lista ÚNICA com navegação (ou execução, para `nenhum`) + Canal.
+  const rows = [];
 
   if (funcao.aceita === "nenhum") {
-    options.push({
-      number: "1",
-      title: "▶️ Executar",
+    rows.push({
       id: `run:${categoria.id}:${funcao.id}`,
+      title: "▶️ Executar",
+      description: "Rodar agora",
     });
-    buttons.push(
-      quickReplyButton("▶️ Executar", `run:${categoria.id}:${funcao.id}`),
-    );
   }
 
-  options.push({
-    number: String(options.length + 1),
-    title: "🔙 Voltar às Funções",
+  rows.push({
     id: `back:${categoria.id}`,
+    title: "🔙 Voltar às funções",
+    description: categoria.titulo,
   });
-  buttons.push(
-    quickReplyButton("🔙 Voltar às Funções", `back:${categoria.id}`),
-  );
-
-  options.push({
-    number: String(options.length + 1),
-    title: "🏠 Menu Principal",
+  rows.push({
     id: IDS.main,
+    title: "🏠 Menu Principal",
+    description: "Voltar ao início",
   });
-  buttons.push(quickReplyButton("🏠 Menu Principal", IDS.main));
+  rows.push({
+    id: IDS.cancel,
+    title: "❌ Cancelar",
+    description: "Sair sem executar",
+  });
 
-  if (funcao.aceita !== "nenhum") {
-    options.push({
-      number: String(options.length + 1),
-      title: "❌ Cancelar",
-      id: IDS.cancel,
-    });
-    buttons.push(quickReplyButton("❌ Cancelar", IDS.cancel));
-  }
+  const secoes = emSecoes("Opções", rows);
+  const options = rows.map((linha, index) => ({
+    number: String(index + 1),
+    title: linha.title,
+    id: linha.id,
+  }));
+
+  const buttons = [];
+
+  const lista = singleSelectButton("⚙️ Opções", secoes, {
+    title: funcao.titulo,
+  });
+  if (lista) buttons.push(lista);
+
+  const canal = canalButton();
+  if (canal) buttons.push(canal);
 
   const content = {
     text: formatMessage({
@@ -537,8 +483,10 @@ export async function sendFunctionCard({ socket, session, categoria, funcao }) {
         `⚡ *Ou use:* ${atalho}`,
         "",
         funcao.aceita === "nenhum"
-          ? "💡 Toca em *Executar* para rodar agora."
-          : "💡 Envia a mensagem abaixo que eu continuo daqui.",
+          ? "💡 Escolhe *Executar* na lista abaixo."
+          : funcao.opcoes
+            ? "💡 Envia o link: depois eu pergunto a qualidade."
+            : "💡 Envia a mensagem abaixo que eu continuo daqui.",
       ],
     }),
     interactiveButtons: buttons,
@@ -554,7 +502,16 @@ export async function sendFunctionCard({ socket, session, categoria, funcao }) {
   });
 }
 
-async function sendInvalidInput({ socket, session, categoria, funcao, motivo }) {
+/* ═══════════ RESULTADO, CANCELAMENTO E ERROS ═══════════ */
+
+/** Textos simples de resultado/erro/aviso: sem botões (regra do projeto). */
+async function sendSimpleText({ session, texto, mentions }) {
+  touch(session);
+  await Promise.resolve(session.sendReply?.(texto, mentions)).catch(() => {});
+  return true;
+}
+
+async function sendInvalidInput({ session, categoria, funcao, motivo }) {
   const alvo =
     motivo === "midia"
       ? "uma mídia"
@@ -562,44 +519,14 @@ async function sendInvalidInput({ socket, session, categoria, funcao, motivo }) 
         ? "um texto válido"
         : "um link";
 
-  const options = [
-    { number: "1", title: "❌ Cancelar", id: IDS.cancel },
-    { number: "2", title: "🏠 Menu Principal", id: IDS.main },
-  ];
-
-  const content = {
-    text: formatMessage({
-      icone: "⚠️",
-      titulo: "Entrada inválida",
-      campos: [
-        `Isso não parece ${alvo} de *${funcao.titulo}*.`,
-        "Tenta de novo ou toca em Cancelar.",
-      ],
-    }),
-    interactiveButtons: [
-      quickReplyButton("❌ Cancelar", IDS.cancel),
-      quickReplyButton("🏠 Menu Principal", IDS.main),
-    ],
-    viewOnce: true,
-  };
-
   // O estado continua pendente para o utilizador tentar outra vez.
-  return deliver({
-    socket,
+  infoLog(
+    `[fluxo] entrada inválida para ${funcao.id} (cat ${categoria.id}): o que veio não parece ${alvo}`,
+  );
+  return sendSimpleText({
     session,
-    content,
-    options,
-    label: `inválido:${categoria.id}:${funcao.id}`,
+    texto: `⚠️ Isso não parece ${alvo} de *${funcao.titulo}*. Envia de novo ou toca no cancelamento no menu.`,
   });
-}
-
-/* ═══════════ RESULTADO, CANCELAMENTO E TIMEOUT ═══════════ */
-
-function retryLabel(funcao) {
-  if (funcao.aceita === "link") return "🔁 Outro link";
-  if (funcao.aceita === "midia") return "🔁 Outra mídia";
-  if (funcao.aceita === "texto") return "🔁 Outro pedido";
-  return "🔁 Repetir";
 }
 
 export async function sendResultButtons({
@@ -608,62 +535,31 @@ export async function sendResultButtons({
   categoria,
   funcao,
 }) {
-  const options = [
-    {
-      number: "1",
-      title: retryLabel(funcao),
-      id: `fn:${categoria.id}:${funcao.id}`,
-    },
-    {
-      number: "2",
-      title: "🔙 Voltar às Funções",
-      id: `back:${categoria.id}`,
-    },
-    { number: "3", title: "🏠 Menu Principal", id: IDS.main },
-  ];
-
-  const content = {
-    text: formatMessage({
-      icone: "✅",
-      titulo: "Pronto",
-      campos: ["✨ Queres fazer mais alguma coisa?"],
-    }),
-    interactiveButtons: [
-      quickReplyButton(retryLabel(funcao), `fn:${categoria.id}:${funcao.id}`),
-      quickReplyButton("🔙 Voltar às Funções", `back:${categoria.id}`),
-      quickReplyButton("🏠 Menu Principal", IDS.main),
-    ],
-    viewOnce: true,
+  // Mantém a função ativa por mais 2 minutos (texto simples, sem botões).
+  session.pending = funcao.aceita === "nenhum" ? null : {
+    categoriaId: categoria.id,
+    funcaoId: funcao.id,
+    input: null,
   };
+  touch(session);
 
-  return deliver({
-    socket,
-    session,
-    content,
-    options,
-    label: `resultado:${categoria.id}:${funcao.id}`,
-  });
+  return sendResultText({ session, categoria, funcao });
 }
 
-async function sendCanceled({ socket, session }) {
-  const options = [{ number: "1", title: "🏠 Menu Principal", id: IDS.main }];
+async function sendResultText({ session, categoria, funcao }) {
+  const continua = funcao.aceita !== "nenhum";
 
-  const content = {
-    text: formatMessage({
-      icone: "❌",
-      titulo: "Cancelado",
-      campos: ["Tudo bem! O pedido foi cancelado.", "", "Podes recomeçar quando quiseres."],
-    }),
-    interactiveButtons: [quickReplyButton("🏠 Menu Principal", IDS.main)],
-    viewOnce: true,
-  };
+  infoLog(
+    `[fluxo] ${funcao.id} (cat ${categoria.id}) terminou; ${
+      continua ? "função continua ativa por 2 min" : "sem pendência"
+    }`,
+  );
 
-  return deliver({
-    socket,
+  return sendSimpleText({
     session,
-    content,
-    options,
-    label: "cancel",
+    texto: continua
+      ? "✅ Pronto! Envie outro link ou use .menu para voltar."
+      : "✅ Pronto! Usa .menu quando quiseres.",
   });
 }
 
@@ -706,6 +602,14 @@ function validateInput(funcao, value, commonFunctions) {
   return { ok: false, motivo: "texto" };
 }
 
+/**
+ * Executa a função.
+ *
+ * - Com `opcoes`: guarda o link na sessão e envia "🎛️ Escolher Qualidade" como
+ *   lista (videoFormatMenu / audioFormatMenu). O download só acontece depois
+ *   da escolha; a sessão fica ativa até ao resultado.
+ * - Sem `opcoes`: "⏳ Já estou a tratar do teu pedido, @usuario..." e baixa.
+ */
 async function runFunction({
   socket,
   session,
@@ -714,11 +618,73 @@ async function runFunction({
   input,
   dispatch,
 }) {
+  touch(session);
+
+  if (funcao.opcoes) {
+    let source;
+    try {
+      // Pode ser link ou termo de pesquisa (play-*): resolve para URL.
+      source = (await resolveDownloadSource(funcao.comando, input)).source;
+    } catch (error) {
+      errorLog(`[fluxo] falha ao resolver fonte de ${funcao.id}: ${error.message}`);
+      await sendInvalidInput({
+        session,
+        categoria,
+        funcao,
+        motivo: "link",
+      });
+      return;
+    }
+
+    // Guarda o link na sessão e envia o menu de qualidade/formato em lista.
+    session.pending = {
+      categoriaId: categoria.id,
+      funcaoId: funcao.id,
+      input: source,
+    };
+
+    infoLog(
+      `[fluxo] ${funcao.id}: link guardado na sessão; a abrir a lista de ${
+        funcao.opcoes.tipo === "video" ? "qualidade do vídeo" : "formato do áudio"
+      }`,
+    );
+
+    const props = {
+      socket,
+      chatId: session.chatId,
+      ownerLid: session.ownerId,
+      ownerName: session.ownerName,
+      sendReply: session.sendReply,
+      source,
+      url: input,
+    };
+
+    if (funcao.opcoes.tipo === "video") {
+      await startVideoFormatMenu(props);
+    } else {
+      await startAudioSourceMenu({
+        socket: props.socket,
+        chatId: props.chatId,
+        ownerLid: props.ownerLid,
+        ownerName: props.ownerName,
+        sendReply: props.sendReply,
+        source,
+        url: props.url,
+        jid: session.ownerId,
+      });
+    }
+    return;
+  }
+
   clearPending(session);
   touch(session);
 
+  const mentions =
+    session.ownerId && session.ownerId !== session.chatId
+      ? [session.ownerId]
+      : undefined;
   await session
-    .sendReply(loadingMessage({ usuario: session.ownerName }))
+    .sendReply("⏳ Já estou a tratar do teu pedido, @usuario...", mentions)
     .catch(() => {});
 
   try {
@@ -733,20 +699,51 @@ async function runFunction({
     errorLog(
       `[fluxo] erro ao executar ${funcao.comando} (${funcao.id}): ${error.message}`,
     );
-    await session
-      .sendReply(`❌ Não consegui executar ${funcao.titulo}: ${error.message}`)
-      .catch(() => {});
+    await sendSimpleText({
+      session,
+      texto: `❌ Não consegui executar ${funcao.titulo}: ${error.message}`,
+    });
+    return;
   }
 
-  await sendResultButtons({ socket, session, categoria, funcao });
+  // Mantém a função ativa por mais 2 minutos: o próximo texto vira a próxima
+  // entrada ("Envie outro link ou use .menu para voltar").
+  if (funcao.aceita !== "nenhum") {
+    session.pending = {
+      categoriaId: categoria.id,
+      funcaoId: funcao.id,
+      input: null,
+    };
+  }
+
+  await sendResultText({ session, categoria, funcao });
+}
+
+/* ═══════════ RESUMO PÓS-DOWNLOAD (menus de qualidade/formato) ═══════════ */
+
+/**
+ * Reabre o texto final depois de um download concluído numa pendência de
+ * qualidade/formato (vfmt:/fmt:). Mantém a função ativa por mais 2 minutos.
+ * Chamado pelos menus através do middleware.
+ */
+export async function resumePendingFunction({ chatId, senderId, sendReply }) {
+  const own = sessions.get(keyOf(chatId, senderId)) || null;
+  if (!own || !own.pending) return false;
+  if (sendReply) own.sendReply = sendReply;
+  touch(own);
+  const categoria = getCategory(own.pending.categoriaId);
+  const funcao = getFunction(own.pending.categoriaId, own.pending.funcaoId);
+  if (!categoria || !funcao) return false;
+  await sendResultText({ session: own, categoria, funcao });
+  return true;
 }
 
 /* ═══════════ HANDLER CENTRAL ═══════════ */
 
 /**
- * Lê a resposta (botão nativo, item de lista ou número) e despacha pelo prefixo
- * do ID. Quando há estado pendente, a próxima mensagem de texto/mídia é a
- * entrada da função.
+ * Lê a resposta (linha de lista, com o ID como texto — ex. `cat:download`) e
+ * despacha pelo prefixo do ID. Quando há estado pendente, a próxima mensagem
+ * de texto/mídia é a entrada da função.
  *
  * @returns {Promise<boolean>} true se a mensagem foi tratada pelo fluxo.
  */
@@ -769,7 +766,43 @@ export async function handleGuidedFlow({
   const ownerId = senderId || (chatId.endsWith("@g.us") ? "" : chatId);
   if (!ownerId) return false;
 
+  infoLog(
+    `[fluxo] mensagem recebida; id="${value}" chat="${chatId}" sender="${ownerId}"`,
+  );
+
+  const ownPre = sessions.get(keyOf(chatId, ownerId)) || null;
+
+  // Com link guardado à espera de qualidade/formato (pending.input), números
+  // 1-4/1-5 são escolha daquele menu, NÃO navegação do fluxo guiado. Devolve
+  // false para que videoFormatMenu/audioFormatMenu os tratem.
+  if (
+    ownPre?.pending?.input &&
+    /^\d{1,2}$/.test(value) &&
+    !ownPre.cardFallback
+  ) {
+    infoLog(
+      `[fluxo] número "${value}" é escolha do menu de qualidade/formato; a ignorar aqui`,
+    );
+    return false;
+  }
+
   const own = sessions.get(keyOf(chatId, ownerId)) || null;
+
+  // Tokens dos menus de qualidade/formato (vfmt:*, fmt:*): tratados por
+  // videoFormatMenu/audioFormatMenu depois deste handler — nunca por aqui.
+  if (OUTSIDE_TOKEN_PREFIXES.some((prefix) => value.startsWith(prefix))) {
+    infoLog(
+      `[fluxo] token "${value}" pertence ao menu de qualidade/formato; a ignorar aqui`,
+    );
+    return false;
+  }
+
+  infoLog(
+    `[fluxo] sessão ${ownPre ? "encontrada" : "ausente"} para "${ownerId}" em "${chatId}"${
+      own?.pending ? ` (pendente: ${own.pending.funcaoId})` : ""
+    }`,
+  );
+
   const prefixo = prefixOf(chatId);
   const pareceComando =
     (prefixo && value.startsWith(prefixo)) || value.startsWith("!");
@@ -799,12 +832,18 @@ export async function handleGuidedFlow({
     const funcao = getFunction(own.pending.categoriaId, own.pending.funcaoId);
 
     if (!categoria || !funcao) {
+      errorLog(
+        `[fluxo] pendência aponta para ${own.pending.categoriaId}/${own.pending.funcaoId}, que não existe; sessão descartada`,
+      );
       dropSession(own);
       return false;
     }
 
     if (!canAccess(categoria, own.permissions)) {
       clearPending(own);
+      infoLog(
+        `[fluxo] ${ownerId} ficou sem permissão para ${categoria.id}; pendência cancelada`,
+      );
       await sendReply("🚫 Esta categoria é restrita a administradores.").catch(
         () => {},
       );
@@ -815,7 +854,6 @@ export async function handleGuidedFlow({
 
     if (!validacao.ok) {
       await sendInvalidInput({
-        socket,
         session: own,
         categoria,
         funcao,
@@ -838,79 +876,79 @@ export async function handleGuidedFlow({
   // Resolve número de fallback ou token de botão/lista.
   const id = numeroDeNavegacao || (numero ? own?.options.get(value) : value);
   if (!id || !TOKEN_PREFIXES.some((prefix) => id.startsWith(prefix))) {
+    infoLog(`[fluxo] "${value}" não é token nem número do fluxo guiado; a ignorar`);
     return false;
   }
 
-  const session = own || findSessionInChat(chatId);
-
-  if (!session) {
-    await sendReply(
-      "⏳ Este menu expirou. Envia o comando novamente para recomeçar.",
-    ).catch(() => {});
-    return true;
-  }
-
   if (!own) {
-    const mentions =
-      session.ownerId && session.ownerId !== chatId
-        ? [session.ownerId]
-        : undefined;
+    // Havia sessão de OUTRA pessoa no chat? O menu não é dela.
+    const other = findSessionInChat(chatId);
+    if (other) {
+      const mentions =
+        other.ownerId && other.ownerId !== chatId ? [other.ownerId] : undefined;
+      infoLog(
+        `[fluxo] ${ownerId} tocou no menu de outra pessoa (dono ${other.ownerId})`,
+      );
+      await sendReply(
+        `🚫 Este menu é de @${other.ownerName}. Só quem fez o pedido pode escolher.`,
+        mentions,
+      ).catch(() => {});
+      return true;
+    }
+    // Sem sessão no chat: o menu expirou (TTL de 2 minutos) ou recarregou.
+    infoLog(`[fluxo] sessão expirada ou inexistente para "${ownerId}"`);
     await sendReply(
-      `🚫 Este menu é de @${session.ownerName}.`,
-      mentions,
+      "⏳ Este menu expirou. Envia .menu para recomeçar.",
     ).catch(() => {});
     return true;
   }
 
-  if (permissions) session.permissions = permissions;
+  infoLog(
+    `[fluxo] a despachar token "${id}" para o dono ${own.ownerId}${
+      own.ownerId !== ownerId ? " (dono diferente!)" : ""
+    }`,
+  );
+
+  if (permissions) session_permissions(own, permissions);
 
   if (id === IDS.main) {
-    await sendMainCard({ socket, session });
+    await sendMainCard({ socket, session: own });
     return true;
   }
 
   if (id.startsWith(IDS.categories)) {
-    const page = Number(id.split(":")[2] || 0);
-    await sendCategoriesCard({ socket, session, page });
+    await sendCategoriesCard({ socket, session: own });
     return true;
   }
 
   if (id === IDS.cancel) {
-    clearPending(session);
-    await sendCanceled({ socket, session });
+    const tinhaPendente = Boolean(own.pending);
+    clearPending(own);
+    infoLog(
+      `[fluxo] cancel${tinhaPendente ? " (depois de pendência)" : ""} pedido por ${own.ownerId}`,
+    );
+    await sendSimpleText({
+      session: own,
+      texto: "❌ Pedido cancelado. Envie .menu para recomeçar quando quiseres.",
+    });
     return true;
   }
 
   const [namespace, first, second] = id.split(":");
 
-  if (namespace === "cat") {
+  if (namespace === "cat" || namespace === "fnlist" || namespace === "back") {
     const categoria = getCategory(first);
-    if (!categoria || !canAccess(categoria, session.permissions)) {
+    const denominacao = namespace === "cat" ? "categoria" : "funções";
+    if (!categoria || !canAccess(categoria, own.permissions)) {
+      infoLog(
+        `[fluxo] ${own.ownerId} sem permissão para a ${denominacao} de "${first}"`,
+      );
       await sendReply(
         "🚫 Não tens permissão para abrir esta categoria.",
       ).catch(() => {});
       return true;
     }
-    await sendCategoryCard({ socket, session, categoria });
-    return true;
-  }
-
-  if (namespace === "fnlist" || namespace === "back") {
-    const categoria = getCategory(first);
-    if (!categoria || !canAccess(categoria, session.permissions)) {
-      await sendReply("🚫 Não tens permissão para abrir esta categoria.").catch(
-        () => {},
-      );
-      return true;
-    }
-
-    if (namespace === "back") {
-      clearPending(session);
-      await sendFunctionsCard({ socket, session, categoria });
-      return true;
-    }
-
-    await sendFunctionsCard({ socket, session, categoria, page: Number(second || 0) });
+    await sendCategoryCard({ socket, session: own, categoria });
     return true;
   }
 
@@ -918,7 +956,10 @@ export async function handleGuidedFlow({
     const categoria = getCategory(first);
     const funcao = getFunction(first, second);
 
-    if (!categoria || !funcao || !canAccess(categoria, session.permissions)) {
+    if (!categoria || !funcao || !canAccess(categoria, own.permissions)) {
+      infoLog(
+        `[fluxo] ${own.ownerId} sem permissão para a função "${second}" de "${first}"`,
+      );
       await sendReply("⚠️ Esta função não está disponível para ti.").catch(
         () => {},
       );
@@ -926,11 +967,11 @@ export async function handleGuidedFlow({
     }
 
     if (namespace === "run") {
+      infoLog(`[fluxo] run em função sem entrada: ${funcao.id}`);
       const validacao = validateInput(funcao, "", commonFunctions);
       if (!validacao.ok) {
         await sendInvalidInput({
-          socket,
-          session,
+          session: own,
           categoria,
           funcao,
           motivo: validacao.motivo,
@@ -939,7 +980,7 @@ export async function handleGuidedFlow({
       }
       await runFunction({
         socket,
-        session,
+        session: own,
         categoria,
         funcao,
         input: validacao.input,
@@ -948,7 +989,7 @@ export async function handleGuidedFlow({
       return true;
     }
 
-    await sendFunctionCard({ socket, session, categoria, funcao });
+    await sendFunctionCard({ socket, session: own, categoria, funcao });
     return true;
   }
 
@@ -956,6 +997,10 @@ export async function handleGuidedFlow({
     () => {},
   );
   return true;
+}
+
+function session_permissions(session, permissions) {
+  session.permissions = permissions;
 }
 
 /**
@@ -1061,7 +1106,7 @@ export async function openGuidedSession({
 }
 
 /**
- * Regista as opções numéricas do card recém-enviado (fallback sem botões).
+ * Registra as opções numéricas do card recém-enviado (fallback sem botões).
  *
  * @param {object} session sessão guiada
  * @param {Array<{number: string, title: string, id: string}>} options

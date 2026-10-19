@@ -57,7 +57,13 @@ test("menu de vídeo respeita o autor, abre a lista e baixa na qualidade escolhi
     assert.match(messages[0].content.text, /💬 \*Canal:\* Canal/);
     assert.match(messages[0].content.text, /⏳ \*Duração:\* 3:45/);
     assert.match(messages[0].content.text, /🌐 \*Fonte:\* YouTube/);
-    assert.equal(messages[0].content.interactiveButtons.length, 3);
+    // A LISTA de qualidade vai direto (quick_reply é proibido): a mensagem é
+    // uma listMessage com as 5 qualidades.
+    assert.equal(messages[0].content.sections[0].rows.length, 5);
+    assert.deepEqual(
+      messages[0].content.sections[0].rows.map((row) => row.rowId),
+      ["vfmt:360", "vfmt:480", "vfmt:720", "vfmt:1080", "vfmt:best"],
+    );
 
     // Outro membro não abre a lista nem consome a pendência do autor.
     assert.equal(

@@ -10,7 +10,7 @@ import { sendMainMenu } from "../../utils/mainMenu.js";
 export default {
   name: "menu",
   description: "Menu de comandos",
-  commands: ["menu", "help"],
+  commands: ["menu"],
   usage: `${PREFIX}menu [categoria]`,
   /**
    * @param {CommandHandleProps} props

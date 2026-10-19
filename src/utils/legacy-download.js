@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import { downloadVideo } from "../services/downloader.js";
-import { downloadMessage, errorMessage, usageMessage } from "../utils/formatMessage.js";
+import { downloadMessage, errorMessage, usageMessage } from "./formatMessage.js";
 
 export async function handleDownload(sock, message, args) {
   const jid = message.key.remoteJid;

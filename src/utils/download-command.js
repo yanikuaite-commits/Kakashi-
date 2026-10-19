@@ -1,14 +1,14 @@
-import { PREFIX } from "../../config.js";
-import { InvalidParameterError, WarningError } from "../../errors/index.js";
-import { downloadByCommand, resolveDownloadSource } from "../../services/downloader.js";
-import { downloadingMessage } from "../../services/download-message.js";
+import { PREFIX } from "../config.js";
+import { InvalidParameterError, WarningError } from "../errors/index.js";
+import { downloadByCommand, resolveDownloadSource } from "../services/downloader.js";
+import { downloadingMessage } from "../services/download-message.js";
 import fs from "node:fs/promises";
 import {
   downloadMessage,
   errorMessage,
   loadingMessage,
-} from "../../utils/formatMessage.js";
-import { errorLog } from "../../utils/logger.js";
+} from "./formatMessage.js";
+import { errorLog } from "./logger.js";
 
 export async function handleDownload(socket, webMessage, args, options = {}) {
   const fullArgs = args.join(" ");

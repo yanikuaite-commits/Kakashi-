@@ -1,5 +1,5 @@
 import { PREFIX } from "../../../config.js";
-import { handleDownload } from "../download.js";
+import { handleDownload } from "../../../utils/download-command.js";
 import { downloadingMessage } from "../../../services/download-message.js";
 
 export default {

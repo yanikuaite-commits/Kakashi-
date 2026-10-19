@@ -55,7 +55,9 @@ test("menu de áudio respeita o autor e envia documento com nome e mimetype fixo
     assert.match(messages[0].content.text, /👤 \*Pedido de:\* @Pessoa A/);
     assert.match(messages[0].content.text, /⏳ \*Duração:\* 2:05/);
     assert.match(messages[0].content.text, /🌐 \*Fonte:\* YouTube/);
-    assert.ok(messages[0].content.interactiveButtons.length >= 2);
+    // A LISTA de formato vai direto (quick_reply é proibido): listMessage com
+    // os 4 formatos.
+    assert.equal(messages[0].content.sections[0].rows.length, 4);
 
     assert.equal(
       await handleAudioFormatReply({

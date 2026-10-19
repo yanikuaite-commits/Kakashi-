@@ -42,7 +42,7 @@ import {
   MAIN_MENU_IMAGE,
   MAIN_MENU_OWNER_NUMBER,
 } from "../config.js";
-import { quickReplyButton, singleSelectButton } from "./interactive.js";
+import { singleSelectButton } from "./interactive.js";
 import { errorLog, infoLog } from "./logger.js";
 import { listCategories } from "../interactive/menuRegistry.js";
 import {
@@ -200,8 +200,8 @@ export function buildMainMenuSections(categories = []) {
 
 /**
  * Botões do card: Dono (cta_url), Ver Menus (lista single_select) e Canal
- * (cta_url). Sem categorias, o "Ver Menus" vira um quick_reply que abre a
- * lista clássica.
+ * (cta_url). Sem categorias fica só o Canal: quick_reply NUNCA é usado
+ * (o WhatsApp descarta-o em silêncio).
  */
 export function buildMainMenuButtons({
   ownerNumber = MAIN_MENU_OWNER_NUMBER,
@@ -221,12 +221,15 @@ export function buildMainMenuButtons({
     });
   }
 
-  const verMenus =
-    singleSelectButton("🔰 Ver Menus 🔰", buildMainMenuSections(categories), {
-      title: "Ver Menus",
-    }) || quickReplyButton("🔰 Ver Menus 🔰", "menu:categories");
+  const verMenus = singleSelectButton(
+    "🔰 Ver Menus 🔰",
+    buildMainMenuSections(categories),
+    { title: "Ver Menus" },
+  );
 
-  botoes.push(verMenus);
+  if (verMenus) {
+    botoes.push(verMenus);
+  }
 
   if (channelUrl) {
     botoes.push({
