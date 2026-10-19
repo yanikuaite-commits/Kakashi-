@@ -107,12 +107,17 @@ test("menu de vídeo respeita o autor, abre a lista e baixa na qualidade escolhi
       }),
       true,
     );
-    assert.deepEqual(downloads, [
-      { source: "https://www.youtube.com/watch?v=exemplo", height: 720 },
-    ]);
-    assert.deepEqual(videos, [
-      { file: filePath, caption: "🎬 Vídeo em 720p" },
-    ]);
+    assert.deepEqual(
+      downloads,
+      [
+        { source: "https://www.youtube.com/watch?v=exemplo", height: 720 },
+      ],
+    );
+    assert.equal(videos.length, 1);
+    assert.equal(videos[0].file, filePath);
+    // Legenda com os metadados + a qualidade escolhida.
+    assert.match(videos[0].caption, /📺 \*Qualidade:\* 720p/);
+    assert.match(videos[0].caption, /🎬 \*Título:\* Vídeo/);
     await assert.rejects(fs.access(filePath));
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });

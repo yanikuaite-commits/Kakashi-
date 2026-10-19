@@ -66,6 +66,13 @@ export const MENU_CATEGORIES = [
     ],
   },
   {
+    key: "anime", label: "Animes", icon: "🍿", aliases: ["canime", "animes"],
+    intro: "HiAnime via API Consumet. Requer ANIME_API_BASE_URL configurado.",
+    commands: [
+      ["anime <nome>", "escolha episódio e qualidade"],
+    ],
+  },
+  {
     key: "protecao", label: "Proteção", icon: "🛡️", aliases: ["cprot", "seguranca"],
     intro: "Admin: use 1 para ativar e 0 para desativar.",
     commands: [

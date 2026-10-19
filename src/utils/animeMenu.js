@@ -1,0 +1,532 @@
+/**
+ * Fluxo de animes (HiAnime via API Consumet) — Parte 3 do sistema de downloads.
+ *
+ * Passos:
+ *   1. o utilizador escolhe "Animes" no menu (ou usa `.anime <nome>`) → o bot
+ *      pede o nome e guarda o estado `aguardando_nome`;
+ *   2. com o nome, pesquisa na API, pega o primeiro resultado e lista os 10
+ *      primeiros episódios (rowId `anm:ep:<índice>`);
+ *   3. ao escolher o episódio, busca as `sources` e lista as qualidades
+ *      (rowId `anm:src:<índice>`);
+ *   4. ao escolher a qualidade, baixa com o yt-dlp (com cookies quando
+ *      existirem) e aplica a regra de tamanho:
+ *        > 150 MB   → cancela e pede qualidade menor;
+ *        100–150 MB → envia como DOCUMENTO;
+ *        ≤ 100 MB   → envia como VÍDEO.
+ *
+ * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
+ * tem limite de tamanho e os links de stream são longos/assinados; o array real
+ * fica na sessão (`sessoesAnime`). Ver `src/utils/animeFormat.js`.
+ *
+ * @author Dev Gui
+ */
+import fs from "node:fs";
+import { ANIME_MAX_DOWNLOAD_BYTES } from "../config.js";
+import { getAnimeInfo, getEpisodeSources, searchAnime } from "../services/anime.js";
+import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
+import { withCreditsContext } from "../services/credits.js";
+import { RODAPE, mediaCaption } from "./formatMessage.js";
+import {
+  ANIME_TOKEN_PREFIXES,
+  animeSessionKey,
+  animeTokenIndex,
+  buildEpisodeRows,
+  buildQualityRows,
+} from "./animeFormat.js";
+import {
+  INTERACTIVE_MENU_TTL_MS,
+  numberedFallback,
+  sendInteractiveWithFallback,
+  singleSelectButton,
+  urlButton,
+} from "./interactive.js";
+import { errorLog, infoLog } from "./logger.js";
+import {
+  animeTooLargeMessage,
+  decideAnimeSend,
+} from "./mediaSend.js";
+
+export const ANIME_TTL_MS = INTERACTIVE_MENU_TTL_MS;
+
+const CHANNEL_URL = "https://www.youtube.com/@devgui_?sub_confirmation=1";
+const CANCEL_TOKEN = "anm:cancel";
+
+/** Sessões por `${chatId}:${ownerId}`. */
+const sessoesAnime = new Map();
+
+function sanitizeName(value) {
+  return String(value || "")
+    .replace(/[\r\n*_`@]/g, "")
+    .slice(0, 32);
+}
+
+function getOwnerId(chatId, ownerLid) {
+  if (ownerLid) return ownerLid;
+  return chatId.endsWith("@g.us") ? "" : chatId;
+}
+
+function dropSession(session) {
+  if (!session) return;
+  if (sessoesAnime.get(session.key) === session) sessoesAnime.delete(session.key);
+  if (session.cleanupTimer) {
+    clearTimeout(session.cleanupTimer);
+    session.cleanupTimer = null;
+  }
+}
+
+function touch(session) {
+  if (session.cleanupTimer) clearTimeout(session.cleanupTimer);
+  session.cleanupTimer = setTimeout(() => {
+    if (sessoesAnime.get(session.key) !== session) return;
+    dropSession(session);
+    session.sendReply?.(
+      "⏳ O tempo do menu de animes terminou. Envia .menu para recomeçar.",
+    ).catch(() => {});
+  }, ANIME_TTL_MS);
+  session.cleanupTimer.unref?.();
+}
+
+function findSessionInChat(chatId) {
+  for (const session of sessoesAnime.values()) {
+    if (session.chatId === chatId) return session;
+  }
+  return null;
+}
+
+/** Introspeção usada nos testes. */
+export function getAnimeSession(chatId, ownerId) {
+  return sessoesAnime.get(animeSessionKey(chatId, ownerId)) || null;
+}
+
+/** Limpa todas as sessões (usado nos testes). */
+export function resetAnimeSessions() {
+  for (const session of sessoesAnime.values()) {
+    if (session.cleanupTimer) clearTimeout(session.cleanupTimer);
+  }
+  sessoesAnime.clear();
+}
+
+function ensureSession({ chatId, ownerId, ownerName, sendReply }) {
+  const key = animeSessionKey(chatId, ownerId);
+  let session = sessoesAnime.get(key);
+
+  if (!session) {
+    session = {
+      key,
+      chatId,
+      ownerId,
+      ownerName: sanitizeName(ownerName) || "dono do pedido",
+      sendReply,
+      stage: "idle",
+      anime: null,
+      episodes: [],
+      episode: null,
+      sources: [],
+      cleanupTimer: null,
+    };
+    sessoesAnime.set(key, session);
+  } else {
+    if (sendReply) session.sendReply = sendReply;
+    if (ownerName) session.ownerName = sanitizeName(ownerName);
+  }
+
+  touch(session);
+  return session;
+}
+
+function canalButton() {
+  return urlButton("📢 Canal", CHANNEL_URL);
+}
+
+function cancelRow() {
+  return {
+    id: CANCEL_TOKEN,
+    title: "❌ Cancelar",
+    description: "Sair do menu de animes",
+  };
+}
+
+async function sendCard({ socket, session, text, title, rows, fallbackPrompt }) {
+  const sections = [{ title: title || "Animes", rows }];
+  const options = rows.map((row, index) => ({
+    number: String(index + 1),
+    title: row.title,
+    id: row.id,
+  }));
+
+  const buttons = [];
+  const lista = singleSelectButton("📂 Opções", sections, { title: title || "Animes" });
+  if (lista) buttons.push(lista);
+  const canal = canalButton();
+  if (canal) buttons.push(canal);
+
+  const sent = await sendInteractiveWithFallback({
+    socket,
+    chatId: session.chatId,
+    content: {
+      text,
+      footer: RODAPE,
+      interactiveButtons: buttons,
+      viewOnce: true,
+    },
+    fallbackText: numberedFallback(options, fallbackPrompt || "Responde com o número 👇"),
+    sendReply: session.sendReply,
+    onSendError: (error) =>
+      errorLog(`[anime] falha ao enviar card: ${error.message}`),
+  });
+
+  if (!sent) {
+    dropSession(session);
+  }
+
+  return Boolean(sent);
+}
+
+/* ═══════════ PASSO 1 · PEDIR O NOME ═══════════ */
+
+/**
+ * Abre o menu de animes. Sem `nome`, pede o nome (estado `aguardando_nome`);
+ * com `nome`, segue direto para a pesquisa.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function startAnimeFlow({
+  socket,
+  chatId,
+  ownerLid,
+  ownerName,
+  sendReply,
+  nome = "",
+}) {
+  const ownerId = getOwnerId(chatId, ownerLid);
+  if (!ownerId) {
+    await sendReply(
+      "🚫 Não consegui confirmar quem fez o pedido. Envia o comando novamente.",
+    ).catch(() => {});
+    return false;
+  }
+
+  const session = ensureSession({ chatId, ownerId, ownerName, sendReply });
+
+  if (nome) {
+    return searchAndSendEpisodes({ socket, session, nome });
+  }
+
+  session.stage = "aguardando_nome";
+  session.anime = null;
+  session.episodes = [];
+  session.episode = null;
+  session.sources = [];
+
+  infoLog(`[anime] a pedir o nome do anime para "${chatId}" (owner ${ownerId})`);
+
+  return sendCard({
+    socket,
+    session,
+    text: mediaCaption({
+      titulo: "Animes (HiAnime)",
+      canal: "Menu de animes",
+      duracao: "—",
+      qualidade: "—",
+      extra: "✏️ Envie o *nome do anime* que quer ver (ex: Naruto).",
+    }),
+    title: "Animes",
+    rows: [cancelRow()],
+  });
+}
+
+/* ═══════════ PASSO 2 · LISTAR OS EPISÓDIOS ═══════════ */
+
+async function searchAndSendEpisodes({ socket, session, nome }) {
+  session.stage = "buscando";
+  touch(session);
+
+  try {
+    const anime = await searchAnime(nome);
+    const info = await getAnimeInfo(anime.id);
+
+    session.anime = { ...anime, title: info.title || anime.title };
+    session.episodes = info.episodes;
+    session.stage = "episodios";
+
+    const rows = buildEpisodeRows(info.episodes);
+    rows.push(cancelRow());
+
+    infoLog(
+      `[anime] "${session.anime.title}" (id ${anime.id}) com ${info.episodes.length} episódios`,
+    );
+
+    return sendCard({
+      socket,
+      session,
+      text: mediaCaption({
+        titulo: session.anime.title,
+        canal: "HiAnime",
+        duracao: `${info.episodes.length} episódios`,
+        qualidade: "Escolha o episódio",
+        extra: `🎬 Primeiros ${rows.length - 1} episódios disponíveis.`,
+      }),
+      title: "Episódios",
+      rows,
+    });
+  } catch (error) {
+    dropSession(session);
+    errorLog(`[anime] falha ao buscar "${nome}": ${error.message}`);
+    await session.sendReply(`❌ ${error.message}`).catch(() => {});
+    return false;
+  }
+}
+
+/* ═══════════ PASSO 3 · LISTAR AS QUALIDADES ═══════════ */
+
+async function sendQualityList({ socket, session, episodeIndex }) {
+  const episode = session.episodes[episodeIndex];
+  if (!episode?.id) {
+    dropSession(session);
+    await session.sendReply(
+      "❌ Esse episódio não está mais disponível. Envia .menu para recomeçar.",
+    ).catch(() => {});
+    return true;
+  }
+
+  session.stage = "buscando";
+  touch(session);
+
+  try {
+    const sources = await getEpisodeSources(episode.id);
+
+    session.episode = {
+      index: episodeIndex,
+      number: episode.number ?? episodeIndex + 1,
+      title: episode.title || "",
+      id: episode.id,
+    };
+    session.sources = sources;
+    session.stage = "qualidades";
+
+    const rows = buildQualityRows(sources);
+    rows.push(cancelRow());
+
+    infoLog(
+      `[anime] episódio ${session.episode.number}: ${sources.length} qualidades`,
+    );
+
+    return sendCard({
+      socket,
+      session,
+      text: mediaCaption({
+        titulo: `${session.anime?.title || "Anime"} — Ep. ${session.episode.number}`,
+        canal: "HiAnime",
+        duracao: session.episode.title || "—",
+        qualidade: "Escolha a qualidade",
+        extra: "⬇️ Escolha a qualidade para baixar.",
+      }),
+      title: "Qualidade",
+      rows,
+    });
+  } catch (error) {
+    dropSession(session);
+    errorLog(`[anime] falha ao buscar fontes: ${error.message}`);
+    await session.sendReply(`❌ ${error.message}`).catch(() => {});
+    return true;
+  }
+}
+
+/* ═══════════ PASSO 4 · BAIXAR E ENVIAR ═══════════ */
+
+async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile }) {
+  const source = session.sources[sourceIndex];
+  if (!source?.url) {
+    dropSession(session);
+    await session.sendReply(
+      "❌ Essa qualidade não está mais disponível. Envia .menu para recomeçar.",
+    ).catch(() => {});
+    return true;
+  }
+
+  const episode = session.episode;
+  const animeTitulo = session.anime?.title || "Anime";
+
+  dropSession(session);
+  await session.sendReply("⬇️ Baixando o episódio...").catch(() => {});
+
+  if (!(await isYtDlpAvailable())) {
+    await session.sendReply(
+      "❌ O yt-dlp não está disponível neste servidor, então não consigo baixar o episódio.",
+    ).catch(() => {});
+    return true;
+  }
+
+  let result;
+  try {
+    result = await withCreditsContext(session.ownerId, () =>
+      downloadWithYtDlp(source.url, { maxBytes: ANIME_MAX_DOWNLOAD_BYTES }),
+    );
+
+    const tamanhoMB = result.fileSize / (1024 * 1024);
+    const acao = decideAnimeSend(result.fileSize);
+
+    const caption = mediaCaption({
+      titulo: `${animeTitulo} — Ep. ${episode?.number ?? "?"}`,
+      canal: "HiAnime",
+      duracao: result.durationString || "Não disponível",
+      qualidade: source.label,
+    });
+
+    if (acao === "cancel") {
+      infoLog(`[anime] cancelado: ${tamanhoMB.toFixed(1)} MB acima do limite`);
+      await session.sendReply(animeTooLargeMessage()).catch(() => {});
+      return true;
+    }
+
+    if (acao === "document") {
+      infoLog(`[anime] enviando como documento (${tamanhoMB.toFixed(1)} MB)`);
+      await socket.sendMessage(session.chatId, {
+        document: fs.readFileSync(result.filePath),
+        mimetype: "video/mp4",
+        fileName: "anime.mp4",
+        caption,
+      });
+    } else {
+      infoLog(`[anime] enviando como vídeo (${tamanhoMB.toFixed(1)} MB)`);
+      if (typeof sendVideoFromFile === "function") {
+        await sendVideoFromFile(result.filePath, caption);
+      } else {
+        await socket.sendMessage(session.chatId, {
+          video: fs.readFileSync(result.filePath),
+          mimetype: "video/mp4",
+          caption,
+        });
+      }
+    }
+  } catch (error) {
+    errorLog(`[anime] falha no download: ${error.message}`);
+    await session.sendReply(`❌ Não consegui baixar o episódio: ${error.message}`).catch(
+      () => {},
+    );
+  } finally {
+    if (result?.filePath) {
+      await fs.promises.rm(result.filePath, { force: true }).catch(() => {});
+    }
+  }
+
+  return true;
+}
+
+/* ═══════════ HANDLER CENTRAL ═══════════ */
+
+/**
+ * Intercepta as respostas do menu de animes: o nome (estado
+ * `aguardando_nome`), os tokens `anm:ep:<i>`, `anm:src:<i>` e `anm:cancel`.
+ *
+ * Deve ser chamado ANTES do fluxo guiado: com uma sessão de anime aberta, o
+ * próximo texto é o nome do anime, não uma função pendente do fluxo.
+ *
+ * @returns {Promise<boolean>} true se a mensagem foi tratada aqui.
+ */
+export async function handleAnimeReply({
+  socket,
+  chatId,
+  senderLid,
+  senderName,
+  text,
+  sendReply,
+  sendVideoFromFile,
+  prefix = "",
+}) {
+  const value = String(text || "").trim();
+  if (!value) return false;
+
+  const isAnimeToken = ANIME_TOKEN_PREFIXES.some((token) =>
+    value.startsWith(token),
+  );
+  const isCancel = value === CANCEL_TOKEN;
+
+  const ownerId = getOwnerId(chatId, senderLid);
+  const own = ownerId
+    ? sessoesAnime.get(animeSessionKey(chatId, ownerId)) || null
+    : null;
+  const doChat = own || findSessionInChat(chatId);
+
+  // Um token de anime sem sessão (menu expirado) merece aviso claro.
+  if (isAnimeToken && !doChat) {
+    await sendReply(
+      "⏳ Este menu de animes expirou. Envia .menu para recomeçar.",
+    ).catch(() => {});
+    return true;
+  }
+
+  if (isCancel) {
+    if (!doChat) return false;
+    // Só o dono da sessão a pode cancelar; outros não a destroem.
+    if (senderLid && senderLid !== doChat.ownerId) {
+      await sendReply(
+        `🚫 Este menu de animes é de @${doChat.ownerName}. Só quem pediu pode cancelar.`,
+      ).catch(() => {});
+      return true;
+    }
+    dropSession(doChat);
+    await sendReply("❌ Menu de animes cancelado.").catch(() => {});
+    return true;
+  }
+
+  if (!own) {
+    // Sessão de outro membro no mesmo chat: não é dele.
+    if (doChat) {
+      await sendReply(
+        `🚫 Este menu de animes é de @${doChat.ownerName}. Só quem pediu pode escolher.`,
+      ).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
+  if (isAnimeToken) {
+    if (sendReply) own.sendReply = sendReply;
+
+    const epIndex = animeTokenIndex(value, "anm:ep:");
+    if (epIndex >= 0) {
+      return sendQualityList({ socket, session: own, episodeIndex: epIndex });
+    }
+
+    const srcIndex = animeTokenIndex(value, "anm:src:");
+    if (srcIndex >= 0) {
+      return downloadAndSend({
+        socket,
+        session: own,
+        sourceIndex: srcIndex,
+        sendVideoFromFile,
+      });
+    }
+
+    return false;
+  }
+
+  // Estado `aguardando_nome`: o texto é o nome do anime.
+  if (own.stage === "aguardando_nome") {
+    if (!senderLid || senderLid !== own.ownerId) {
+      await sendReply(
+        `🚫 O menu de animes é de @${own.ownerName}. Só quem pediu pode escolher.`,
+      ).catch(() => {});
+      return true;
+    }
+
+    // Comandos com prefixo não são nomes de anime: larga a sessão e segue.
+    if (prefix && (value.startsWith(prefix) || value.startsWith("!"))) {
+      dropSession(own);
+      return false;
+    }
+
+    if (value.length < 2) {
+      await sendReply("✏️ Envie um nome de anime com pelo menos 2 letras.").catch(
+        () => {},
+      );
+      return true;
+    }
+
+    if (sendReply) own.sendReply = sendReply;
+    return searchAndSendEpisodes({ socket, session: own, nome: value });
+  }
+
+  return false;
+}

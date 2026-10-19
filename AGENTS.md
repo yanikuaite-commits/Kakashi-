@@ -68,6 +68,7 @@ High-value architectural notes:
 | `src/@types/index.d.ts` | Typing and documentation for command and middleware props. |
 | `src/services/spider-x-api.js` | Spider X integration for downloads, AI, Pinterest, Brat, and related endpoints. |
 | `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
+| `src/services/anime.js` | HiAnime (Consumet) search, episodes and streaming sources. |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
 | `src/services/ffmpeg.js` | Media conversion and audio/video processing. |
 
@@ -206,6 +207,22 @@ the GenDownload API when the binary is missing or the extraction fails.
 - configuration lives in `src/config.js` under the `YTDLP_*` constants (`ENABLED`, `PATH`, `COOKIES_PATH`, `PROXY`, `JS_RUNTIME`, `IMPERSONATE`, `EXTRACTOR_ARGS`)
 - `YTDLP_ENABLED=false` disables it entirely; nothing breaks without the binary
 - YouTube blocks datacenter IPs (Render included) with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
+
+### Animes (HiAnime via API Consumet)
+
+`src/services/anime.js` searches HiAnime, lists episodes and returns streaming
+sources; `src/utils/animeMenu.js` runs the interactive flow (nome → episódios →
+qualidade → download) and `src/utils/animeFormat.js` holds the pure helpers.
+
+- the base URL comes from `ANIME_API_BASE_URL` (`src/config.js`). The public
+  `api.consumet.org` instance was **shut down** (HTTP 451) and Consumet now
+  requires self-hosting, so a private instance must be configured or the
+  feature replies with a clear "API offline" message instead of failing silently
+- list rows carry only indices (`anm:ep:<i>` / `anm:src:<i>`); the real
+  (long, signed) stream URLs stay in the session, because WhatsApp drops
+  oversized `rowId`s
+- size rule: `> 150 MB` cancels the send, `100–150 MB` sends as document,
+  `≤ 100 MB` sends as video (see `src/utils/mediaSend.js`)
 
 ### Media Services
 

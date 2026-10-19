@@ -1,13 +1,14 @@
 import { PREFIX } from "../config.js";
 import { InvalidParameterError, WarningError } from "../errors/index.js";
-import { downloadByCommand, resolveDownloadSource } from "../services/downloader.js";
+import { downloadByCommand } from "../services/downloader.js";
 import { downloadingMessage } from "../services/download-message.js";
 import fs from "node:fs/promises";
 import {
-  downloadMessage,
   errorMessage,
   loadingMessage,
+  mediaCaption,
 } from "./formatMessage.js";
+import { sendMediaByRule } from "./sendMedia.js";
 import { errorLog } from "./logger.js";
 
 export async function handleDownload(socket, webMessage, args, options = {}) {
@@ -23,7 +24,9 @@ export async function handleDownload(socket, webMessage, args, options = {}) {
       throw new WarningError("Envie uma URL válida para download.");
     }
 
-    await socket.sendMessage(socket.remoteJid || webMessage.remoteJid, {
+    const chatId = socket.remoteJid || webMessage.remoteJid;
+
+    await socket.sendMessage(chatId, {
       text: options.downloadingMessage
         ? options.downloadingMessage({
             fileType: "vídeo",
@@ -33,16 +36,22 @@ export async function handleDownload(socket, webMessage, args, options = {}) {
     });
 
     data = await downloadByCommand("baixar", source);
-    await socket.sendMessage(socket.remoteJid || webMessage.remoteJid, { react: { text: "✅", key: webMessage.key } });
-    await socket.sendMessage(socket.remoteJid || webMessage.remoteJid, {
-      video: { url: data.filePath },
-      caption: downloadMessage({
+    await socket.sendMessage(chatId, { react: { text: "✅", key: webMessage.key } });
+
+    // Plataformas gerais: envia SEMPRE como vídeo.
+    await sendMediaByRule({
+      socket,
+      chatId,
+      result: data,
+      caption: mediaCaption({
         titulo: data.title,
         canal: data.artist,
-        plataforma: data.platform || "Vídeo",
-        usuario: webMessage?.pushName,
+        seguidores: data.followers,
+        duracao: data.durationString || "Não disponível",
+        qualidade: "Melhor disponível",
         extra: "✅ Feito! Aqui está o vídeo que pediste 🎉",
       }),
+      rule: "general",
     });
   } catch (error) {
     errorLog(error);

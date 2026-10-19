@@ -224,6 +224,7 @@ export const COMMAND_CREDITS = {
   "play-video": 4,
   "play-audio": 3,
   "baixar": 3,
+  "anime": 3,
   "yt-search": 1,
   // Inteligência artificial
   "deepseek": 2,
@@ -282,6 +283,22 @@ export const YTDLP_PROXY = process.env.YTDLP_PROXY || "";
 export const YTDLP_JS_RUNTIME = process.env.YTDLP_JS_RUNTIME ?? "node";
 export const YTDLP_IMPERSONATE = process.env.YTDLP_IMPERSONATE || "";
 export const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || "";
+
+// ==========================================================================
+// ANIMES (HiAnime via API Consumet)
+// ==========================================================================
+// A API pública `api.consumet.org` foi DESATIVADA (responde 451 e exige
+// auto-hospedagem). Defina ANIME_API_BASE_URL com a sua instância Consumet
+// (ex: "https://a-sua-instancia.onrender.com"); sem isso o comando avisa que a
+// API está indisponível em vez de falhar em silêncio.
+export const ANIME_API_BASE_URL = (
+  process.env.ANIME_API_BASE_URL || "https://api.consumet.org"
+).replace(/\/+$/, "");
+export const ANIME_API_TIMEOUT_MS = 30 * 1000;
+// Limite do WhatsApp: acima de 100 MB só como documento; acima de 150 MB o
+// envio é cancelado e o utilizador é convidado a escolher uma qualidade menor.
+export const ANIME_DOCUMENT_LIMIT_MB = 150;
+export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 
 export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 export const AI_TIMEOUT_MS = 30 * 1000;

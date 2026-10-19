@@ -6,6 +6,8 @@ import {
   resolveDownloadSource,
 } from "../../../services/downloader.js";
 import { downloadingMessage } from "../../../services/download-message.js";
+import { mediaCaption } from "../../../utils/formatMessage.js";
+import { sendMediaByRule } from "../../../utils/sendMedia.js";
 import { startVideoFormatMenu } from "../../../utils/videoFormatMenu.js";
 import fs from "node:fs/promises";
 import { errorLog } from "../../../utils/logger.js";
@@ -67,7 +69,22 @@ export default {
       );
       data = await downloadByCommand("play-video", source);
       await sendSuccessReact();
-      await sendVideoFromFile(data.filePath);
+
+      // YouTube: documento acima de 100 MB, vídeo até 100 MB.
+      await sendMediaByRule({
+        socket,
+        chatId: remoteJid,
+        result: data,
+        caption: mediaCaption({
+          titulo: data.title,
+          canal: data.artist,
+          seguidores: data.followers,
+          duracao: data.durationString || "Não disponível",
+          qualidade: "Melhor disponível",
+        }),
+        rule: "youtube",
+        sendVideoFromFile,
+      });
     } catch (error) {
       errorLog(error);
       await sendErrorReply(error.message);

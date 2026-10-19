@@ -41,6 +41,7 @@ import { isAdmin, isBotOwner, isOwnerInPrivateChat } from "../middlewares/index.
 import { resolveDownloadSource } from "../services/downloader.js";
 import { startVideoFormatMenu } from "../utils/videoFormatMenu.js";
 import { startAudioSourceMenu } from "../utils/audioFormatMenu.js";
+import { startAnimeFlow } from "../utils/animeMenu.js";
 import {
   CATEGORIES,
   canAccess,
@@ -71,7 +72,7 @@ const TOKEN_PREFIXES = [
 ];
 
 /** Tokens dos menus de qualidade/formato que NÃO são do fluxo guiado. */
-const OUTSIDE_TOKEN_PREFIXES = ["vfmt:", "fmt:"];
+const OUTSIDE_TOKEN_PREFIXES = ["vfmt:", "fmt:", "anm:"];
 
 /** Sessões abertas: `chatId:ownerId` → sessão. */
 const sessions = new Map();
@@ -619,6 +620,20 @@ async function runFunction({
   dispatch,
 }) {
   touch(session);
+
+  // Animes: fluxo próprio (pede o nome → episódios → qualidade). Abre o menu
+  // que deixa a sessão em `aguardando_nome`.
+  if (funcao.id === "anime") {
+    clearPending(session);
+    await startAnimeFlow({
+      socket,
+      chatId: session.chatId,
+      ownerLid: session.ownerId,
+      ownerName: session.ownerName,
+      sendReply: session.sendReply,
+    });
+    return;
+  }
 
   if (funcao.opcoes) {
     let source;
