@@ -94,7 +94,47 @@ export function ensureFrame(text, options = {}) {
   if (value.length > MAX_FRAME_LENGTH) return value;
   if (value.split("\n").length > MAX_FRAME_LINES) return value;
 
-  return formatMessage({ ...options, campos: [value] });
+  return formatMessage({ ...inferReplyStyle(value), ...options, campos: [value] });
+}
+
+function inferReplyStyle(text) {
+  const normalized = String(text)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase();
+
+  if (/carregando|processando|ja estou a tratar|a baixar|a descarregar/.test(normalized)) {
+    return { icone: "⏳", titulo: "A decorrer" };
+  }
+  if (/sem permissao|nao tens permissao|so admins|acesso negado/.test(normalized)) {
+    return { icone: "🚫", titulo: "Acesso restrito" };
+  }
+  if (/erro|falha|nao consegui|nao foi possivel|invalido|invalida/.test(normalized)) {
+    return { icone: "❌", titulo: "Erro" };
+  }
+  if (/aviso|atencao|uso correto|ja esta (?:ativado|desativado)|precisa informar/.test(normalized)) {
+    return { icone: "⚠️", titulo: "Atenção" };
+  }
+  if (/bem-vind|boas-vind|entrou no grupo|saiu do grupo|despedida/.test(normalized)) {
+    return { icone: "👋", titulo: "Grupo" };
+  }
+  if (/foi removid|foi banid|advertencia|advertido|silenciado|moderacao/.test(normalized)) {
+    return { icone: "🛡️", titulo: "Moderação" };
+  }
+  if (/jogo|pontuacao|pontos|experiencia|\bxp\b|ranking|dado rolado/.test(normalized)) {
+    return { icone: "🎮", titulo: "Jogo e XP" };
+  }
+  if (/inteligencia artificial|resposta da ia|gemini|deepseek|gpt|\bia\b/.test(normalized)) {
+    return { icone: "🤖", titulo: "Inteligência artificial" };
+  }
+  if (/painel|administrador|configuracao|saldo de creditos|comando bloqueado/.test(normalized)) {
+    return { icone: "🔧", titulo: "Painel" };
+  }
+  if (/sucesso|concluido|enviado|criado|ativado|desativado|feito|adicionado|removido/.test(normalized)) {
+    return { icone: "✅", titulo: "Concluído" };
+  }
+
+  return { icone: "💬", titulo: "Resposta" };
 }
 
 /**
