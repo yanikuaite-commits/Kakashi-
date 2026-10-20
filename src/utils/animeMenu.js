@@ -10,11 +10,15 @@
  *      alcançáveis;
  *   3. ao escolher o episódio, busca as `sources` e lista as qualidades
  *      (rowId `anm:src:<índice>`);
- *   4. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
- *      (a mesma do YouTube, com teto maior):
+ *   4. ao escolher a qualidade, baixa com o yt-dlp limitado a `ANIME_MAX_HEIGHT`
+ *      (480p) e aplica a regra de tamanho (a mesma do YouTube, com teto maior):
  *        > 200 MB   → cancela e pede qualidade menor;
  *        100–200 MB → envia como DOCUMENTO;
  *        ≤ 100 MB   → envia como VÍDEO.
+ *
+ * A resolução é fixa em 480p: o m3u8 do provider traz 240p–1080p e sem limite o
+ * yt-dlp escolhia 1080p, estourando o teto de 200 MB. A lista de qualidades
+ * escolhe a *fonte* (URL), não a resolução final.
  *
  * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
  * tem limite de tamanho e os links de stream são longos/assinados; o array real
@@ -23,7 +27,7 @@
  * @author Dev Gui
  */
 import fs from "node:fs";
-import { ANIME_MAX_DOWNLOAD_BYTES } from "../config.js";
+import { ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT } from "../config.js";
 import { getAnimeInfo, getEpisodeSources, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withCreditsContext } from "../services/credits.js";
@@ -489,6 +493,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
   try {
     result = await withCreditsContext(session.ownerId, () =>
       downloadWithYtDlp(source.url, {
+        height: ANIME_MAX_HEIGHT,
         maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
         extraArgs: animeDownloadArgs(session.provider),
         concurrentFragments: animeConcurrentFragments(session.provider),

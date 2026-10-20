@@ -339,6 +339,13 @@ export const ANIME_API_TIMEOUT_MS = 30 * 1000;
 export const ANIME_DOCUMENT_LIMIT_MB = 200;
 export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 
+// Resolução máxima do download de animes. O provider entrega um m3u8 com várias
+// faixas (240p–1080p) e, sem limite, o yt-dlp escolhe a maior (1080p): um
+// episódio de 24 min passa de 200 MB e o envio acaba cancelado. Fixar 480p
+// mantém o episódio dentro do limite. Se a faixa de 480p não existir, o seletor
+// do yt-dlp cai para a melhor disponível em vez de falhar.
+export const ANIME_MAX_HEIGHT = Number(process.env.ANIME_MAX_HEIGHT) || 480;
+
 export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 export const AI_TIMEOUT_MS = 30 * 1000;
 export const ATTP_TIMEOUT_MS = 10 * 1000;
