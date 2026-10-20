@@ -204,8 +204,9 @@ the GenDownload API when the binary is missing or the extraction fails.
 
 - the binary is installed by the `Dockerfile` (standalone `yt-dlp_linux`, no Python)
 - `npm run setup:ytdlp` downloads it to `bin/yt-dlp` on non-Docker hosts; Termux uses `pkg install yt-dlp`
-- configuration lives in `src/config.js` under the `YTDLP_*` constants (`ENABLED`, `PATH`, `COOKIES_PATH`, `PROXY`, `JS_RUNTIME`, `IMPERSONATE`, `EXTRACTOR_ARGS`)
+- configuration lives in `src/config.js` under the `YTDLP_*` constants (`ENABLED`, `PATH`, `COOKIES_PATH`, `PROXY`, `JS_RUNTIME`, `IMPERSONATE`, `EXTRACTOR_ARGS`, `CONCURRENT_FRAGMENTS`)
 - `YTDLP_ENABLED=false` disables it entirely; nothing breaks without the binary
+- `YTDLP_CONCURRENT_FRAGMENTS` sets the yt-dlp `-N` (default 4). CDNs that rate-limit parallel requests (the anime CDN answers 429) need `1`, otherwise yt-dlp drops fragments and fails with `No such file ...-FragN`; the anime flow forces `1` for `anikoto`
 - YouTube blocks datacenter IPs (Render included) with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
 
 ### Animes (anikoto + providers via @consumet/extensions)

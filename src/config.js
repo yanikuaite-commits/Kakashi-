@@ -283,6 +283,12 @@ export const YTDLP_PROXY = process.env.YTDLP_PROXY || "";
 export const YTDLP_JS_RUNTIME = process.env.YTDLP_JS_RUNTIME ?? "node";
 export const YTDLP_IMPERSONATE = process.env.YTDLP_IMPERSONATE || "";
 export const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || "";
+// Fragmentos HLS baixados em paralelo. 1 = sequencial. CDNs com rate limit
+// (o dos animes responde 429 a pedidos concorrentes) precisam de 1, senão o
+// yt-dlp perde fragmentos e falha com "No such file ...-FragN".
+export const YTDLP_CONCURRENT_FRAGMENTS = Number(
+  process.env.YTDLP_CONCURRENT_FRAGMENTS || 4,
+);
 
 // ==========================================================================
 // ANIMES (fontes de streaming via @consumet/extensions, em processo)

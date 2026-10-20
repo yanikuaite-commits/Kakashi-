@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   MAX_FILE_SIZE_BYTES,
+  YTDLP_CONCURRENT_FRAGMENTS,
   YTDLP_COOKIES_PATH,
   YTDLP_ENABLED,
   YTDLP_EXTRACTOR_ARGS,
@@ -347,10 +348,13 @@ async function pickOutputPath(stdout, id) {
  * Baixa a mídia com o yt-dlp.
  *
  * @param {string} url
- * @param {{ audio?: boolean, height?: number|string, maxBytes?: number, extraArgs?: string[] }} options
+ * @param {{ audio?: boolean, height?: number|string, maxBytes?: number,
+ *   extraArgs?: string[], concurrentFragments?: number }} options
  *   `maxBytes` sobrepõe o limite padrão de 100 MB (os animes aceitam documento
  *   até 350 MB, então precisam de um limite maior); `extraArgs` acrescenta
- *   flags ao yt-dlp (ex.: `--impersonate` e `--referer` para o CDN de animes).
+ *   flags ao yt-dlp (ex.: `--impersonate` e `--referer` para o CDN de animes);
+ *   `concurrentFragments` controla o `-N` (1 = sequencial, para CDNs com rate
+ *   limit).
  * @returns {Promise<{ filePath: string, mimetype: string, fileName: string,
  *   title: string, artist: string, thumbnail: string|null, fileSize: number,
  *   duration: number, durationString: string, followers: number|null,
@@ -358,7 +362,13 @@ async function pickOutputPath(stdout, id) {
  */
 export async function downloadWithYtDlp(
   url,
-  { audio = false, height, maxBytes = MAX_FILE_SIZE_BYTES, extraArgs = [] } = {},
+  {
+    audio = false,
+    height,
+    maxBytes = MAX_FILE_SIZE_BYTES,
+    extraArgs = [],
+    concurrentFragments = YTDLP_CONCURRENT_FRAGMENTS,
+  } = {},
 ) {
   const binary = await resolveYtDlpBinary();
 
@@ -402,7 +412,17 @@ export async function downloadWithYtDlp(
       "--embed-thumbnail",
     );
   } else {
-    args.push("--merge-output-format", "mp4", "-N", "4", "-f", buildFormatSelector(height));
+    // `-N` controla os fragmentos HLS em paralelo. CDNs com rate limit (o dos
+    // animes devolve 429 a pedidos concorrentes) perdem fragmentos e falham com
+    // "No such file ...-FragN", por isso o valor é ajustável pelo chamador.
+    args.push(
+      "--merge-output-format",
+      "mp4",
+      "-N",
+      String(concurrentFragments),
+      "-f",
+      buildFormatSelector(height),
+    );
   }
 
   args.push(url);
