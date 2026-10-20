@@ -345,7 +345,7 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
       return sendSeasonList({ socket, session });
     }
 
-    return loadEpisodesAndSend({ socket, session, id: anime.id, titulo: "" });
+    return loadEpisodesAndSend({ socket, session, id: anime.id });
   } catch (error) {
     dropSession(session);
     errorLog(`[anime] falha ao buscar "${nome}": ${error.message}`);
@@ -386,14 +386,14 @@ async function sendSeasonList({ socket, session }) {
  *
  * @returns {Promise<boolean>}
  */
-async function loadEpisodesAndSend({ socket, session, id, titulo }) {
+async function loadEpisodesAndSend({ socket, session, id }) {
   session.stage = "buscando";
   touch(session);
 
   try {
     const info = await getAnimeInfo(id, session.provider);
 
-    session.anime = { ...session.anime, title: info.title || session.anime?.title || titulo || "Anime" };
+    session.anime = { ...session.anime, title: info.title || session.anime?.title || "Anime" };
     session.episodes = info.episodes;
     session.episode = null;
     session.sources = [];
