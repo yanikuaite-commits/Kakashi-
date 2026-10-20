@@ -135,6 +135,181 @@ test("token de anime sem sessão avisa que o menu expirou", async () => {
   assert.match(replies[0], /expirou/i);
 });
 
+test("anm:sea carrega os episódios da temporada escolhida", async () => {
+  resetAnimeSessions();
+
+  // Rede stubada (o código é o de produção): pesquisa → temporadas → página da
+  // temporada → lista de episódios. Cada temporada devolve um número de
+  // episódios DIFERENTE, para provar que a escolha não mostra sempre a 1ª.
+  const respostas = {
+    "/filter?keyword=attack%20on%20titan": `
+      <div class="item ">
+        <div class="inner">
+          <div class="ani poster tip" data-tip="1631">
+            <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa/ep-1">
+              <img src="https://cdn.anipixcdn.co/a.jpg" alt="Attack on Titan" />
+            </a>
+          </div>
+        </div>
+      </div>`,
+    "/api/seasons/1631": JSON.stringify({
+      status: 200,
+      result: `
+        <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa"><div class="name">Season 1</div></a>
+        <a href="https://anikoto.cz/watch/attack-on-titan-season-2-0rtbh"><div class="name">Season 2</div></a>`,
+    }),
+    "/watch/attack-on-titan-bgaoa/ep-1": `<div data-anime-id="1631"></div>`,
+    "/watch/attack-on-titan-season-2-0rtbh/ep-1": `<div data-anime-id="1385"></div>`,
+    "/ajax/episode/list/1631": JSON.stringify({
+      status: 200,
+      result: `<a href="#" data-id="1" data-num="1" data-ids="S1E1">1</a>
+               <a href="#" data-id="2" data-num="2" data-ids="S1E2">2</a>
+               <a href="#" data-id="3" data-num="3" data-ids="S1E3">3</a>`,
+    }),
+    "/ajax/episode/list/1385": JSON.stringify({
+      status: 200,
+      result: `<a href="#" data-id="9" data-num="1" data-ids="S2E1">1</a>
+               <a href="#" data-id="10" data-num="2" data-ids="S2E2">2</a>`,
+    }),
+  };
+
+  globalThis.fetch = async (url) => {
+    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const enviados = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    // Pesquisa → deve mostrar a lista de TEMPORADAS (2 agrupadas).
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "attack on titan",
+    });
+
+    const linhasTemporadas = enviados[0].interactiveButtons
+      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+      .find((p) => p.sections)?.sections?.[0]?.rows;
+    const idsTemporadas = (linhasTemporadas || []).map((r) => r.id);
+
+    assert.ok(idsTemporadas.includes("anm:sea:0"), "oferece a temporada 1");
+    assert.ok(idsTemporadas.includes("anm:sea:1"), "oferece a temporada 2");
+    assert.equal(
+      getAnimeSession(CHAT, LID).stage,
+      "temporadas",
+      "fica à espera da escolha da temporada",
+    );
+
+    // Escolhe a temporada 2 → os episódios têm de ser os DELA (2, não 3).
+    const consumiu = await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: "anm:sea:1",
+      sendReply: async () => {},
+    });
+
+    assert.equal(consumiu, true);
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.stage, "episodios");
+    assert.equal(sessao.episodes.length, 2, "a temporada 2 tem 2 episódios");
+    assert.equal(sessao.episodes[0].id, "attack-on-titan-season-2-0rtbh::9::S2E1");
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
+test("sem temporadas agrupadas, salta direto para os episódios", async () => {
+  resetAnimeSessions();
+
+  const respostas = {
+    "/filter?keyword=one%20piece": `
+      <div class="item ">
+        <div class="inner">
+          <div class="ani poster tip" data-tip="1642">
+            <a href="https://anikoto.cz/watch/one-piece-abc/ep-1">
+              <img src="https://cdn.anipixcdn.co/a.jpg" alt="One Piece" />
+            </a>
+          </div>
+        </div>
+      </div>`,
+    "/api/seasons/1642": JSON.stringify({ status: 200, result: "" }),
+    "/ajax/episode/list/1642": JSON.stringify({
+      status: 200,
+      result: `<a href="#" data-id="1" data-num="1" data-ids="T1">1</a>`,
+    }),
+  };
+
+  globalThis.fetch = async (url) => {
+    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const enviados = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "one piece",
+    });
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.stage, "episodios", "vai direto para os episódios");
+    assert.equal(sessao.episodes.length, 1);
+
+    const ids = enviados[0].interactiveButtons
+      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+      .find((p) => p.sections)?.sections?.[0]?.rows
+      ?.map((r) => r.id);
+    assert.ok(ids.includes("anm:ep:0"), "mostra os episódios logo");
+    assert.ok(
+      !ids.some((id) => id.startsWith("anm:sea:")),
+      "não mostra passo de temporada",
+    );
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
+test("anm:sea com sessão inexistente avisa que o menu expirou", async () => {
+  resetAnimeSessions();
+
+  const replies = [];
+  const consumiu = await handleAnimeReply({
+    socket: makeSocket(),
+    chatId: CHAT,
+    senderLid: LID,
+    senderLids: [LID],
+    text: "anm:sea:0",
+    sendReply: async (text) => replies.push(String(text)),
+  });
+
+  assert.equal(consumiu, true);
+  assert.match(replies[0], /expirou/i);
+});
+
 test("anm:pg avança para os episódios seguintes com índice absoluto", async () => {
   resetAnimeSessions();
   await abrirMenu(LID, [LID]);

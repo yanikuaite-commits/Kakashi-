@@ -9,6 +9,7 @@ import {
   buildEpisodeRows,
   buildNextPageRow,
   buildQualityRows,
+  buildSeasonRows,
   episodePageCount,
   identitiesOverlap,
   jidDigits,
@@ -125,7 +126,37 @@ test("animeTokenIndex lê o índice do token", () => {
 });
 
 test("os prefixos de token cobrem episódio, qualidade e página", () => {
-  assert.deepEqual(ANIME_TOKEN_PREFIXES, ["anm:ep:", "anm:src:", "anm:pg:"]);
+  assert.deepEqual(ANIME_TOKEN_PREFIXES, [
+    "anm:sea:",
+    "anm:ep:",
+    "anm:src:",
+    "anm:pg:",
+  ]);
+});
+
+test("buildSeasonRows usa anm:sea:<i> e guarda o slug", () => {
+  const rows = buildSeasonRows([
+    { slug: "attack-on-titan-bgaoa", title: "Season 1" },
+    { slug: "attack-on-titan-season-2-0rtbh", title: "Season 2" },
+  ]);
+
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].id, "anm:sea:0");
+  assert.equal(rows[1].id, "anm:sea:1");
+  assert.equal(rows[0].title, "Season 1");
+  assert.equal(rows[1].slug, "attack-on-titan-season-2-0rtbh");
+});
+
+test("buildSeasonRows lida com lista vazia e título ausente", () => {
+  assert.deepEqual(buildSeasonRows([]), []);
+  const [row] = buildSeasonRows([{ slug: "x" }]);
+  assert.equal(row.title, "Temporada 1");
+});
+
+test("animeTokenIndex lê o índice de temporada", () => {
+  assert.equal(animeTokenIndex("anm:sea:3", "anm:sea:"), 3);
+  assert.equal(animeTokenIndex("anm:sea:0", "anm:sea:"), 0);
+  assert.equal(animeTokenIndex("anm:ep:1", "anm:sea:"), -1);
 });
 
 test("jidDigits ignora o servidor e o sufixo de aparelho", () => {
