@@ -184,3 +184,41 @@ test("anm:pg avança para os episódios seguintes com índice absoluto", async (
     "só um botão de paginação (nada de retroceder)",
   );
 });
+
+test("card de animes leva o botão do dono e mantém Canal", async () => {
+  resetAnimeSessions();
+  const CHAT = "120363000000000000@g.us";
+  const LID = "987654321098765:12@lid";
+  const enviados = [];
+
+  const socket = {
+    sendMessage: async (_chat, content) => {
+      enviados.push(content);
+      return { key: { id: "m" } };
+    },
+  };
+
+  // Sem `nome`: o card inicial é montado offline (não vai à rede).
+  await startAnimeFlow({
+    socket,
+    chatId: CHAT,
+    ownerLid: LID,
+    ownerName: "Y",
+    sendReply: async () => {},
+  });
+
+  const botoes = enviados.at(-1).interactiveButtons;
+  const cta = botoes
+    .filter((b) => b.name === "cta_url")
+    .map((b) => JSON.parse(b.buttonParamsJson));
+
+  const dono = cta.find((p) => p.display_text === "👑 Dono");
+  assert.deepEqual(dono, {
+    display_text: "👑 Dono",
+    url: "https://wa.me/258834788141",
+  });
+
+  const canal = cta.find((p) => p.display_text === "📢 Canal");
+  assert.ok(canal, "o Canal continua no card");
+  assert.ok(botoes.length <= 3, "no máximo 3 botões por card");
+});

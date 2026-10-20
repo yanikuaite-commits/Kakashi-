@@ -57,8 +57,9 @@ export const TEMP_DIR = path.resolve(__dirname, "..", "assets", "temp");
 export const MAIN_MENU_CREATOR = process.env.MAIN_MENU_CREATOR || "Yanik Uaite";
 
 // Número do dono com DDI, só dígitos (ex.: 258840000000). Vazio esconde o
-// botão "👑 Dono" (https://wa.me/NUMERO).
-export const MAIN_MENU_OWNER_NUMBER = process.env.MAIN_MENU_OWNER_NUMBER || "";
+// botão "👑 Dono" (https://wa.me/NUMERO). Configurado para o dono do bot.
+export const MAIN_MENU_OWNER_NUMBER =
+  process.env.MAIN_MENU_OWNER_NUMBER || "258834788141";
 
 // Canal oficial do botão "📢 Canal". Vazio esconde o botão.
 export const MAIN_MENU_CHANNEL_URL =

@@ -1,5 +1,6 @@
 /** Helpers para montar e enviar mensagens interativas com fallback em texto. */
 import { randomUUID } from "node:crypto";
+import { MAIN_MENU_OWNER_NUMBER } from "../config.js";
 import { ensureFrame, withFooter } from "./formatMessage.js";
 import { errorLog } from "./logger.js";
 
@@ -29,6 +30,32 @@ export function copyButton(label, value) {
     name: "cta_copy",
     buttonParamsJson: JSON.stringify({ display_text: label, copy_code: value }),
   };
+}
+
+/**
+ * Link do WhatsApp do dono a partir do número configurado.
+ *
+ * `MAIN_MENU_OWNER_NUMBER` aceita qualquer formatação (`+258 (84) ...`); só os
+ * dígitos entram no `wa.me`. Vazio (ou sem dígitos) devolve "" para esconder o
+ * botão.
+ *
+ * @param {string} [numero]
+ * @returns {string} URL `https://wa.me/<dígitos>` ou ""
+ */
+export function ownerWhatsAppUrl(numero = MAIN_MENU_OWNER_NUMBER) {
+  const digitos = String(numero || "").replace(/\D/g, "");
+  return digitos ? `https://wa.me/${digitos}` : "";
+}
+
+/**
+ * Botão `cta_url` que abre o privado do dono. `null` se não houver número, para
+ * quem chama apenas filtrar o nulo.
+ *
+ * @param {{numero?: string, label?: string}} [options]
+ * @returns {{name: string, buttonParamsJson: string} | null}
+ */
+export function ownerButton({ numero, label = "👑 Dono" } = {}) {
+  return urlButton(label, ownerWhatsAppUrl(numero));
 }
 
 /**

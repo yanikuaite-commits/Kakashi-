@@ -7,6 +7,8 @@ import {
   handleInteractiveMenuReply,
   INTERACTIVE_MENU_TTL_MS,
   numberedFallback,
+  ownerButton,
+  ownerWhatsAppUrl,
   sendInteractiveWithFallback,
   singleSelectButton,
   singleSelectList,
@@ -25,7 +27,40 @@ test("interactive builders preserve IDs and produce Baileys payloads", () => {
   assert.equal(urlButton("Canal", "https://example.com").name, "cta_url");
   assert.equal(urlButton("Canal", "javascript:alert(1)"), null);
   assert.equal(copyButton("Copiar", "https://example.com").name, "cta_copy");
+  assert.equal(urlButton("Canal", "http://example.com"), null);
   assert.equal(singleSelectList({ text: "Escolhe", title: "Menu", sections: [] }).buttonText, "Selecionar");
+});
+
+test("botão do dono abre o privado com o número normalizado", () => {
+  // Só os dígitos entram no wa.me; a formatação humana é aceita.
+  assert.equal(ownerWhatsAppUrl("+258 (84) 123-4567"), "https://wa.me/258841234567");
+  assert.equal(ownerWhatsAppUrl("258834788141"), "https://wa.me/258834788141");
+
+  // Sem número (ou sem dígitos) o botão é escondido.
+  assert.equal(ownerWhatsAppUrl(""), "");
+  assert.equal(ownerWhatsAppUrl("   "), "");
+  assert.equal(ownerWhatsAppUrl("sem-numeros"), "");
+  assert.equal(ownerButton({ numero: "" }), null);
+
+  const botao = ownerButton({ numero: "258834788141" });
+  assert.equal(botao.name, "cta_url");
+  assert.deepEqual(JSON.parse(botao.buttonParamsJson), {
+    display_text: "👑 Dono",
+    url: "https://wa.me/258834788141",
+  });
+
+  // O label pode ser trocado sem mudar o destino.
+  const comLabel = ownerButton({ numero: "258834788141", label: "📢 Canal (dono)" });
+  assert.equal(JSON.parse(comLabel.buttonParamsJson).display_text, "📢 Canal (dono)");
+  assert.equal(JSON.parse(comLabel.buttonParamsJson).url, "https://wa.me/258834788141");
+});
+
+test("botão do dono usa o número configurado por padrão", () => {
+  // MAIN_MENU_OWNER_NUMBER está definido no config (dono do bot).
+  const botao = ownerButton();
+  assert.ok(botao);
+  assert.equal(JSON.parse(botao.buttonParamsJson).url, ownerWhatsAppUrl());
+  assert.match(ownerWhatsAppUrl(), /^https:\/\/wa\.me\/\d+$/);
 });
 
 test("simple and native buttons include required native-flow metadata", async () => {
