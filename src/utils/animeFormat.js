@@ -114,33 +114,29 @@ export function buildEpisodeRows(
 }
 
 /**
- * Linhas de navegação entre páginas de episódios ("Página anterior" /
- * "Página seguinte"), com o número da página no rótulo.
+ * Linha única "Ver mais episódios", no fundo da lista, quando ainda faltam
+ * episódios por mostrar. Sem botão de retroceder: a lista curta é o objetivo,
+ * e quem quiser os anteriores volta a pesquisar o anime.
  *
  * @param {number} page página atual (base 0)
  * @param {number} totalPages
- * @returns {Array<{id: string, title: string, description: string}>}
+ * @returns {Array<{id: string, title: string, description: string}>} vazio na última página
  */
-export function buildEpisodePageRows(page, totalPages) {
-  const rows = [];
+export function buildNextPageRow(page, totalPages) {
+  if (page + 1 >= totalPages) return [];
 
-  if (page > 0) {
-    rows.push({
-      id: `anm:pg:${page - 1}`,
-      title: "⬅️ Página anterior",
-      description: `Página ${page} de ${totalPages}`,
-    });
-  }
+  const proxima = page + 1;
+  const ultima = proxima + 1 === totalPages;
 
-  if (page + 1 < totalPages) {
-    rows.push({
-      id: `anm:pg:${page + 1}`,
-      title: "➡️ Página seguinte",
-      description: `Página ${page + 2} de ${totalPages}`,
-    });
-  }
-
-  return rows;
+  return [
+    {
+      id: `anm:pg:${proxima}`,
+      title: "➡️ Ver mais episódios",
+      description: `${ultima ? "Últimos episódios" : "Mais episódios"} · página ${
+        proxima + 1
+      } de ${totalPages}`,
+    },
+  ];
 }
 
 /**

@@ -4,9 +4,10 @@
  * Passos:
  *   1. o utilizador escolhe "Animes" no menu (ou usa `.anime <nome>`) → o bot
  *      pede o nome e guarda o estado `aguardando_nome`;
- *   2. com o nome, pesquisa no provider e lista os episódios em páginas de 10
- *      (`rowId` `anm:ep:<índice>`), com navegação `anm:pg:<página>` para os
- *      alcançar todos;
+ *   2. com o nome, pesquisa no provider e lista 10 episódios (`rowId`
+ *      `anm:ep:<índice>`), com um botão `anm:pg:<página>` no fundo para os
+ *      restantes — a lista fica curta e todos os episódios continuam
+ *      alcançáveis;
  *   3. ao escolher o episódio, busca as `sources` e lista as qualidades
  *      (rowId `anm:src:<índice>`);
  *   4. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
@@ -33,8 +34,8 @@ import {
   animeProviderLabel,
   animeSessionKey,
   animeTokenIndex,
-  buildEpisodePageRows,
   buildEpisodeRows,
+  buildNextPageRow,
   buildQualityRows,
   episodePageCount,
   identitiesOverlap,
@@ -331,8 +332,8 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
 }
 
 /**
- * Envia uma página da lista de episódios (todos ficam alcançáveis por
- * navegação, mesmo quando o total excede o limite de linhas do WhatsApp).
+ * Envia uma página da lista de episódios: 10 por vez, com um botão "Ver mais"
+ * no fundo para os restantes (todos ficam alcançáveis sem a lista crescer).
  *
  * @returns {Promise<boolean>}
  */
@@ -347,12 +348,13 @@ async function sendEpisodePage({ socket, session, page }) {
 
   const rows = [
     ...buildEpisodeRows(session.episodes, atual),
-    ...buildEpisodePageRows(atual, totalPages),
+    ...buildNextPageRow(atual, totalPages),
     cancelRow(),
   ];
 
   const inicio = atual * EPISODES_PER_PAGE + 1;
   const fim = Math.min(total, inicio + EPISODES_PER_PAGE - 1);
+  const faltam = total - fim;
 
   return sendCard({
     socket,
@@ -361,8 +363,10 @@ async function sendEpisodePage({ socket, session, page }) {
       titulo: session.anime?.title || "Anime",
       canal: animeProviderLabel(session.provider),
       duracao: `${total} episódios`,
-      qualidade: `Página ${atual + 1}/${totalPages}`,
-      extra: `🎬 Episódios ${inicio}–${fim} de ${total}.`,
+      qualidade: `Episódios ${inicio}–${fim}`,
+      extra: faltam
+        ? `🎬 Faltam ${faltam}. Usa *Ver mais episódios* em baixo.`
+        : "🎬 Estes são os últimos episódios.",
     }),
     title: "Episódios",
     rows,

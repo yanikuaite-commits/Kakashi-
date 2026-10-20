@@ -6,8 +6,8 @@ import {
   animeQualityLabel,
   animeSessionKey,
   animeTokenIndex,
-  buildEpisodePageRows,
   buildEpisodeRows,
+  buildNextPageRow,
   buildQualityRows,
   episodePageCount,
   identitiesOverlap,
@@ -64,29 +64,26 @@ test("episodePageCount cobre todos os episódios, com mínimo de 1", () => {
   assert.equal(episodePageCount(Array.from({ length: 220 }), 25), 9);
 });
 
-test("buildEpisodePageRows só mostra navegação onde há página", () => {
-  // Página única: sem navegação.
-  assert.deepEqual(buildEpisodePageRows(0, 1), []);
+test("buildNextPageRow mostra um só botão enquanto faltam episódios", () => {
+  // Página única: sem botão.
+  assert.deepEqual(buildNextPageRow(0, 1), []);
 
-  // Primeira de várias: só "seguinte".
-  const primeira = buildEpisodePageRows(0, 3);
+  // Primeira de 3: um só botão "ver mais", sem retroceder.
+  const primeira = buildNextPageRow(0, 3);
   assert.equal(primeira.length, 1);
   assert.equal(primeira[0].id, "anm:pg:1");
-  assert.match(primeira[0].title, /seguinte/);
+  assert.match(primeira[0].title, /Ver mais/);
   assert.match(primeira[0].description, /2 de 3/);
+  assert.match(primeira[0].description, /Mais episódios/);
 
-  // Do meio: ambas.
-  const meio = buildEpisodePageRows(1, 3);
-  assert.deepEqual(
-    meio.map((r) => r.id),
-    ["anm:pg:0", "anm:pg:2"],
-  );
+  // Penúltima: o rótulo avisa que são os últimos.
+  const penultima = buildNextPageRow(1, 3);
+  assert.equal(penultima.length, 1);
+  assert.equal(penultima[0].id, "anm:pg:2");
+  assert.match(penultima[0].description, /Últimos episódios/);
 
-  // Última: só "anterior".
-  const ultima = buildEpisodePageRows(2, 3);
-  assert.equal(ultima.length, 1);
-  assert.equal(ultima[0].id, "anm:pg:1");
-  assert.match(ultima[0].title, /anterior/);
+  // Última: sem botão.
+  assert.deepEqual(buildNextPageRow(2, 3), []);
 });
 
 test("normalizeSources filtra sem url e ordena da maior para a menor", () => {
