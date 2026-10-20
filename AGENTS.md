@@ -209,6 +209,12 @@ the GenDownload API when the binary is missing or the extraction fails.
 - `YTDLP_CONCURRENT_FRAGMENTS` sets the yt-dlp `-N` (default 4). CDNs that rate-limit parallel requests (the anime CDN answers 429) need `1`, otherwise yt-dlp drops fragments and fails with `No such file ...-FragN`; the anime flow forces `1` for `anikoto`
 - YouTube blocks datacenter IPs (Render included) with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
 
+Media sending must stream, never buffer: use `mediaUploadFromFile()` from
+`src/utils/mediaSend.js` (returns `{ stream }`) instead of `fs.readFileSync`.
+The Baileys path encrypts chunk by chunk, so a 350 MB episode costs ~65 MB of
+RSS as a stream against ~351 MB as a buffer. The Render `starter` plan has
+512 MB, so buffering a large episode gets the process killed by OOM.
+
 ### Animes (anikoto + providers via @consumet/extensions)
 
 `src/services/anime.js` searches a live provider, lists episodes and returns

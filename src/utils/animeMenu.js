@@ -12,8 +12,8 @@
  *      (rowId `anm:src:<índice>`);
  *   4. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
  *      (a mesma do YouTube, com teto maior):
- *        > 350 MB   → cancela e pede qualidade menor;
- *        100–350 MB → envia como DOCUMENTO;
+ *        > 200 MB   → cancela e pede qualidade menor;
+ *        100–200 MB → envia como DOCUMENTO;
  *        ≤ 100 MB   → envia como VÍDEO.
  *
  * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
@@ -27,6 +27,7 @@ import { ANIME_MAX_DOWNLOAD_BYTES } from "../config.js";
 import { getAnimeInfo, getEpisodeSources, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withCreditsContext } from "../services/credits.js";
+import { mediaUploadFromFile } from "./mediaSend.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
   ANIME_TOKEN_PREFIXES,
@@ -513,7 +514,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
     if (acao === "document") {
       infoLog(`[anime] enviando como documento (${tamanhoMB.toFixed(1)} MB)`);
       await socket.sendMessage(session.chatId, {
-        document: fs.readFileSync(result.filePath),
+        document: mediaUploadFromFile(result.filePath),
         mimetype: "video/mp4",
         fileName: "anime.mp4",
         caption,
@@ -524,7 +525,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
         await sendVideoFromFile(result.filePath, caption);
       } else {
         await socket.sendMessage(session.chatId, {
-          video: fs.readFileSync(result.filePath),
+          video: mediaUploadFromFile(result.filePath),
           mimetype: "video/mp4",
           caption,
         });

@@ -10,11 +10,26 @@
  *   enviam SEMPRE como vídeo, independente do tamanho;
  * - YouTube: documento acima de 100 MB, vídeo até 100 MB;
  * - animes: mesma regra do YouTube (documento acima de 100 MB), mas com um
- *   teto maior — acima de 350 MB o envio é cancelado.
+ *   teto maior — acima de 200 MB o envio é cancelado.
  *
  * @author Dev Gui
  */
 import { ANIME_DOCUMENT_LIMIT_MB } from "../config.js";
+import fs from "node:fs";
+
+/**
+ * Payload de mídia para o Baileys a partir de um ficheiro, lido em stream.
+ *
+ * O Baileys aceita `{ stream }` e processa o ficheiro em pedaços. Carregá-lo
+ * inteiro com `readFileSync` custa o tamanho do ficheiro em RSS: um episódio de
+ * 350 MB sobe ~350 MB num plano de 512 MB e o processo é morto por OOM.
+ *
+ * @param {string} filePath
+ * @returns {{ stream: import("node:fs").ReadStream }}
+ */
+export function mediaUploadFromFile(filePath) {
+  return { stream: fs.createReadStream(filePath) };
+}
 
 const MB = 1024 * 1024;
 
