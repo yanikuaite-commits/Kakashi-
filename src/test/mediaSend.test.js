@@ -52,6 +52,11 @@ test("os limites batem com as constantes exportadas", () => {
   assert.equal(ANIME_DOCUMENT_LIMIT_MB, 200);
 });
 
+test("animes baixam em 480p por padrão (resolução fixa)", async () => {
+  const { ANIME_MAX_HEIGHT } = await import("../config.js");
+  assert.equal(ANIME_MAX_HEIGHT, 480);
+});
+
 test("mediaUploadFromFile devolve um stream, não um Buffer carregado", async () => {
   const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");

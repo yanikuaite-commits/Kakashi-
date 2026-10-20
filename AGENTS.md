@@ -272,10 +272,14 @@ qualidade → download) and `src/utils/animeFormat.js` holds the pure helpers.
   single `anm:pg:<p>` "ver mais" row at the bottom for the rest, so the list
   stays short and every episode is still reachable — WhatsApp drops oversized
   lists, so "all at once" is not an option
-- size rule: `> 350 MB` cancels the send, `100–350 MB` sends as document,
+- size rule: `> 200 MB` cancels the send, `100–200 MB` sends as document,
   `≤ 100 MB` sends as video — the document threshold is the same rule YouTube
-  uses (`decideYouTubeSend`), the 350 MB ceiling is anime-specific
+  uses (`decideYouTubeSend`), the 200 MB ceiling is anime-specific
   (see `src/utils/mediaSend.js`)
+- resolution is fixed at `ANIME_MAX_HEIGHT` (480p): the provider's m3u8 carries
+  240p–1080p and, with no limit, yt-dlp picked 1080p and blew past the 200 MB
+  ceiling (a 24 min episode is ~470 MB at 1080p vs ~70 MB at 480p). The quality
+  list picks the *source* (URL), not the final resolution
 
 ### Media Services
 
