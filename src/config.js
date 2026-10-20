@@ -285,15 +285,22 @@ export const YTDLP_IMPERSONATE = process.env.YTDLP_IMPERSONATE || "";
 export const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || "";
 
 // ==========================================================================
-// ANIMES (HiAnime via API Consumet)
+// ANIMES (fontes de streaming via @consumet/extensions, em processo)
 // ==========================================================================
-// A API pública `api.consumet.org` foi DESATIVADA (responde 451 e exige
-// auto-hospedagem). Defina ANIME_API_BASE_URL com a sua instância Consumet
-// (ex: "https://a-sua-instancia.onrender.com"); sem isso o comando avisa que a
-// API está indisponível em vez de falhar em silêncio.
-export const ANIME_API_BASE_URL = (
-  process.env.ANIME_API_BASE_URL || "https://api.consumet.org"
-).replace(/\/+$/, "");
+// A API pública `api.consumet.org` foi DESATIVADA e o provider HiAnime fechou
+// em definitivo (março de 2026), pelo que apontar para um servidor Consumet já
+// não resolveria. Em vez disso, a biblioteca `@consumet/extensions` corre
+// DENTRO do bot (sem servidor) e extrai os links de streaming de providers
+// vivos; o yt-dlp baixa o m3u8 resultante.
+//
+// ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
+// preferência. Cada provider é tentado até um devolver o episódio.
+export const ANIME_PROVIDERS = (
+  process.env.ANIME_PROVIDERS || "animeunity,animepahe,kickassanime"
+)
+  .split(",")
+  .map((nome) => nome.trim().toLowerCase())
+  .filter(Boolean);
 export const ANIME_API_TIMEOUT_MS = 30 * 1000;
 // Limite do WhatsApp: acima de 100 MB só como documento; acima de 150 MB o
 // envio é cancelado e o utilizador é convidado a escolher uma qualidade menor.

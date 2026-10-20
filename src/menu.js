@@ -67,7 +67,7 @@ export const MENU_CATEGORIES = [
   },
   {
     key: "anime", label: "Animes", icon: "🍿", aliases: ["canime", "animes"],
-    intro: "HiAnime via API Consumet. Requer ANIME_API_BASE_URL configurado.",
+    intro: "Animes via providers vivos (animeunity, animepahe, ...). Baixa com yt-dlp.",
     commands: [
       ["anime <nome>", "escolha episódio e qualidade"],
     ],

@@ -1,11 +1,11 @@
 /**
- * Helpers puros do fluxo de animes (HiAnime via API Consumet).
+ * Helpers puros do fluxo de animes (providers via @consumet/extensions).
  *
  * Ficam separados do cliente HTTP (`src/services/anime.js`) para poderem ser
  * testados sem rede e sem Baileys: aqui só há transformação de dados.
  *
  * Sobre os `rowId`: o WhatsApp limita o tamanho do `rowId` e os links de
- * stream do HiAnime são longos e assinados (m3u8 com token), então guardar a
+ * stream dos providers são longos e assinados (m3u8 com token), então guardar a
  * URL dentro do `rowId` faria a linha ser descartada. Por isso as linhas usam
  * índices estáveis (`anm:ep:<i>` / `anm:src:<i>`) e o array real vive na
  * sessão (ver `src/utils/animeMenu.js`).
@@ -18,6 +18,18 @@ export const EPISODES_PER_PAGE = 10;
 
 /** Prefixos de token do menu de animes. */
 export const ANIME_TOKEN_PREFIXES = ["anm:ep:", "anm:src:"];
+
+/**
+ * Rótulo legível de um provider de animes ("animeunity" → "AnimeUnity").
+ *
+ * @param {string} provider
+ * @returns {string}
+ */
+export function animeProviderLabel(provider) {
+  const nome = String(provider || "").trim();
+  if (!nome) return "Animes";
+  return nome.charAt(0).toUpperCase() + nome.slice(1);
+}
 
 /**
  * Chave da sessão por chat + autor.

@@ -1,5 +1,5 @@
 /**
- * Fluxo de animes (HiAnime via API Consumet) — Parte 3 do sistema de downloads.
+ * Fluxo de animes (providers vivos via @consumet/extensions) — Parte 3 do sistema de downloads.
  *
  * Passos:
  *   1. o utilizador escolhe "Animes" no menu (ou usa `.anime <nome>`) → o bot
@@ -28,6 +28,7 @@ import { withCreditsContext } from "../services/credits.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
   ANIME_TOKEN_PREFIXES,
+  animeProviderLabel,
   animeSessionKey,
   animeTokenIndex,
   buildEpisodeRows,
@@ -167,6 +168,7 @@ function ensureSession({
       ownerName: sanitizeName(ownerName) || "dono do pedido",
       sendReply,
       stage: "idle",
+      provider: "",
       anime: null,
       episodes: [],
       episode: null,
@@ -284,7 +286,7 @@ export async function startAnimeFlow({
     socket,
     session,
     text: mediaCaption({
-      titulo: "Animes (HiAnime)",
+      titulo: "Animes",
       canal: "Menu de animes",
       duracao: "—",
       qualidade: "—",
@@ -303,9 +305,10 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
 
   try {
     const anime = await searchAnime(nome);
-    const info = await getAnimeInfo(anime.id);
+    const info = await getAnimeInfo(anime.id, anime.provider);
 
     session.anime = { ...anime, title: info.title || anime.title };
+    session.provider = anime.provider;
     session.episodes = info.episodes;
     session.stage = "episodios";
 
@@ -321,7 +324,7 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
       session,
       text: mediaCaption({
         titulo: session.anime.title,
-        canal: "HiAnime",
+        canal: animeProviderLabel(session.provider),
         duracao: `${info.episodes.length} episódios`,
         qualidade: "Escolha o episódio",
         extra: `🎬 Primeiros ${rows.length - 1} episódios disponíveis.`,
@@ -353,7 +356,7 @@ async function sendQualityList({ socket, session, episodeIndex }) {
   touch(session);
 
   try {
-    const sources = await getEpisodeSources(episode.id);
+    const sources = await getEpisodeSources(episode.id, session.provider);
 
     session.episode = {
       index: episodeIndex,
@@ -376,7 +379,7 @@ async function sendQualityList({ socket, session, episodeIndex }) {
       session,
       text: mediaCaption({
         titulo: `${session.anime?.title || "Anime"} — Ep. ${session.episode.number}`,
-        canal: "HiAnime",
+        canal: animeProviderLabel(session.provider),
         duracao: session.episode.title || "—",
         qualidade: "Escolha a qualidade",
         extra: "⬇️ Escolha a qualidade para baixar.",
@@ -428,7 +431,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
 
     const caption = mediaCaption({
       titulo: `${animeTitulo} — Ep. ${episode?.number ?? "?"}`,
-      canal: "HiAnime",
+      canal: animeProviderLabel(session.provider),
       duracao: result.durationString || "Não disponível",
       qualidade: source.label,
     });

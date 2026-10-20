@@ -208,16 +208,28 @@ the GenDownload API when the binary is missing or the extraction fails.
 - `YTDLP_ENABLED=false` disables it entirely; nothing breaks without the binary
 - YouTube blocks datacenter IPs (Render included) with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
 
-### Animes (HiAnime via API Consumet)
+### Animes (providers via @consumet/extensions)
 
-`src/services/anime.js` searches HiAnime, lists episodes and returns streaming
-sources; `src/utils/animeMenu.js` runs the interactive flow (nome → episódios →
-qualidade → download) and `src/utils/animeFormat.js` holds the pure helpers.
+`src/services/anime.js` searches a live provider, lists episodes and returns
+streaming sources; `src/utils/animeMenu.js` runs the interactive flow (nome →
+episódios → qualidade → download) and `src/utils/animeFormat.js` holds the pure
+helpers.
 
-- the base URL comes from `ANIME_API_BASE_URL` (`src/config.js`). The public
-  `api.consumet.org` instance was **shut down** (HTTP 451) and Consumet now
-  requires self-hosting, so a private instance must be configured or the
-  feature replies with a clear "API offline" message instead of failing silently
+- extraction runs **in-process** through the `@consumet/extensions` library, with
+  no Consumet server and no self-hosting. The public `api.consumet.org` instance
+  was shut down (HTTP 451) and the HiAnime provider (ex-Zoro) shut down for good
+  in March 2026, so pointing at a Consumet server would no longer help — there is
+  no live source underneath
+- `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
+  (default `animeunity,animepahe,kickassanime`); each provider is tried until one
+  returns the episode, and the winning provider is carried in the session so
+  `fetchAnimeInfo`/`fetchEpisodeSources` hit the same source
+- the returned link is an m3u8/mp4 that yt-dlp downloads; HLS sources are
+  preferred over DASH because some `.mpd` files from these sites ship without an
+  audio track
+- these sites change domain and die without notice, so a provider that works
+  today may need replacing tomorrow: fix by editing `ANIME_PROVIDERS`, never by
+  hardcoding a domain in a command
 - list rows carry only indices (`anm:ep:<i>` / `anm:src:<i>`); the real
   (long, signed) stream URLs stay in the session, because WhatsApp drops
   oversized `rowId`s
