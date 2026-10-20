@@ -4,14 +4,16 @@
  * Passos:
  *   1. o utilizador escolhe "Animes" no menu (ou usa `.anime <nome>`) → o bot
  *      pede o nome e guarda o estado `aguardando_nome`;
- *   2. com o nome, pesquisa na API, pega o primeiro resultado e lista os 10
- *      primeiros episódios (rowId `anm:ep:<índice>`);
+ *   2. com o nome, pesquisa no provider e lista 10 episódios (`rowId`
+ *      `anm:ep:<índice>`), com um botão `anm:pg:<página>` no fundo para os
+ *      restantes — a lista fica curta e todos os episódios continuam
+ *      alcançáveis;
  *   3. ao escolher o episódio, busca as `sources` e lista as qualidades
  *      (rowId `anm:src:<índice>`);
- *   4. ao escolher a qualidade, baixa com o yt-dlp (com cookies quando
- *      existirem) e aplica a regra de tamanho:
- *        > 150 MB   → cancela e pede qualidade menor;
- *        100–150 MB → envia como DOCUMENTO;
+ *   4. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
+ *      (a mesma do YouTube, com teto maior):
+ *        > 350 MB   → cancela e pede qualidade menor;
+ *        100–350 MB → envia como DOCUMENTO;
  *        ≤ 100 MB   → envia como VÍDEO.
  *
  * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
@@ -28,11 +30,14 @@ import { withCreditsContext } from "../services/credits.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
   ANIME_TOKEN_PREFIXES,
+  EPISODES_PER_PAGE,
   animeProviderLabel,
   animeSessionKey,
   animeTokenIndex,
   buildEpisodeRows,
+  buildNextPageRow,
   buildQualityRows,
+  episodePageCount,
   identitiesOverlap,
   jidIdentities,
 } from "./animeFormat.js";
@@ -171,6 +176,7 @@ function ensureSession({
       provider: "",
       anime: null,
       episodes: [],
+      page: 0,
       episode: null,
       sources: [],
       cleanupTimer: null,
@@ -312,32 +318,59 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
     session.episodes = info.episodes;
     session.stage = "episodios";
 
-    const rows = buildEpisodeRows(info.episodes);
-    rows.push(cancelRow());
-
     infoLog(
       `[anime] "${session.anime.title}" (id ${anime.id}) com ${info.episodes.length} episódios`,
     );
 
-    return sendCard({
-      socket,
-      session,
-      text: mediaCaption({
-        titulo: session.anime.title,
-        canal: animeProviderLabel(session.provider),
-        duracao: `${info.episodes.length} episódios`,
-        qualidade: "Escolha o episódio",
-        extra: `🎬 Primeiros ${rows.length - 1} episódios disponíveis.`,
-      }),
-      title: "Episódios",
-      rows,
-    });
+    return sendEpisodePage({ socket, session, page: 0 });
   } catch (error) {
     dropSession(session);
     errorLog(`[anime] falha ao buscar "${nome}": ${error.message}`);
     await session.sendReply(`❌ ${error.message}`).catch(() => {});
     return false;
   }
+}
+
+/**
+ * Envia uma página da lista de episódios: 10 por vez, com um botão "Ver mais"
+ * no fundo para os restantes (todos ficam alcançáveis sem a lista crescer).
+ *
+ * @returns {Promise<boolean>}
+ */
+async function sendEpisodePage({ socket, session, page }) {
+  const total = session.episodes.length;
+  const totalPages = episodePageCount(session.episodes);
+  const atual = Math.min(Math.max(0, page), totalPages - 1);
+
+  session.page = atual;
+  session.stage = "episodios";
+  touch(session);
+
+  const rows = [
+    ...buildEpisodeRows(session.episodes, atual),
+    ...buildNextPageRow(atual, totalPages),
+    cancelRow(),
+  ];
+
+  const inicio = atual * EPISODES_PER_PAGE + 1;
+  const fim = Math.min(total, inicio + EPISODES_PER_PAGE - 1);
+  const faltam = total - fim;
+
+  return sendCard({
+    socket,
+    session,
+    text: mediaCaption({
+      titulo: session.anime?.title || "Anime",
+      canal: animeProviderLabel(session.provider),
+      duracao: `${total} episódios`,
+      qualidade: `Episódios ${inicio}–${fim}`,
+      extra: faltam
+        ? `🎬 Faltam ${faltam}. Usa *Ver mais episódios* em baixo.`
+        : "🎬 Estes são os últimos episódios.",
+    }),
+    title: "Episódios",
+    rows,
+  });
 }
 
 /* ═══════════ PASSO 3 · LISTAR AS QUALIDADES ═══════════ */
@@ -591,6 +624,18 @@ export async function handleAnimeReply({
     const epIndex = animeTokenIndex(value, "anm:ep:");
     if (epIndex >= 0) {
       return sendQualityList({ socket, session: sessao, episodeIndex: epIndex });
+    }
+
+    const pgIndex = animeTokenIndex(value, "anm:pg:");
+    if (pgIndex >= 0) {
+      if (!sessao.episodes?.length) {
+        dropSession(sessao);
+        await sendReply(
+          "❌ Essa lista não está mais disponível. Envia .menu para recomeçar.",
+        ).catch(() => {});
+        return true;
+      }
+      return sendEpisodePage({ socket, session: sessao, page: pgIndex });
     }
 
     const srcIndex = animeTokenIndex(value, "anm:src:");

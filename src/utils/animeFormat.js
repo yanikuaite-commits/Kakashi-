@@ -13,11 +13,11 @@
  * @author Dev Gui
  */
 
-/** Quantos episódios aparecem na primeira lista (pedido: os 10 primeiros). */
+/** Quantos episódios aparecem por página da lista. */
 export const EPISODES_PER_PAGE = 10;
 
 /** Prefixos de token do menu de animes. */
-export const ANIME_TOKEN_PREFIXES = ["anm:ep:", "anm:src:"];
+export const ANIME_TOKEN_PREFIXES = ["anm:ep:", "anm:src:", "anm:pg:"];
 
 /**
  * Rótulo legível de um provider de animes ("animeunity" → "AnimeUnity").
@@ -63,27 +63,80 @@ export function animeQualityLabel(source = {}) {
 }
 
 /**
- * Monta as linhas da lista de episódios (os 10 primeiros).
+ * Número de páginas necessárias para listar todos os episódios.
+ *
+ * O WhatsApp descarta listas demasiado longas, por isso os episódios são
+ * paginados em vez de enviados de uma vez.
+ *
+ * @param {Array<unknown>} episodes
+ * @param {number} [perPage]
+ * @returns {number} no mínimo 1
+ */
+export function episodePageCount(episodes = [], perPage = EPISODES_PER_PAGE) {
+  return Math.max(1, Math.ceil(episodes.length / perPage));
+}
+
+/**
+ * Monta as linhas da lista de episódios de uma página.
+ *
+ * O `id` usa o índice ABSOLUTO (`anm:ep:<i>`), não a posição na página: assim
+ * `session.episodes[i]` resolve sempre o episódio certo, em qualquer página.
  *
  * @param {Array<{id: string, number?: number, title?: string}>} episodes
+ * @param {number} [page] página (base 0)
+ * @param {number} [perPage]
  * @returns {Array<{id: string, title: string, description: string, episodeId: string}>}
  */
-export function buildEpisodeRows(episodes = []) {
-  return episodes.slice(0, EPISODES_PER_PAGE).map((episode, index) => {
-    const numero = episode?.number ?? index + 1;
-    const titulo = String(episode?.title || "").trim();
-    const jaTemNumero = new RegExp(`epis[oó]dio\\s*${numero}`, "i").test(titulo);
+export function buildEpisodeRows(
+  episodes = [],
+  page = 0,
+  perPage = EPISODES_PER_PAGE,
+) {
+  const inicio = page * perPage;
 
-    return {
-      id: `anm:ep:${index}`,
-      title: `Episódio ${numero}`.slice(0, 60),
-      description: (jaTemNumero ? titulo || "Ver episódio" : titulo || "Ver episódio").slice(
-        0,
-        72,
-      ),
-      episodeId: String(episode?.id || ""),
-    };
-  });
+  return episodes
+    .slice(inicio, inicio + perPage)
+    .map((episode, offset) => {
+      const index = inicio + offset;
+      const numero = episode?.number ?? index + 1;
+      const titulo = String(episode?.title || "").trim();
+      const jaTemNumero = new RegExp(`epis[oó]dio\\s*${numero}`, "i").test(titulo);
+
+      return {
+        id: `anm:ep:${index}`,
+        title: `Episódio ${numero}`.slice(0, 60),
+        description: (
+          jaTemNumero ? titulo || "Ver episódio" : titulo || "Ver episódio"
+        ).slice(0, 72),
+        episodeId: String(episode?.id || ""),
+      };
+    });
+}
+
+/**
+ * Linha única "Ver mais episódios", no fundo da lista, quando ainda faltam
+ * episódios por mostrar. Sem botão de retroceder: a lista curta é o objetivo,
+ * e quem quiser os anteriores volta a pesquisar o anime.
+ *
+ * @param {number} page página atual (base 0)
+ * @param {number} totalPages
+ * @returns {Array<{id: string, title: string, description: string}>} vazio na última página
+ */
+export function buildNextPageRow(page, totalPages) {
+  if (page + 1 >= totalPages) return [];
+
+  const proxima = page + 1;
+  const ultima = proxima + 1 === totalPages;
+
+  return [
+    {
+      id: `anm:pg:${proxima}`,
+      title: "➡️ Ver mais episódios",
+      description: `${ultima ? "Últimos episódios" : "Mais episódios"} · página ${
+        proxima + 1
+      } de ${totalPages}`,
+    },
+  ];
 }
 
 /**

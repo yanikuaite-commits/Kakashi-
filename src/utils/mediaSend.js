@@ -9,16 +9,18 @@
  * - plataformas gerais (TikTok, Instagram, X, Facebook, Pinterest, baixar):
  *   enviam SEMPRE como vídeo, independente do tamanho;
  * - YouTube: documento acima de 100 MB, vídeo até 100 MB;
- * - animes: cancela acima de 150 MB, documento entre 100 MB e 150 MB, vídeo
- *   até 100 MB.
+ * - animes: mesma regra do YouTube (documento acima de 100 MB), mas com um
+ *   teto maior — acima de 350 MB o envio é cancelado.
  *
  * @author Dev Gui
  */
+import { ANIME_DOCUMENT_LIMIT_MB } from "../config.js";
 
 const MB = 1024 * 1024;
 
+export { ANIME_DOCUMENT_LIMIT_MB };
+
 export const WHATSAPP_VIDEO_LIMIT_MB = 100;
-export const ANIME_DOCUMENT_LIMIT_MB = 150;
 
 /**
  * Converte bytes em MB (base 1024).
@@ -51,7 +53,9 @@ export function decideGeneralSend() {
 }
 
 /**
- * Decide o envio de animes.
+ * Decide o envio de animes: a mesma regra do YouTube (documento acima de
+ * 100 MB), mas com um teto próprio — acima de `documentLimitMb` cancela em vez
+ * de enviar.
  *
  * @param {number} bytes
  * @param {{ videoLimitMb?: number, documentLimitMb?: number }} [limits]
@@ -61,11 +65,9 @@ export function decideAnimeSend(
   bytes,
   { videoLimitMb = WHATSAPP_VIDEO_LIMIT_MB, documentLimitMb = ANIME_DOCUMENT_LIMIT_MB } = {},
 ) {
-  const tamanhoMB = toMegabytes(bytes);
+  if (toMegabytes(bytes) > documentLimitMb) return "cancel";
 
-  if (tamanhoMB > documentLimitMb) return "cancel";
-  if (tamanhoMB > videoLimitMb) return "document";
-  return "video";
+  return decideYouTubeSend(bytes, videoLimitMb);
 }
 
 /**
