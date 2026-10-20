@@ -173,6 +173,28 @@ test("download de vídeo gera mp4 com limite de altura e arquivo em tmp", async 
   await rm(result.filePath, { force: true });
 });
 
+test("a concorrência de fragmentos HLS é ajustável pelo chamador", async () => {
+  // O CDN dos animes responde 429 a pedidos concorrentes e perde fragmentos
+  // ("No such file ...-FragN"); baixar em sequência evita isso.
+  const result = await downloadWithYtDlp("https://exemplo.test/video", {
+    concurrentFragments: 1,
+  });
+
+  const args = (await loggedArgs()).at(-1);
+  assert.deepEqual(args.slice(args.indexOf("-N"), args.indexOf("-N") + 2), ["-N", "1"]);
+
+  await rm(result.filePath, { force: true });
+});
+
+test("sem opção, a concorrência de fragmentos usa o padrão (4)", async () => {
+  const result = await downloadWithYtDlp("https://exemplo.test/video");
+
+  const args = (await loggedArgs()).at(-1);
+  assert.deepEqual(args.slice(args.indexOf("-N"), args.indexOf("-N") + 2), ["-N", "4"]);
+
+  await rm(result.filePath, { force: true });
+});
+
 test("download de áudio extrai mp3", async () => {
   const result = await downloadWithYtDlp("https://exemplo.test/video", { audio: true });
 

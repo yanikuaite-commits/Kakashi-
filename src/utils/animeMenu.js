@@ -452,6 +452,15 @@ function animeDownloadArgs(provider) {
   ];
 }
 
+/**
+ * O CDN dos animes (anikoto) limita pedidos concorrentes: com fragmentos HLS em
+ * paralelo ele responde 429 e o yt-dlp perde fragmentos, falhando com
+ * "No such file ...-FragN". Baixar em sequência é mais lento e mais confiável.
+ */
+function animeConcurrentFragments(provider) {
+  return String(provider || "").toLowerCase() === "anikoto" ? 1 : undefined;
+}
+
 async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile }) {
   const source = session.sources[sourceIndex];
   if (!source?.url) {
@@ -481,6 +490,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
       downloadWithYtDlp(source.url, {
         maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
         extraArgs: animeDownloadArgs(session.provider),
+        concurrentFragments: animeConcurrentFragments(session.provider),
       }),
     );
 
