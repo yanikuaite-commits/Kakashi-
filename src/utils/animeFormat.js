@@ -124,3 +124,57 @@ export function animeTokenIndex(token, prefixo = "anm:") {
   const valor = Number(texto.slice(prefixo.length));
   return Number.isInteger(valor) && valor >= 0 ? valor : -1;
 }
+
+/**
+ * Só os dígitos de um JID — a parte estável da identidade.
+ *
+ * Remove primeiro o servidor (`@lid`, `@s.whatsapp.net`) e o sufixo de
+ * aparelho (`:12`), senão `244...:12@lid` e `244...@lid` dariam dígitos
+ * diferentes e a MESMA pessoa não seria reconhecida.
+ *
+ * @param {string} jid
+ * @returns {string}
+ */
+export function jidDigits(jid) {
+  const texto = String(jid || "");
+  if (!texto) return "";
+
+  return texto.split("@")[0].split(":")[0].replace(/\D/g, "");
+}
+
+/**
+ * Identidades comparáveis de um ou mais JIDs (participant + participantAlt).
+ *
+ * @param {...(string|undefined)} jids
+ * @returns {Set<string>}
+ */
+export function jidIdentities(...jids) {
+  const identidades = new Set();
+
+  for (const jid of jids) {
+    const digitos = jidDigits(jid);
+    if (digitos) identidades.add(digitos);
+  }
+
+  return identidades;
+}
+
+/**
+ * true se dois conjuntos de identidades partilham algum valor.
+ *
+ * @param {Set<string>|Array<string>} a
+ * @param {Set<string>|Array<string>} b
+ * @returns {boolean}
+ */
+export function identitiesOverlap(a, b) {
+  if (!a || !b) return false;
+
+  const menor = a.size <= b.size ? a : b;
+  const maior = menor === a ? b : a;
+
+  for (const valor of menor) {
+    if (maior.has(valor)) return true;
+  }
+
+  return false;
+}

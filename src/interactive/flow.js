@@ -129,7 +129,14 @@ function touch(session) {
   session.timer.unref?.();
 }
 
-function ensureSession({ chatId, ownerId, ownerName, sendReply, permissions }) {
+function ensureSession({
+  chatId,
+  ownerId,
+  ownerName,
+  sendReply,
+  permissions,
+  senderJids = [],
+}) {
   const key = keyOf(chatId, ownerId);
   let session = sessions.get(key);
 
@@ -138,6 +145,7 @@ function ensureSession({ chatId, ownerId, ownerName, sendReply, permissions }) {
       key,
       chatId,
       ownerId,
+      senderJids: senderJids.filter(Boolean),
       ownerName: sanitizeName(ownerName) || "dono do pedido",
       sendReply,
       permissions: permissions || { isOwner: false, isAdmin: false },
@@ -150,6 +158,10 @@ function ensureSession({ chatId, ownerId, ownerName, sendReply, permissions }) {
     if (sendReply) session.sendReply = sendReply;
     if (ownerName) session.ownerName = sanitizeName(ownerName);
     if (permissions) session.permissions = permissions;
+    // Alarga as formas de JID conhecidas do autor (nunca as reduz).
+    for (const jid of senderJids.filter(Boolean)) {
+      if (!session.senderJids.includes(jid)) session.senderJids.push(jid);
+    }
   }
 
   touch(session);
@@ -631,6 +643,7 @@ async function runFunction({
       ownerLid: session.ownerId,
       ownerName: session.ownerName,
       sendReply: session.sendReply,
+      senderLids: session.senderJids || [],
     });
     return;
   }
@@ -1057,6 +1070,10 @@ export async function startGuidedMenu({
     ownerName,
     sendReply,
     permissions: perms,
+    senderJids: [
+      webMessage?.key?.participant,
+      webMessage?.key?.participantAlt,
+    ].filter(Boolean),
   });
 
   const chave = String(section || "").trim();
@@ -1117,6 +1134,10 @@ export async function openGuidedSession({
     ownerName,
     sendReply,
     permissions: perms,
+    senderJids: [
+      webMessage?.key?.participant,
+      webMessage?.key?.participantAlt,
+    ].filter(Boolean),
   });
 }
 

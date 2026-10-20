@@ -128,6 +128,10 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         socket,
         chatId: commonFunctions.remoteJid,
         senderLid: commonFunctions.userLid,
+        senderLids: [
+          webMessage?.key?.participant,
+          webMessage?.key?.participantAlt,
+        ].filter(Boolean),
         senderName: webMessage?.pushName,
         text: commonFunctions.fullMessage,
         sendReply: commonFunctions.sendReply,

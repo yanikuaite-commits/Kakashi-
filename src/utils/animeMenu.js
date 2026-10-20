@@ -32,6 +32,8 @@ import {
   animeTokenIndex,
   buildEpisodeRows,
   buildQualityRows,
+  identitiesOverlap,
+  jidIdentities,
 } from "./animeFormat.js";
 import {
   INTERACTIVE_MENU_TTL_MS,
@@ -65,6 +67,26 @@ function getOwnerId(chatId, ownerLid) {
   return chatId.endsWith("@g.us") ? "" : chatId;
 }
 
+/**
+ * true se quem respondeu é o autor do pedido.
+ *
+ * Compara pelos DÍGITOS (participant + participantAlt), não pela string exata:
+ * a mesma pessoa chega com formas diferentes entre mensagens (`@lid` vs
+ * número, com/sem sufixo de aparelho), e comparar strings negava o próprio
+ * autor. Sem identidade conhecida do autor OU do remetente, aceita
+ * (fail-open): um menu que recusa o dono é pior do que um menu aberto — e em
+ * conversa privada não existe `key.participant` para comparar.
+ */
+function isSessionOwner(session, ...senderJids) {
+  const autor = session?.identidades;
+  if (!autor?.size) return true;
+
+  const quem = jidIdentities(...senderJids);
+  if (!quem.size) return true;
+
+  return identitiesOverlap(autor, quem);
+}
+
 function dropSession(session) {
   if (!session) return;
   if (sessoesAnime.get(session.key) === session) sessoesAnime.delete(session.key);
@@ -86,11 +108,29 @@ function touch(session) {
   session.cleanupTimer.unref?.();
 }
 
-function findSessionInChat(chatId) {
+/**
+ * Procura uma sessão no chat. Com `senderJids`, devolve primeiro a sessão cujo
+ * autor tem a MESMA identidade (dígitos); sem correspondência, cai no primeiro
+ * do chat (para o aviso "é de @fulano").
+ *
+ * @param {string} chatId
+ * @param {Array<string>} [senderJids]
+ * @returns {object|null}
+ */
+function findSessionInChat(chatId, senderJids = []) {
+  let primeiro = null;
+
   for (const session of sessoesAnime.values()) {
-    if (session.chatId === chatId) return session;
+    if (session.chatId !== chatId) continue;
+
+    if (!primeiro) primeiro = session;
+
+    if (senderJids.length && isSessionOwner(session, ...senderJids)) {
+      return session;
+    }
   }
-  return null;
+
+  return primeiro;
 }
 
 /** Introspeção usada nos testes. */
@@ -106,15 +146,24 @@ export function resetAnimeSessions() {
   sessoesAnime.clear();
 }
 
-function ensureSession({ chatId, ownerId, ownerName, sendReply }) {
+function ensureSession({
+  chatId,
+  ownerId,
+  ownerName,
+  sendReply,
+  senderLids = [],
+}) {
   const key = animeSessionKey(chatId, ownerId);
   let session = sessoesAnime.get(key);
+
+  const identidades = jidIdentities(ownerId, ...senderLids);
 
   if (!session) {
     session = {
       key,
       chatId,
       ownerId,
+      identidades,
       ownerName: sanitizeName(ownerName) || "dono do pedido",
       sendReply,
       stage: "idle",
@@ -128,6 +177,10 @@ function ensureSession({ chatId, ownerId, ownerName, sendReply }) {
   } else {
     if (sendReply) session.sendReply = sendReply;
     if (ownerName) session.ownerName = sanitizeName(ownerName);
+    // Alarga as identidades conhecidas do autor (nunca as reduz).
+    for (const identidade of identidades) {
+      session.identidades.add(identidade);
+    }
   }
 
   touch(session);
@@ -196,6 +249,7 @@ export async function startAnimeFlow({
   ownerLid,
   ownerName,
   sendReply,
+  senderLids = [],
   nome = "",
 }) {
   const ownerId = getOwnerId(chatId, ownerLid);
@@ -206,7 +260,13 @@ export async function startAnimeFlow({
     return false;
   }
 
-  const session = ensureSession({ chatId, ownerId, ownerName, sendReply });
+  const session = ensureSession({
+    chatId,
+    ownerId,
+    ownerName,
+    sendReply,
+    senderLids,
+  });
 
   if (nome) {
     return searchAndSendEpisodes({ socket, session, nome });
@@ -428,6 +488,7 @@ export async function handleAnimeReply({
   socket,
   chatId,
   senderLid,
+  senderLids = [],
   senderName,
   text,
   sendReply,
@@ -442,11 +503,15 @@ export async function handleAnimeReply({
   );
   const isCancel = value === CANCEL_TOKEN;
 
+  const senderJids = [senderLid, ...senderLids].filter(Boolean);
   const ownerId = getOwnerId(chatId, senderLid);
   const own = ownerId
     ? sessoesAnime.get(animeSessionKey(chatId, ownerId)) || null
     : null;
-  const doChat = own || findSessionInChat(chatId);
+  // Se a chave exata falhar (formas de JID diferentes), procura no chat uma
+  // sessão cujo autor tenha a MESMA identidade — e não apenas "a primeira".
+  const doChat =
+    own || findSessionInChat(chatId, senderJids) || findSessionInChat(chatId);
 
   // Um token de anime sem sessão (menu expirado) merece aviso claro.
   if (isAnimeToken && !doChat) {
@@ -459,7 +524,7 @@ export async function handleAnimeReply({
   if (isCancel) {
     if (!doChat) return false;
     // Só o dono da sessão a pode cancelar; outros não a destroem.
-    if (senderLid && senderLid !== doChat.ownerId) {
+    if (!isSessionOwner(doChat, ...senderJids)) {
       await sendReply(
         `🚫 Este menu de animes é de @${doChat.ownerName}. Só quem pediu pode cancelar.`,
       ).catch(() => {});
@@ -470,8 +535,11 @@ export async function handleAnimeReply({
     return true;
   }
 
-  if (!own) {
-    // Sessão de outro membro no mesmo chat: não é dele.
+  // Sessão encontrada por identidade (não pela chave exata): adota-a para o
+  // resto do fluxo, alargando as formas de JID conhecidas do autor.
+  const sessao = own || (doChat && isSessionOwner(doChat, ...senderJids) ? doChat : null);
+
+  if (!sessao) {
     if (doChat) {
       await sendReply(
         `🚫 Este menu de animes é de @${doChat.ownerName}. Só quem pediu pode escolher.`,
@@ -481,19 +549,27 @@ export async function handleAnimeReply({
     return false;
   }
 
+  if (own && senderJids.length) {
+    for (const jid of senderJids) {
+      for (const identidade of jidIdentities(jid)) {
+        own.identidades.add(identidade);
+      }
+    }
+  }
+
   if (isAnimeToken) {
-    if (sendReply) own.sendReply = sendReply;
+    if (sendReply) sessao.sendReply = sendReply;
 
     const epIndex = animeTokenIndex(value, "anm:ep:");
     if (epIndex >= 0) {
-      return sendQualityList({ socket, session: own, episodeIndex: epIndex });
+      return sendQualityList({ socket, session: sessao, episodeIndex: epIndex });
     }
 
     const srcIndex = animeTokenIndex(value, "anm:src:");
     if (srcIndex >= 0) {
       return downloadAndSend({
         socket,
-        session: own,
+        session: sessao,
         sourceIndex: srcIndex,
         sendVideoFromFile,
       });
@@ -503,17 +579,17 @@ export async function handleAnimeReply({
   }
 
   // Estado `aguardando_nome`: o texto é o nome do anime.
-  if (own.stage === "aguardando_nome") {
-    if (!senderLid || senderLid !== own.ownerId) {
+  if (sessao.stage === "aguardando_nome") {
+    if (!isSessionOwner(sessao, ...senderJids)) {
       await sendReply(
-        `🚫 O menu de animes é de @${own.ownerName}. Só quem pediu pode escolher.`,
+        `🚫 O menu de animes é de @${sessao.ownerName}. Só quem pediu pode escolher.`,
       ).catch(() => {});
       return true;
     }
 
     // Comandos com prefixo não são nomes de anime: larga a sessão e segue.
     if (prefix && (value.startsWith(prefix) || value.startsWith("!"))) {
-      dropSession(own);
+      dropSession(sessao);
       return false;
     }
 
@@ -524,8 +600,8 @@ export async function handleAnimeReply({
       return true;
     }
 
-    if (sendReply) own.sendReply = sendReply;
-    return searchAndSendEpisodes({ socket, session: own, nome: value });
+    if (sendReply) sessao.sendReply = sendReply;
+    return searchAndSendEpisodes({ socket, session: sessao, nome: value });
   }
 
   return false;

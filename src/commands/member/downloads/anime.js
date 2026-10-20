@@ -23,6 +23,10 @@ export default {
       ownerLid: userLid,
       ownerName: webMessage?.pushName,
       sendReply,
+      senderLids: [
+        webMessage?.key?.participant,
+        webMessage?.key?.participantAlt,
+      ].filter(Boolean),
       nome: fullArgs.trim(),
     });
   },

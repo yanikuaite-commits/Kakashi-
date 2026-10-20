@@ -8,6 +8,9 @@ import {
   animeTokenIndex,
   buildEpisodeRows,
   buildQualityRows,
+  identitiesOverlap,
+  jidDigits,
+  jidIdentities,
   normalizeSources,
 } from "../utils/animeFormat.js";
 
@@ -78,4 +81,31 @@ test("animeTokenIndex lê o índice do token", () => {
 
 test("os prefixos de token cobrem episódio e qualidade", () => {
   assert.deepEqual(ANIME_TOKEN_PREFIXES, ["anm:ep:", "anm:src:"]);
+});
+
+test("jidDigits ignora o servidor e o sufixo de aparelho", () => {
+  // A MESMA pessoa: só os dígitos contam.
+  assert.equal(jidDigits("244991234567:12@lid"), jidDigits("244991234567@lid"));
+  assert.equal(jidDigits("244991234567@lid"), jidDigits("244991234567@s.whatsapp.net"));
+  assert.equal(jidDigits("244991234567:12@lid"), "244991234567");
+  assert.equal(jidDigits(""), "");
+  assert.equal(jidDigits(undefined), "");
+});
+
+test("jidIdentities recolhe as formas comparáveis e ignora vazios", () => {
+  const ids = jidIdentities("244991234567:12@lid", "244991234567@s.whatsapp.net", "");
+  assert.deepEqual([...ids], ["244991234567"]);
+  assert.equal(jidIdentities().size, 0);
+});
+
+test("identitiesOverlap compara sem depender da ordem", () => {
+  const autor = jidIdentities("244991234567:12@lid");
+  const quem = jidIdentities("244991234567@s.whatsapp.net");
+  const outro = jidIdentities("555555555555@lid");
+
+  assert.equal(identitiesOverlap(autor, quem), true);
+  assert.equal(identitiesOverlap(quem, autor), true);
+  assert.equal(identitiesOverlap(autor, outro), false);
+  assert.equal(identitiesOverlap(autor, new Set()), false);
+  assert.equal(identitiesOverlap(null, quem), false);
 });
