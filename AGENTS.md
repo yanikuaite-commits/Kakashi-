@@ -221,7 +221,7 @@ helpers.
   in March 2026, so pointing at a Consumet server would no longer help — there is
   no live source underneath
 - `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `animeunity,animepahe,kickassanime`); each provider is tried until one
+  (default `animeunity,animepahe`); each provider is tried until one
   returns the episode, and the winning provider is carried in the session so
   `fetchAnimeInfo`/`fetchEpisodeSources` hit the same source
 - the returned link is an m3u8/mp4 that yt-dlp downloads; HLS sources are
@@ -230,6 +230,17 @@ helpers.
 - these sites change domain and die without notice, so a provider that works
   today may need replacing tomorrow: fix by editing `ANIME_PROVIDERS`, never by
   hardcoding a domain in a command
+- **every one of these sites sits behind Cloudflare, and the library sends no
+  `User-Agent`** (axios defaults to `axios/1.x`), which Cloudflare blocks from
+  datacenter IPs — Render included. This is the same class of block as YouTube's
+  "confirm you're not a bot". `ANIME_USER_AGENT` / `ANIME_ACCEPT_LANGUAGE`
+  (`src/config.js`) are applied to each provider's HTTP client in
+  `applyProviderClient`; without them search fails with "nenhuma fonte respondeu"
+  even while the site is up. If the host IP is challenged even with browser
+  headers, set `ANIME_PROXY_URL` to a residential HTTP proxy
+- a provider failing does not abort the flow: each error is logged with its
+  reason and the next provider is tried, so `assets/temp/wa-logs.txt` tells you
+  exactly which provider failed and why
 - list rows carry only indices (`anm:ep:<i>` / `anm:src:<i>`); the real
   (long, signed) stream URLs stay in the session, because WhatsApp drops
   oversized `rowId`s

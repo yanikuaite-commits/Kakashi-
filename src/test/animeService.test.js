@@ -54,3 +54,23 @@ test("provider inexistente dá erro claro em vez de rebentar", async () => {
     (error) => error instanceof AnimeApiError && /ANIME_PROVIDERS/.test(error.message),
   );
 });
+
+test("os providers recebem User-Agent de browser", async () => {
+  // Regressão do erro "nenhuma fonte respondeu" no Render: a biblioteca não
+  // define User-Agent, o axios envia "axios/1.x" e o Cloudflare bloqueia isso
+  // em IPs de datacenter. O cliente tem de sair com cara de browser.
+  const { ANIME } = await import("@consumet/extensions");
+  const instance = new ANIME.AnimeUnity();
+
+  // Aplica exatamente a mesma afinação usada pelo serviço.
+  const { applyProviderClient } = await import("../services/anime.js");
+  applyProviderClient(instance, "animeunity");
+
+  const ua = instance.client.defaults.headers.common["User-Agent"];
+  assert.match(ua, /Mozilla\/5\.0/, "tem de ter User-Agent de browser");
+  assert.doesNotMatch(ua, /axios/i, "não pode ficar o default do axios");
+  assert.ok(
+    instance.client.defaults.headers.common["Accept-Language"],
+    "tem de ter Accept-Language",
+  );
+});

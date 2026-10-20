@@ -296,11 +296,27 @@ export const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || "";
 // ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
 // preferência. Cada provider é tentado até um devolver o episódio.
 export const ANIME_PROVIDERS = (
-  process.env.ANIME_PROVIDERS || "animeunity,animepahe,kickassanime"
+  process.env.ANIME_PROVIDERS || "animeunity,animepahe"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())
   .filter(Boolean);
+
+// A biblioteca NÃO define User-Agent, pelo que o axios envia "axios/1.x" — e o
+// Cloudflare (que está à frente de todos estes sites) bloqueia esse agente em
+// IPs de datacenter, como o Render. Sem estes cabeçalhos a pesquisa falha com
+// "nenhuma fonte respondeu". Isto é o mesmo tipo de bloqueio que o YouTube já
+// faz a IPs de datacenter.
+export const ANIME_USER_AGENT =
+  process.env.ANIME_USER_AGENT ||
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+export const ANIME_ACCEPT_LANGUAGE = process.env.ANIME_ACCEPT_LANGUAGE || "en-US,en;q=0.9";
+
+// Escape hatch para quando o IP do host está bloqueado de vez (Cloudflare
+// desafia datacenter mesmo com User-Agent de browser): um proxy HTTP
+// residencial, no formato http://user:pass@host:port.
+export const ANIME_PROXY_URL = process.env.ANIME_PROXY_URL || "";
+
 export const ANIME_API_TIMEOUT_MS = 30 * 1000;
 // Limite do WhatsApp: acima de 100 MB só como documento; acima de 150 MB o
 // envio é cancelado e o utilizador é convidado a escolher uma qualidade menor.

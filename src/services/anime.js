@@ -18,7 +18,13 @@
  *
  * @author Dev Gui
  */
-import { ANIME_API_TIMEOUT_MS, ANIME_PROVIDERS } from "../config.js";
+import {
+  ANIME_ACCEPT_LANGUAGE,
+  ANIME_API_TIMEOUT_MS,
+  ANIME_PROVIDERS,
+  ANIME_PROXY_URL,
+  ANIME_USER_AGENT,
+} from "../config.js";
 import { errorLog, infoLog } from "../utils/logger.js";
 import { normalizeSources } from "../utils/animeFormat.js";
 
@@ -35,9 +41,9 @@ const DEP_MISSING_HINT =
   "para instalar `@consumet/extensions`.";
 
 const NO_PROVIDER_HINT =
-  "Nenhuma fonte de animes respondeu. Os sites de anime mudam de domínio com " +
-  "frequência — ajuste ANIME_PROVIDERS (ex: animeunity,animepahe,kickassanime) " +
-  "com um provider que esteja no ar.";
+  "Nenhuma fonte de animes respondeu. Estes sites bloqueiam IPs de datacenter " +
+  "(como o Render) e mudam de domínio com frequência — ajuste ANIME_PROVIDERS " +
+  "com um provider que esteja no ar ou ANIME_PROXY_URL com um proxy residencial.";
 
 /** Nome → construtor no namespace `ANIME` da biblioteca. */
 const PROVIDER_FACTORIES = {
@@ -52,6 +58,48 @@ const PROVIDER_FACTORIES = {
 
 let consumetAnime = null;
 const instancias = new Map();
+
+/**
+ * Aplica cabeçalhos de browser e proxy ao cliente HTTP de um provider.
+ *
+ * A biblioteca não define User-Agent, pelo que o axios envia "axios/1.x" e o
+ * Cloudflare — à frente de todos estes sites — bloqueia esse agente em IPs de
+ * datacenter (Render incluído). Sem isto, a pesquisa falha com "nenhuma fonte
+ * respondeu" mesmo com o site no ar. O proxy é o escape hatch para quando o IP
+ * do host está bloqueado de vez.
+ *
+ * @param {object} instance
+ * @param {string} nome
+ */
+export function applyProviderClient(instance, nome) {
+  const client = instance?.client;
+  if (!client?.defaults?.headers) return;
+
+  client.defaults.headers.common["User-Agent"] = ANIME_USER_AGENT;
+  client.defaults.headers.common["Accept-Language"] = ANIME_ACCEPT_LANGUAGE;
+  client.defaults.headers.common["Accept"] =
+    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+
+  if (ANIME_PROXY_URL) {
+    try {
+      client.defaults.proxy = {
+        host: new URL(ANIME_PROXY_URL).hostname,
+        port: Number(new URL(ANIME_PROXY_URL).port) || undefined,
+        protocol: new URL(ANIME_PROXY_URL).protocol.replace(":", ""),
+        auth:
+          new URL(ANIME_PROXY_URL).username
+            ? {
+                username: decodeURIComponent(new URL(ANIME_PROXY_URL).username),
+                password: decodeURIComponent(new URL(ANIME_PROXY_URL).password),
+              }
+            : undefined,
+      };
+      infoLog(`[anime] ${nome} a usar ANIME_PROXY_URL`);
+    } catch (error) {
+      errorLog(`[anime] ANIME_PROXY_URL inválido: ${error.message}`);
+    }
+  }
+}
 
 async function loadConsumet() {
   if (consumetAnime) return consumetAnime;
@@ -86,7 +134,9 @@ async function activeProviders() {
 
     if (!instancias.has(nome)) {
       try {
-        instancias.set(nome, fabrica(A));
+        const instance = fabrica(A);
+        applyProviderClient(instance, nome);
+        instancias.set(nome, instance);
       } catch (error) {
         errorLog(`[anime] provider "${nome}" indisponível: ${error.message}`);
         continue;
