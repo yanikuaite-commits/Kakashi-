@@ -81,7 +81,7 @@ test("os providers recebem User-Agent de browser", async () => {
  * fragilidade real do provider — o parsing depende da forma do markup, não de
  * uma API estável.
  */
-const { search: anikotoSearch, episodes: anikotoEpisodes } = await import(
+const { search: anikotoSearch, episodes: anikotoEpisodes, parseSeasons } = await import(
   "../services/anikoto.js"
 );
 
@@ -174,6 +174,93 @@ test("anikoto: 'bad request' (resultado não-HTML) devolve lista vazia", async (
 
   try {
     assert.deepEqual(await anikotoEpisodes("958", "naruto-eybxz"), []);
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
+test("anikoto: parseSeasons extrai slug e título de cada temporada", () => {
+  // Amostra REAL de `api/seasons/1631` (Attack on Titan).
+  const html = `
+    <section id="w-seasons" class="swiper-container">
+      <div class="seasons swiper-wrapper">
+        <div class="swiper-slide season active">
+          <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa" style="background-image: url(https://s4.anilist.co/x.jpg);">
+            <div class="name" style="color:#ffffff">Season 1</div>
+          </a>
+        </div>
+        <div class="swiper-slide season ">
+          <a href="https://anikoto.cz/watch/attack-on-titan-season-2-0rtbh" style="background-image: url(https://cdn.anipixcdn.co/y.jpg);">
+            <div class="name" style="color:#ffffff">Season 2</div>
+          </a>
+        </div>
+      </div>
+    </section>`;
+
+  assert.deepEqual(parseSeasons(html), [
+    { slug: "attack-on-titan-bgaoa", title: "Season 1" },
+    { slug: "attack-on-titan-season-2-0rtbh", title: "Season 2" },
+  ]);
+});
+
+test("anikoto: parseSeasons devolve vazio quando não há agrupamento", () => {
+  assert.deepEqual(parseSeasons(""), []);
+  assert.deepEqual(parseSeasons(undefined), []);
+  assert.deepEqual(parseSeasons('<section id="w-seasons"></section>'), []);
+});
+
+test("anikoto: parseSeasons não deixa um link sem nome apanhar o do seguinte", () => {
+  // Regressão: um regex ganancioso entre href e class="name" atravessava o
+  // </a> e atribuía o nome da temporada SEGUINTE a um link sem nome.
+  const html = `
+    <a href="https://anikoto.cz/watch/sem-nome"><div class="outra">x</div></a>
+    <a href="https://anikoto.cz/watch/com-nome"><div class="name">Season 1</div></a>`;
+
+  assert.deepEqual(parseSeasons(html), [{ slug: "com-nome", title: "Season 1" }]);
+});
+
+test("anikoto: parseSeasons não deixa o sufixo /ep-N no slug", () => {
+  const html = `
+    <a href="https://anikoto.cz/watch/naruto-eybxz/ep-1"><div class="name">Classic Series</div></a>`;
+
+  assert.deepEqual(parseSeasons(html), [
+    { slug: "naruto-eybxz", title: "Classic Series" },
+  ]);
+});
+
+test("anikoto: seasonEpisodes lê o data-anime-id e devolve os episódios", async () => {
+  const pagina = `<div class="ctrl watch2gether-create" data-anime-id="1385" title="Watch Together"></div>`;
+  const lista = JSON.stringify({
+    status: 200,
+    result: `<div class="range">
+      <a href="#" data-id="24265" data-num="1" data-ids="TOKEN1">1</a>
+      <a href="#" data-id="24266" data-num="2" data-ids="TOKEN2">2</a>
+    </div>`,
+  });
+
+  const pedidos = [];
+  globalThis.fetch = async (url) => {
+    pedidos.push(String(url));
+    return {
+      ok: true,
+      status: 200,
+      text: async () => (String(url).includes("/ajax/episode/list/") ? lista : pagina),
+    };
+  };
+
+  try {
+    const { seasonEpisodes } = await import("../services/anikoto.js");
+    const eps = await seasonEpisodes("attack-on-titan-season-2-0rtbh");
+
+    assert.deepEqual(eps, [
+      { id: "24265", number: 1, ids: "TOKEN1" },
+      { id: "24266", number: 2, ids: "TOKEN2" },
+    ]);
+    // O id numérico tem de ter sido lido da página de watch da temporada.
+    assert.ok(
+      pedidos.some((u) => u.includes("/ajax/episode/list/1385")),
+      "o endpoint de episódios tem de receber o id da temporada",
+    );
   } finally {
     delete globalThis.fetch;
   }

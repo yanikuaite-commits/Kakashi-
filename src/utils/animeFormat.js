@@ -17,7 +17,7 @@
 export const EPISODES_PER_PAGE = 10;
 
 /** Prefixos de token do menu de animes. */
-export const ANIME_TOKEN_PREFIXES = ["anm:ep:", "anm:src:", "anm:pg:"];
+export const ANIME_TOKEN_PREFIXES = ["anm:sea:", "anm:ep:", "anm:src:", "anm:pg:"];
 
 /**
  * Rótulo legível de um provider de animes ("animeunity" → "AnimeUnity").
@@ -74,6 +74,24 @@ export function animeQualityLabel(source = {}) {
  */
 export function episodePageCount(episodes = [], perPage = EPISODES_PER_PAGE) {
   return Math.max(1, Math.ceil(episodes.length / perPage));
+}
+
+/**
+ * Monta as linhas da lista de temporadas.
+ *
+ * O `id` usa o índice (`anm:sea:<i>`) e o slug real fica na sessão: os slugs
+ * são longos e o WhatsApp descarta `rowId`s grandes.
+ *
+ * @param {Array<{slug: string, title: string}>} seasons
+ * @returns {Array<{id: string, title: string, description: string, slug: string}>}
+ */
+export function buildSeasonRows(seasons = []) {
+  return seasons.map((temporada, index) => ({
+    id: `anm:sea:${index}`,
+    title: String(temporada?.title || `Temporada ${index + 1}`).slice(0, 60),
+    description: "Escolher esta temporada",
+    slug: String(temporada?.slug || ""),
+  }));
 }
 
 /**

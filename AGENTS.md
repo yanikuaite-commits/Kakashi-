@@ -219,8 +219,9 @@ RSS as a stream against ~351 MB as a buffer. The Render `starter` plan has
 
 `src/services/anime.js` searches a live provider, lists episodes and returns
 streaming sources; `src/services/anikoto.js` is the in-house provider;
-`src/utils/animeMenu.js` runs the interactive flow (nome → episódios →
-qualidade → download) and `src/utils/animeFormat.js` holds the pure helpers.
+`src/utils/animeMenu.js` runs the interactive flow (nome → temporadas →
+episódios → qualidade → download) and `src/utils/animeFormat.js` holds the pure
+helpers.
 
 - **`anikoto` is the default and the only provider that works from a datacenter
   IP (Render).** It is scraped by the bot itself, not by the library, because
@@ -234,6 +235,14 @@ qualidade → download) and `src/utils/animeFormat.js` holds the pure helpers.
 - the anikoto `Referer` must be the watch page or the site answers "bad request";
   episode ids therefore carry `<slug>::<epId>::<dataIds>`, and the anime id
   carries `<numId>:<slug>`, so every later step has what it needs without state
+- **seasons are separate entries on the site, not a field.** A title like
+  Attack on Titan is 6 different animes (own slug and id); `api/seasons/<id>`
+  only groups them. Without the season step, picking a season showed the
+  episodes of the first one. The flow lists the group only when it has 2+
+  entries (`getAnimeSeasons` → `[]` means "skip straight to episodes", as
+  before). The numeric id the episode endpoint needs (`data-anime-id`) is read
+  from the season's watch page in `seasonEpisodes`, so the session stores only
+  the short slug
 - the anikoto CDN (`fetch.nexabloom.top`) passes a **Cloudflare challenge** on
   the m3u8 fetch. `src/utils/animeMenu.js` (`animeDownloadArgs`) adds
   `--extractor-args generic:impersonate` and `--referer https://megaplay.buzz/`

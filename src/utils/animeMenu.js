@@ -4,13 +4,17 @@
  * Passos:
  *   1. o utilizador escolhe "Animes" no menu (ou usa `.anime <nome>`) → o bot
  *      pede o nome e guarda o estado `aguardando_nome`;
- *   2. com o nome, pesquisa no provider e lista 10 episódios (`rowId`
- *      `anm:ep:<índice>`), com um botão `anm:pg:<página>` no fundo para os
- *      restantes — a lista fica curta e todos os episódios continuam
- *      alcançáveis;
- *   3. ao escolher o episódio, busca as `sources` e lista as qualidades
+ *   2. com o nome, pesquisa no provider. Se o título tiver temporadas
+ *      agrupadas, lista-as (`rowId` `anm:sea:<índice>`); senão salta direto
+ *      para os episódios — muitas temporadas no site são, na verdade, animes
+ *      separados, por isso a escolha evita misturar episódios de temporadas
+ *      diferentes;
+ *   3. escolhida a temporada, lista 10 episódios (`rowId` `anm:ep:<índice>`),
+ *      com um botão `anm:pg:<página>` no fundo para os restantes — a lista
+ *      fica curta e todos os episódios continuam alcançáveis;
+ *   4. ao escolher o episódio, busca as `sources` e lista as qualidades
  *      (rowId `anm:src:<índice>`);
- *   4. ao escolher a qualidade, baixa com o yt-dlp limitado a `ANIME_MAX_HEIGHT`
+ *   5. ao escolher a qualidade, baixa com o yt-dlp limitado a `ANIME_MAX_HEIGHT`
  *      (480p) e aplica a regra de tamanho (a mesma do YouTube, com teto maior):
  *        > 200 MB   → cancela e pede qualidade menor;
  *        100–200 MB → envia como DOCUMENTO;
@@ -28,7 +32,7 @@
  */
 import fs from "node:fs";
 import { ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT } from "../config.js";
-import { getAnimeInfo, getEpisodeSources, searchAnime } from "../services/anime.js";
+import { getAnimeInfo, getAnimeSeasons, getEpisodeSources, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withCreditsContext } from "../services/credits.js";
 import { mediaUploadFromFile } from "./mediaSend.js";
@@ -42,6 +46,7 @@ import {
   buildEpisodeRows,
   buildNextPageRow,
   buildQualityRows,
+  buildSeasonRows,
   episodePageCount,
   identitiesOverlap,
   jidIdentities,
@@ -180,6 +185,8 @@ function ensureSession({
       stage: "idle",
       provider: "",
       anime: null,
+      seasons: [],
+      seasonTitle: "",
       episodes: [],
       page: 0,
       episode: null,
@@ -287,6 +294,8 @@ export async function startAnimeFlow({
 
   session.stage = "aguardando_nome";
   session.anime = null;
+  session.seasons = [];
+  session.seasonTitle = "";
   session.episodes = [];
   session.episode = null;
   session.sources = [];
@@ -308,7 +317,7 @@ export async function startAnimeFlow({
   });
 }
 
-/* ═══════════ PASSO 2 · LISTAR OS EPISÓDIOS ═══════════ */
+/* ═══════════ PASSO 2 · LISTAR AS TEMPORADAS (se existirem) ═══════════ */
 
 async function searchAndSendEpisodes({ socket, session, nome }) {
   session.stage = "buscando";
@@ -316,21 +325,129 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
 
   try {
     const anime = await searchAnime(nome);
-    const info = await getAnimeInfo(anime.id, anime.provider);
+    const seasons = await getAnimeSeasons(anime.id, anime.provider);
 
-    session.anime = { ...anime, title: info.title || anime.title };
+    session.anime = { ...anime };
     session.provider = anime.provider;
+    session.seasons = seasons;
+    session.seasonTitle = "";
+    session.episodes = [];
+    session.episode = null;
+    session.sources = [];
+
+    // Só há passo de temporada quando a fonte agrupa 2+ títulos: um grupo de
+    // um é o próprio anime e a escolha seria ruído.
+    if (seasons.length > 1) {
+      session.stage = "temporadas";
+      infoLog(
+        `[anime] "${anime.title}" (id ${anime.id}) tem ${seasons.length} temporadas`,
+      );
+      return sendSeasonList({ socket, session });
+    }
+
+    return loadEpisodesAndSend({ socket, session, id: anime.id, titulo: "" });
+  } catch (error) {
+    dropSession(session);
+    errorLog(`[anime] falha ao buscar "${nome}": ${error.message}`);
+    await session.sendReply(`❌ ${error.message}`).catch(() => {});
+    return false;
+  }
+}
+
+/**
+ * Envia a lista de temporadas do título pesquisado.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function sendSeasonList({ socket, session }) {
+  session.stage = "temporadas";
+  touch(session);
+
+  const rows = [...buildSeasonRows(session.seasons), cancelRow()];
+
+  return sendCard({
+    socket,
+    session,
+    text: mediaCaption({
+      titulo: session.anime?.title || "Anime",
+      canal: animeProviderLabel(session.provider),
+      duracao: `${session.seasons.length} temporadas`,
+      qualidade: "—",
+      extra: "📺 Escolhe a temporada que queres ver.",
+    }),
+    title: "Temporadas",
+    rows,
+  });
+}
+
+/**
+ * Carrega os episódios de uma entrada (o próprio anime ou uma temporada) e
+ * envia a primeira página.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function loadEpisodesAndSend({ socket, session, id, titulo }) {
+  session.stage = "buscando";
+  touch(session);
+
+  try {
+    const info = await getAnimeInfo(id, session.provider);
+
+    session.anime = { ...session.anime, title: info.title || session.anime?.title || titulo || "Anime" };
     session.episodes = info.episodes;
+    session.episode = null;
+    session.sources = [];
+    session.seasonTitle = "";
     session.stage = "episodios";
 
     infoLog(
-      `[anime] "${session.anime.title}" (id ${anime.id}) com ${info.episodes.length} episódios`,
+      `[anime] "${session.anime.title}" (id ${id}) com ${info.episodes.length} episódios`,
     );
 
     return sendEpisodePage({ socket, session, page: 0 });
   } catch (error) {
     dropSession(session);
-    errorLog(`[anime] falha ao buscar "${nome}": ${error.message}`);
+    errorLog(`[anime] falha ao buscar episódios (id ${id}): ${error.message}`);
+    await session.sendReply(`❌ ${error.message}`).catch(() => {});
+    return false;
+  }
+}
+
+/**
+ * Troca a lista de episódios pela da temporada escolhida.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function chooseSeasonAndSendEpisodes({ socket, session, seasonIndex }) {
+  const temporada = session.seasons?.[seasonIndex];
+  if (!temporada?.slug) {
+    dropSession(session);
+    await session.sendReply(
+      "❌ Essa temporada não está mais disponível. Envia .menu para recomeçar.",
+    ).catch(() => {});
+    return true;
+  }
+
+  session.stage = "buscando";
+  touch(session);
+
+  try {
+    const episodes = await getSeasonEpisodes(temporada.slug, session.provider);
+
+    session.episodes = episodes;
+    session.episode = null;
+    session.sources = [];
+    session.stage = "episodios";
+    session.seasonTitle = temporada.title;
+
+    infoLog(
+      `[anime] temporada "${temporada.title}" com ${episodes.length} episódios`,
+    );
+
+    return sendEpisodePage({ socket, session, page: 0 });
+  } catch (error) {
+    dropSession(session);
+    errorLog(`[anime] falha na temporada "${temporada.slug}": ${error.message}`);
     await session.sendReply(`❌ ${error.message}`).catch(() => {});
     return false;
   }
@@ -365,7 +482,9 @@ async function sendEpisodePage({ socket, session, page }) {
     socket,
     session,
     text: mediaCaption({
-      titulo: session.anime?.title || "Anime",
+      titulo: session.seasonTitle
+        ? `${session.anime?.title || "Anime"} — ${session.seasonTitle}`
+        : session.anime?.title || "Anime",
       canal: animeProviderLabel(session.provider),
       duracao: `${total} episódios`,
       qualidade: `Episódios ${inicio}–${fim}`,
@@ -636,6 +755,15 @@ export async function handleAnimeReply({
 
   if (isAnimeToken) {
     if (sendReply) sessao.sendReply = sendReply;
+
+    const seaIndex = animeTokenIndex(value, "anm:sea:");
+    if (seaIndex >= 0) {
+      return chooseSeasonAndSendEpisodes({
+        socket,
+        session: sessao,
+        seasonIndex: seaIndex,
+      });
+    }
 
     const epIndex = animeTokenIndex(value, "anm:ep:");
     if (epIndex >= 0) {

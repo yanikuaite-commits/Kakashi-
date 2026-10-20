@@ -124,6 +124,67 @@ export async function episodes(animeId, slug) {
     }));
 }
 
+/**
+ * Extrai as temporadas do HTML de `api/seasons/<id>`.
+ *
+ * Puro (sem rede) para poder ser testado com HTML real capturado. Cada slide
+ * traz o link e o nome da temporada.
+ *
+ * @param {string} html
+ * @returns {Array<{slug: string, title: string}>}
+ */
+export function parseSeasons(html) {
+  return [
+    ...String(html ?? "").matchAll(
+      /<a\b[^>]*href="([^"]*\/watch\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/g,
+    ),
+  ]
+    .map(([, href, conteudo]) => ({
+      slug: href.replace(`${BASE}/watch/`, "").replace(/\/ep-\d+$/, ""),
+      title: (conteudo.match(/class="name"[^>]*>([^<]*)</)?.[1] || "").trim(),
+    }))
+    .filter((temporada) => temporada.slug && temporada.title);
+}
+
+/**
+ * Temporadas de um anime.
+ *
+ * No site cada temporada é, na prática, OUTRO anime (slug e id próprios): o
+ * `api/seasons/<id>` só as agrupa. Sem as separar, escolher uma temporada
+ * mostrava sempre os episódios da primeira.
+ *
+ * @param {string} animeId
+ * @param {string} slug
+ * @returns {Promise<Array<{slug: string, title: string}>>} vazio quando não há agrupamento
+ */
+export async function seasons(animeId, slug) {
+  const referer = `${BASE}/watch/${slug}/ep-1`;
+  const corpo = JSON.parse(await fetchText(`${BASE}/api/seasons/${animeId}`, referer));
+
+  return parseSeasons(corpo?.result);
+}
+
+/**
+ * Episódios de uma temporada, a partir do seu slug.
+ *
+ * O id numérico exigido pelo endpoint de episódios (`data-anime-id`) só existe
+ * na página de watch da temporada, por isso é lido aqui — assim o menu guarda
+ * apenas o slug (curto) na linha.
+ *
+ * @param {string} slug
+ * @returns {Promise<Array<{id: string, number: number, ids: string}>>}
+ */
+export async function seasonEpisodes(slug) {
+  const pagina = await fetchText(`${BASE}/watch/${slug}/ep-1`);
+  const animeId = pagina.match(/data-anime-id="(\d+)"/)?.[1];
+
+  if (!animeId) {
+    throw new AnimeApiError("Essa temporada não devolveu episódios.");
+  }
+
+  return episodes(animeId, slug);
+}
+
 /** Desencripta o campo `enc` do megaplay (AES-256-CBC, base64url). */
 function decryptMegaplay(enc) {
   const key = Buffer.alloc(32);

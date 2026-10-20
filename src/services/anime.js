@@ -335,6 +335,71 @@ export async function getAnimeInfo(id, provider) {
 }
 
 /**
+ * Temporadas de um anime, quando a fonte as agrupa.
+ *
+ * Devolve `[]` quando não há agrupamento (a maioria dos títulos) ou quando a
+ * fonte não expõe temporadas — nesse caso o fluxo salta o passo e vai direto
+ * para os episódios, como antes.
+ *
+ * @param {string} id
+ * @param {string} provider
+ * @returns {Promise<Array<{slug: string, title: string}>>}
+ */
+export async function getAnimeSeasons(id, provider) {
+  const { tipo, instance } = await resolveProvider(provider);
+  if (tipo !== "proprio" || typeof instance.seasons !== "function") return [];
+
+  const [animeId, slug] = String(id).split(":");
+
+  return withTimeout(
+    instance.seasons(animeId, slug),
+    ANIME_API_TIMEOUT_MS,
+    `${provider}.seasons`,
+  ).catch((error) => {
+    // Temporadas são um extra: se falharem, o fluxo segue para os episódios
+    // em vez de bloquear o pedido do utilizador.
+    errorLog(`[anime] ${provider} falhou nas temporadas: ${error.message}`);
+    return [];
+  });
+}
+
+/**
+ * Episódios de uma temporada específica (identificada pelo seu slug).
+ *
+ * @param {string} slug
+ * @param {string} provider
+ * @returns {Promise<Array<object>>}
+ */
+export async function getSeasonEpisodes(slug, provider) {
+  const { tipo, instance } = await resolveProvider(provider);
+  if (tipo !== "proprio" || typeof instance.seasonEpisodes !== "function") {
+    throw new AnimeApiError("Esta fonte não suporta escolha de temporada.");
+  }
+
+  const lista = await withTimeout(
+    instance.seasonEpisodes(slug),
+    ANIME_API_TIMEOUT_MS,
+    `${provider}.seasonEpisodes`,
+  ).catch((error) => {
+    errorLog(`[anime] ${provider} falhou na temporada "${slug}": ${error.message}`);
+    throw new AnimeApiError(
+      "Não consegui obter os episódios desta temporada. Tente outra.",
+      { cause: error },
+    );
+  });
+
+  if (!lista?.length) {
+    throw new AnimeApiError("Esta temporada não tem episódios disponíveis.");
+  }
+
+  return lista.map((episode) => ({
+    id: `${slug}::${episode.id}::${episode.ids}`,
+    number: episode.number,
+    title: "",
+  }));
+}
+
+/**
  * Fontes de streaming de um episódio, já normalizadas por qualidade.
  *
  * @param {string} episodeId
