@@ -6,8 +6,10 @@ import {
   animeQualityLabel,
   animeSessionKey,
   animeTokenIndex,
+  buildEpisodePageRows,
   buildEpisodeRows,
   buildQualityRows,
+  episodePageCount,
   identitiesOverlap,
   jidDigits,
   jidIdentities,
@@ -27,19 +29,64 @@ test("animeQualityLabel deriva rótulos legíveis", () => {
   assert.equal(animeQualityLabel({}), "auto");
 });
 
-test("buildEpisodeRows limita aos 10 primeiros e usa índices estáveis", () => {
+test("buildEpisodeRows pagina com índices ABSOLUTOS estáveis", () => {
   const episodes = Array.from({ length: 25 }, (_, i) => ({
     id: `ep-${i}`,
     number: i + 1,
     title: `Episódio ${i + 1}`,
   }));
 
-  const rows = buildEpisodeRows(episodes);
-  assert.equal(rows.length, EPISODES_PER_PAGE);
-  assert.equal(rows[0].id, "anm:ep:0");
-  assert.equal(rows[9].id, "anm:ep:9");
-  assert.equal(rows[0].episodeId, "ep-0");
-  assert.match(rows[0].title, /Episódio 1/);
+  const primeira = buildEpisodeRows(episodes, 0);
+  assert.equal(primeira.length, EPISODES_PER_PAGE);
+  assert.equal(primeira[0].id, "anm:ep:0");
+  assert.equal(primeira[9].id, "anm:ep:9");
+  assert.equal(primeira[0].episodeId, "ep-0");
+  assert.match(primeira[0].title, /Episódio 1/);
+
+  // Página 2: o índice tem de ser o absoluto (10..19), não a posição na página,
+  // senão `session.episodes[i]` resolvia o episódio errado.
+  const segunda = buildEpisodeRows(episodes, 1);
+  assert.equal(segunda[0].id, "anm:ep:10");
+  assert.equal(segunda[0].episodeId, "ep-10");
+  assert.match(segunda[0].title, /Episódio 11/);
+
+  // Última página parcial: 25 episódios → 5 linhas.
+  const ultima = buildEpisodeRows(episodes, 2);
+  assert.equal(ultima.length, 5);
+  assert.equal(ultima.at(-1).id, "anm:ep:24");
+});
+
+test("episodePageCount cobre todos os episódios, com mínimo de 1", () => {
+  assert.equal(episodePageCount([]), 1);
+  assert.equal(episodePageCount(Array.from({ length: 10 })), 1);
+  assert.equal(episodePageCount(Array.from({ length: 11 })), 2);
+  assert.equal(episodePageCount(Array.from({ length: 220 })), 22);
+  assert.equal(episodePageCount(Array.from({ length: 220 }), 25), 9);
+});
+
+test("buildEpisodePageRows só mostra navegação onde há página", () => {
+  // Página única: sem navegação.
+  assert.deepEqual(buildEpisodePageRows(0, 1), []);
+
+  // Primeira de várias: só "seguinte".
+  const primeira = buildEpisodePageRows(0, 3);
+  assert.equal(primeira.length, 1);
+  assert.equal(primeira[0].id, "anm:pg:1");
+  assert.match(primeira[0].title, /seguinte/);
+  assert.match(primeira[0].description, /2 de 3/);
+
+  // Do meio: ambas.
+  const meio = buildEpisodePageRows(1, 3);
+  assert.deepEqual(
+    meio.map((r) => r.id),
+    ["anm:pg:0", "anm:pg:2"],
+  );
+
+  // Última: só "anterior".
+  const ultima = buildEpisodePageRows(2, 3);
+  assert.equal(ultima.length, 1);
+  assert.equal(ultima[0].id, "anm:pg:1");
+  assert.match(ultima[0].title, /anterior/);
 });
 
 test("normalizeSources filtra sem url e ordena da maior para a menor", () => {
@@ -74,13 +121,14 @@ test("buildQualityRows usa anm:src:<i> e mantém a url real fora do rowId", () =
 test("animeTokenIndex lê o índice do token", () => {
   assert.equal(animeTokenIndex("anm:ep:3", "anm:ep:"), 3);
   assert.equal(animeTokenIndex("anm:src:0", "anm:src:"), 0);
+  assert.equal(animeTokenIndex("anm:pg:2", "anm:pg:"), 2);
   assert.equal(animeTokenIndex("anm:ep:x", "anm:ep:"), -1);
   assert.equal(animeTokenIndex("vfmt:720", "anm:ep:"), -1);
   assert.equal(animeTokenIndex("", "anm:ep:"), -1);
 });
 
-test("os prefixos de token cobrem episódio e qualidade", () => {
-  assert.deepEqual(ANIME_TOKEN_PREFIXES, ["anm:ep:", "anm:src:"]);
+test("os prefixos de token cobrem episódio, qualidade e página", () => {
+  assert.deepEqual(ANIME_TOKEN_PREFIXES, ["anm:ep:", "anm:src:", "anm:pg:"]);
 });
 
 test("jidDigits ignora o servidor e o sufixo de aparelho", () => {

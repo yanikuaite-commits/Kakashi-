@@ -323,9 +323,10 @@ export const ANIME_ACCEPT_LANGUAGE = process.env.ANIME_ACCEPT_LANGUAGE || "en-US
 export const ANIME_PROXY_URL = process.env.ANIME_PROXY_URL || "";
 
 export const ANIME_API_TIMEOUT_MS = 30 * 1000;
-// Limite do WhatsApp: acima de 100 MB só como documento; acima de 150 MB o
-// envio é cancelado e o utilizador é convidado a escolher uma qualidade menor.
-export const ANIME_DOCUMENT_LIMIT_MB = 150;
+// Limite do WhatsApp: acima de 100 MB só como documento (a mesma regra do
+// YouTube, aplicada pelo `decideAnimeSend`); acima de 350 MB o envio é
+// cancelado e o utilizador é convidado a escolher uma qualidade menor.
+export const ANIME_DOCUMENT_LIMIT_MB = 350;
 export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 
 export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;

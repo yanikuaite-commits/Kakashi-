@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  getAnimeSession,
   handleAnimeReply,
   resetAnimeSessions,
   startAnimeFlow,
@@ -132,4 +133,49 @@ test("token de anime sem sessão avisa que o menu expirou", async () => {
 
   assert.equal(consumiu, true);
   assert.match(replies[0], /expirou/i);
+});
+
+test("anm:pg navega entre páginas e mantém o índice absoluto", async () => {
+  resetAnimeSessions();
+  await abrirMenu(LID, [LID]);
+
+  // Injeta a lista de episódios sem ir à rede (o passo de pesquisa é o único
+  // que a usa) e prova a navegação que o requisito "todos os episódios" exige.
+  const sessao = getAnimeSession(CHAT, LID);
+  sessao.episodes = Array.from({ length: 25 }, (_, i) => ({
+    id: `ep-${i}`,
+    number: i + 1,
+    title: `Episódio ${i + 1}`,
+  }));
+
+  const enviados = [];
+  const socket = {
+    sendMessage: async (_chat, content) => {
+      enviados.push(content);
+      return { key: { id: "m" } };
+    },
+  };
+
+  const consumiu = await handleAnimeReply({
+    socket,
+    chatId: CHAT,
+    senderLid: LID,
+    senderLids: [LID],
+    text: "anm:pg:1",
+    sendReply: async () => {},
+  });
+
+  assert.equal(consumiu, true);
+  assert.equal(getAnimeSession(CHAT, LID).page, 1);
+
+  // A página 2 tem de mostrar os episódios 11–20, com ids absolutos.
+  const linhas = enviados[0].interactiveButtons
+    .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+    .find((p) => p.sections)?.sections?.[0]?.rows;
+  const ids = (linhas || []).map((r) => r.id);
+
+  assert.ok(ids.includes("anm:ep:10"), "a página 2 começa no índice absoluto 10");
+  assert.ok(ids.includes("anm:ep:19"), "e termina no 19");
+  assert.ok(ids.includes("anm:pg:0"), "tem navegação para a anterior");
+  assert.ok(ids.includes("anm:pg:2"), "tem navegação para a seguinte");
 });

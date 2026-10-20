@@ -261,8 +261,14 @@ qualidade → download) and `src/utils/animeFormat.js` holds the pure helpers.
 - list rows carry only indices (`anm:ep:<i>` / `anm:src:<i>`); the real
   (long, signed) stream URLs stay in the session, because WhatsApp drops
   oversized `rowId`s
-- size rule: `> 150 MB` cancels the send, `100–150 MB` sends as document,
-  `≤ 100 MB` sends as video (see `src/utils/mediaSend.js`)
+- episodes are listed in pages of 10 (`anm:ep:<i>` uses the ABSOLUTE index),
+  with `anm:pg:<p>` navigation rows, so every episode is reachable even when the
+  anime has hundreds of them — WhatsApp drops oversized lists, so "all at once"
+  is not an option
+- size rule: `> 350 MB` cancels the send, `100–350 MB` sends as document,
+  `≤ 100 MB` sends as video — the document threshold is the same rule YouTube
+  uses (`decideYouTubeSend`), the 350 MB ceiling is anime-specific
+  (see `src/utils/mediaSend.js`)
 
 ### Media Services
 

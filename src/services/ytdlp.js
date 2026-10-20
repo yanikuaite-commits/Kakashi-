@@ -347,9 +347,10 @@ async function pickOutputPath(stdout, id) {
  * Baixa a mídia com o yt-dlp.
  *
  * @param {string} url
- * @param {{ audio?: boolean, height?: number|string, maxBytes?: number }} options
+ * @param {{ audio?: boolean, height?: number|string, maxBytes?: number, extraArgs?: string[] }} options
  *   `maxBytes` sobrepõe o limite padrão de 100 MB (os animes aceitam documento
- *   até 150 MB, então precisam de um limite maior).
+ *   até 350 MB, então precisam de um limite maior); `extraArgs` acrescenta
+ *   flags ao yt-dlp (ex.: `--impersonate` e `--referer` para o CDN de animes).
  * @returns {Promise<{ filePath: string, mimetype: string, fileName: string,
  *   title: string, artist: string, thumbnail: string|null, fileSize: number,
  *   duration: number, durationString: string, followers: number|null,
