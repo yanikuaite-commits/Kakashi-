@@ -9,6 +9,7 @@
 import { delay } from "baileys";
 import fs from "node:fs";
 import { BOT_EMOJI, TIMEOUT_IN_MILLISECONDS_BY_EVENT } from "../config.js";
+import { mediaUploadFromFile } from "./mediaSend.js";
 import {
   ajustAudioByBuffer,
   baileysIs,
@@ -403,7 +404,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
     return await socket.sendMessage(
       remoteJid,
       {
-        video: fs.readFileSync(file),
+        video: mediaUploadFromFile(file),
         caption: formatCaption(caption),
         ...optionalParams,
       },
@@ -654,7 +655,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
     return await socket.sendMessage(
       remoteJid,
       {
-        document: fs.readFileSync(file),
+        document: mediaUploadFromFile(file),
         mimetype: mimetype || "application/octet-stream",
         fileName: fileName || "documento.pdf",
       },

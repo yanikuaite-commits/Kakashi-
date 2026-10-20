@@ -330,9 +330,13 @@ export const ANIME_PROXY_URL = process.env.ANIME_PROXY_URL || "";
 
 export const ANIME_API_TIMEOUT_MS = 30 * 1000;
 // Limite do WhatsApp: acima de 100 MB só como documento (a mesma regra do
-// YouTube, aplicada pelo `decideAnimeSend`); acima de 350 MB o envio é
+// YouTube, aplicada pelo `decideAnimeSend`); acima de 200 MB o envio é
 // cancelado e o utilizador é convidado a escolher uma qualidade menor.
-export const ANIME_DOCUMENT_LIMIT_MB = 350;
+//
+// 200 MB e não 350: o envio mantém em disco o download e a cópia encriptada do
+// Baileys, ou seja ~2x o tamanho (350 MB -> ~700 MB). O Render Starter tem disco
+// efémero pequeno e downloads em paralelo esgotam-no.
+export const ANIME_DOCUMENT_LIMIT_MB = 200;
 export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 
 export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;

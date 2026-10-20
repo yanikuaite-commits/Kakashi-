@@ -351,7 +351,7 @@ async function pickOutputPath(stdout, id) {
  * @param {{ audio?: boolean, height?: number|string, maxBytes?: number,
  *   extraArgs?: string[], concurrentFragments?: number }} options
  *   `maxBytes` sobrepõe o limite padrão de 100 MB (os animes aceitam documento
- *   até 350 MB, então precisam de um limite maior); `extraArgs` acrescenta
+ *   até 200 MB, então precisam de um limite maior); `extraArgs` acrescenta
  *   flags ao yt-dlp (ex.: `--impersonate` e `--referer` para o CDN de animes);
  *   `concurrentFragments` controla o `-N` (1 = sequencial, para CDNs com rate
  *   limit).

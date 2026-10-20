@@ -7,8 +7,7 @@
  *
  * @author Dev Gui
  */
-import fs from "node:fs";
-import { decideGeneralSend, decideYouTubeSend } from "./mediaSend.js";
+import { decideGeneralSend, decideYouTubeSend, mediaUploadFromFile } from "./mediaSend.js";
 
 /**
  * Envia o resultado de um download.
@@ -37,7 +36,7 @@ export async function sendMediaByRule({
 
   if (acao === "document") {
     await socket.sendMessage(chatId, {
-      document: fs.readFileSync(result.filePath),
+      document: mediaUploadFromFile(result.filePath),
       mimetype: "video/mp4",
       fileName: result.fileName || "video.mp4",
       caption,
@@ -51,7 +50,7 @@ export async function sendMediaByRule({
   }
 
   await socket.sendMessage(chatId, {
-    video: fs.readFileSync(result.filePath),
+    video: mediaUploadFromFile(result.filePath),
     mimetype: "video/mp4",
     caption,
   });
