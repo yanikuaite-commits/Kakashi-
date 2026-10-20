@@ -25,12 +25,13 @@
  *
  * @author Dev Gui
  */
-import { MAIN_MENU_OWNER_NUMBER, PREFIX } from "../config.js";
+import { PREFIX } from "../config.js";
 import { getPrefix } from "../utils/database.js";
 import { RODAPE, formatMessage } from "../utils/formatMessage.js";
 import {
   INTERACTIVE_MENU_TTL_MS,
   numberedFallback,
+  ownerButton,
   sendInteractiveWithFallback,
   singleSelectButton,
   singleSelectList,
@@ -304,16 +305,9 @@ export async function sendMainCard({ socket, session }) {
   if (verMenus) buttons.push(verMenus);
 
   // Dono (se houver número configurado) e Canal são cta_url.
-  const dono = String(MAIN_MENU_OWNER_NUMBER || "").replace(/\D/g, "");
-  if (dono) {
-    buttons.push({
-      name: "cta_url",
-      buttonParamsJson: JSON.stringify({
-        display_text: "👑 Dono",
-        url: `https://wa.me/${dono}`,
-      }),
-    });
-  }
+  const dono = ownerButton();
+  if (dono) buttons.push(dono);
+
   const canal = canalButton();
   if (canal) buttons.push(canal);
 
@@ -388,6 +382,9 @@ export async function sendCategoryCard({ socket, session, categoria }) {
     { title: `${categoria.titulo} · Funções` },
   );
   if (lista) buttons.push(lista);
+
+  const dono = ownerButton();
+  if (dono) buttons.push(dono);
 
   const canal = canalButton();
   if (canal) buttons.push(canal);
@@ -481,6 +478,9 @@ export async function sendFunctionCard({ socket, session, categoria, funcao }) {
     title: funcao.titulo,
   });
   if (lista) buttons.push(lista);
+
+  const dono = ownerButton();
+  if (dono) buttons.push(dono);
 
   const canal = canalButton();
   if (canal) buttons.push(canal);

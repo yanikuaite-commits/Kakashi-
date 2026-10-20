@@ -156,6 +156,19 @@ test("botões Dono e Canal são cta_url e Ver Menus é a lista de categorias", (
   assert.equal(mainMenuOwnerUrl(""), "");
 });
 
+test("botão Dono usa o número configurado no bot", () => {
+  // MAIN_MENU_OWNER_NUMBER está preenchido em src/config.js; o botão deve
+  // abrir o privado do dono com o link wa.me normalizado.
+  const botoes = buildMainMenuButtons({ channelUrl: "", categories: [] });
+  assert.equal(botoes.length, 1);
+  assert.equal(botoes[0].name, "cta_url");
+  assert.deepEqual(JSON.parse(botoes[0].buttonParamsJson), {
+    display_text: "👑 Dono",
+    url: "https://wa.me/258834788141",
+  });
+  assert.equal(mainMenuOwnerUrl(), "https://wa.me/258834788141");
+});
+
 test("categorias são divididas em seções de no máximo 10 linhas", () => {
   const categorias = Array.from({ length: 12 }, (_, index) => ({
     id: `c${index}`,

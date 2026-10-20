@@ -42,7 +42,7 @@ import {
   MAIN_MENU_IMAGE,
   MAIN_MENU_OWNER_NUMBER,
 } from "../config.js";
-import { singleSelectButton } from "./interactive.js";
+import { ownerButton, ownerWhatsAppUrl, singleSelectButton } from "./interactive.js";
 import { errorLog, infoLog } from "./logger.js";
 import { listCategories } from "../interactive/menuRegistry.js";
 import {
@@ -166,8 +166,7 @@ export function buildMainMenuBody({
 
 /** Normaliza o número do dono para o link do WhatsApp. */
 export function mainMenuOwnerUrl(numero = MAIN_MENU_OWNER_NUMBER) {
-  const digitos = String(numero || "").replace(/\D/g, "");
-  return digitos ? `https://wa.me/${digitos}` : "";
+  return ownerWhatsAppUrl(numero);
 }
 
 /**
@@ -209,17 +208,9 @@ export function buildMainMenuButtons({
   categories = [],
 } = {}) {
   const botoes = [];
-  const dono = mainMenuOwnerUrl(ownerNumber);
+  const dono = ownerButton({ numero: ownerNumber });
 
-  if (dono) {
-    botoes.push({
-      name: "cta_url",
-      buttonParamsJson: JSON.stringify({
-        display_text: "👑 Dono",
-        url: dono,
-      }),
-    });
-  }
+  if (dono) botoes.push(dono);
 
   const verMenus = singleSelectButton(
     "🔰 Ver Menus 🔰",

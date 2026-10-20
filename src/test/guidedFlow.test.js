@@ -345,3 +345,77 @@ test(" link inválido avisa e mantém a pendência", async (t) => {
   assert.ok(ambiente.replies.at(-1).text.includes("não parece um link"));
   assert.equal(getGuidedSession(GROUP, DONO).pending.funcaoId, "tiktok");
 });
+
+/* ═══════════ BOTÃO DO DONO EM TODOS OS CARDS ═══════════ */
+
+test("botão Dono aparece em todos os cards do fluxo guiado", async () => {
+  limpar();
+  const ambiente = criarAmbiente();
+
+  const donoDe = (card) =>
+    card.interactiveButtons.find((botao) => {
+      if (botao.name !== "cta_url") return false;
+      const params = JSON.parse(botao.buttonParamsJson);
+      return params.display_text === "👑 Dono";
+    });
+
+  await openGuidedSession({
+    socket: ambiente.socket,
+    chatId: GROUP,
+    ownerId: DONO,
+    ownerName: "Membro",
+    sendReply: ambiente.sendReply,
+    permissions: { isOwner: false, isAdmin: false },
+  });
+
+  // Card 1: menu principal.
+  await handleGuidedFlow({
+    ...ambiente,
+    senderId: DONO,
+    text: "menu:main",
+    commonFunctions: {},
+    sendReply: ambiente.sendReply,
+    dispatch: async () => {},
+  });
+  assert.deepEqual(
+    JSON.parse(donoDe(ambiente.enviadas.at(-1)).buttonParamsJson),
+    { display_text: "👑 Dono", url: "https://wa.me/258834788141" },
+  );
+
+  // Card 2: categoria escolhida.
+  await handleGuidedFlow({
+    ...ambiente,
+    senderId: DONO,
+    text: "cat:download",
+    commonFunctions: {},
+    sendReply: ambiente.sendReply,
+    dispatch: async () => {},
+  });
+  assert.deepEqual(
+    JSON.parse(donoDe(ambiente.enviadas.at(-1)).buttonParamsJson),
+    { display_text: "👑 Dono", url: "https://wa.me/258834788141" },
+  );
+
+  // Card 3: função escolhida.
+  await handleGuidedFlow({
+    ...ambiente,
+    senderId: DONO,
+    text: "fn:download:tiktok",
+    commonFunctions: {},
+    sendReply: ambiente.sendReply,
+    dispatch: async () => {},
+  });
+  assert.deepEqual(
+    JSON.parse(donoDe(ambiente.enviadas.at(-1)).buttonParamsJson),
+    { display_text: "👑 Dono", url: "https://wa.me/258834788141" },
+  );
+
+  // O WhatsApp aceita no máximo 3 botões por card.
+  for (const card of ambiente.enviadas) {
+    assert.ok(
+      card.interactiveButtons.length <= 3,
+      `card com ${card.interactiveButtons.length} botões`,
+    );
+  }
+});
+

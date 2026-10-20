@@ -193,6 +193,10 @@ rodapé `© Kakashi Bot • Escolha abaixo` e três botões:
 | 🔰 Ver Menus 🔰 | `single_select` com as categorias (id `cat:<categoria>`) |
 | 📢 Canal | `cta_url` para o canal oficial |
 
+O mesmo par **👑 Dono** + **📢 Canal** acompanha os cards do fluxo guiado
+(categorias e funções) e o menu de animes, para o utilizador falar com o dono
+a partir de qualquer passo.
+
 Valores dinâmicos: `@usuario` (com `mentions` real), data/hora no fuso
 **Africa/Maputo**, dia da semana em português e `Velocidade` (diferença entre
 o `messageTimestamp` da mensagem e o envio, em segundos com 4 casas).
@@ -203,7 +207,7 @@ Configuração (todas em `src/config.js`, com override por variável de ambiente
 | --- | --- |
 | `BOT_NAME` | nome no card |
 | `MAIN_MENU_CREATOR` | criador (card e rodapé) |
-| `MAIN_MENU_OWNER_NUMBER` | número do dono, só dígitos com DDI (vazio esconde o botão Dono) |
+| `MAIN_MENU_OWNER_NUMBER` | número do dono, só dígitos com DDI (já vem com o número do dono; vazio esconde o botão Dono) |
 | `MAIN_MENU_CHANNEL_URL` | link do canal (vazio esconde o botão Canal) |
 | `MAIN_MENU_IMAGE` | caminho local **ou** URL https da imagem (vazio = sem imagem) |
 | `MAIN_MENU_FOOTER` | texto do rodapé |

@@ -54,6 +54,7 @@ import {
 import {
   INTERACTIVE_MENU_TTL_MS,
   numberedFallback,
+  ownerButton,
   sendInteractiveWithFallback,
   singleSelectButton,
   urlButton,
@@ -230,6 +231,8 @@ async function sendCard({ socket, session, text, title, rows, fallbackPrompt }) 
   const buttons = [];
   const lista = singleSelectButton("📂 Opções", sections, { title: title || "Animes" });
   if (lista) buttons.push(lista);
+  const dono = ownerButton();
+  if (dono) buttons.push(dono);
   const canal = canalButton();
   if (canal) buttons.push(canal);
 

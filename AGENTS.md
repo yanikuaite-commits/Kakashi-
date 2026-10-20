@@ -65,6 +65,7 @@ High-value architectural notes:
 | `src/utils/dynamicCommand.js` | Prefix validation, permission enforcement, and command dispatch. |
 | `src/utils/loadCommonFunctions.js` | Injected helper functions used by command handlers. |
 | `src/utils/database.js` | Safe access layer for JSON persistence. |
+| `src/utils/interactive.js` | Interactive-message builders: `singleSelectButton`, `urlButton`, `ownerButton` (owner WhatsApp link from `MAIN_MENU_OWNER_NUMBER`), `copyButton`. |
 | `src/@types/index.d.ts` | Typing and documentation for command and middleware props. |
 | `src/services/spider-x-api.js` | Spider X integration for downloads, AI, Pinterest, Brat, and related endpoints. |
 | `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
