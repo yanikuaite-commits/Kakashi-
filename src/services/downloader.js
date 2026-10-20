@@ -1,5 +1,9 @@
 import fs from "node:fs/promises";
-import { DEFAULT_VIDEO_HEIGHT, PENDING_DOWNLOAD_TTL_MS } from "../config.js";
+import {
+  DEFAULT_VIDEO_HEIGHT,
+  MAX_FILE_SIZE_BYTES,
+  PENDING_DOWNLOAD_TTL_MS,
+} from "../config.js";
 import { downloadWithGenDownload } from "../utils/genDownloader.js";
 import { errorLog } from "../utils/logger.js";
 import { chargeMediaCredits } from "./credits.js";
@@ -118,6 +122,33 @@ export async function downloadVideo(source, height = DEFAULT_VIDEO_HEIGHT) {
   return settleMediaCredits("vídeo", result);
 }
 
+/**
+ * Baixa o vídeo do YouTube sem o teto de 100 MB.
+ *
+ * O teto padrão do yt-dlp cortaria o arquivo antes de sabermos que ele deve
+ * seguir como DOCUMENTO (regra do YouTube: > 100 MB vira documento). Aqui o
+ * limite é alargado para o máximo do WhatsApp e a decisão final fica em
+ * `decideYouTubeSend`.
+ */
+export async function downloadYouTubeVideo(source, height = DEFAULT_VIDEO_HEIGHT) {
+  if (await isYtDlpAvailable()) {
+    try {
+      const result = await downloadWithYtDlp(source, {
+        height,
+        maxBytes: MAX_FILE_SIZE_BYTES * 2,
+      });
+      return settleMediaCredits("vídeo", result);
+    } catch (error) {
+      errorLog(
+        `Falha no yt-dlp (${error.message}). Tentando a API GenDownload...`,
+      );
+    }
+  }
+
+  const result = await downloadWithGenDownload(source, { height });
+  return settleMediaCredits("vídeo", result);
+}
+
 export async function downloadAudio(source) {
   const result = await downloadMedia(source, { audio: true });
 
@@ -147,6 +178,22 @@ export async function downloadByCommand(command, value, search = searchYouTube) 
       url: match.url,
     } : result;
   }
+
+  // YouTube: baixa sem o teto de 100 MB para o comando poder enviar como
+  // DOCUMENTO quando o ficheiro passar desse tamanho (regra do YouTube).
+  if (command === "play-video") {
+    const result = await downloadYouTubeVideo(source);
+    return match
+      ? {
+          ...result,
+          title: match.title || result.title,
+          artist: match.artist || result.artist,
+          thumbnail: match.thumbnail || result.thumbnail,
+          url: match.url,
+        }
+      : result;
+  }
+
   return downloadVideo(source);
 }
 

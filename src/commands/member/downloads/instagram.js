@@ -2,6 +2,8 @@ import { PREFIX } from "../../../config.js";
 import { InvalidParameterError, WarningError } from "../../../errors/index.js";
 import { downloadByCommand } from "../../../services/downloader.js";
 import { downloadingMessage } from "../../../services/download-message.js";
+import { mediaCaption } from "../../../utils/formatMessage.js";
+import { sendMediaByRule } from "../../../utils/sendMedia.js";
 import fs from "node:fs/promises";
 import { errorLog } from "../../../utils/logger.js";
 
@@ -14,6 +16,8 @@ export default {
    * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
+    socket,
+    remoteJid,
     sendVideoFromFile,
     sendReply,
     fullArgs,
@@ -43,7 +47,21 @@ export default {
       );
       data = await downloadByCommand("instagram", fullArgs);
       await sendSuccessReact();
-      await sendVideoFromFile(data.filePath);
+      // Plataformas gerais: envia SEMPRE como vídeo.
+      await sendMediaByRule({
+        socket,
+        chatId: remoteJid,
+        result: data,
+        caption: mediaCaption({
+          titulo: data.title,
+          canal: data.artist,
+          seguidores: data.followers,
+          duracao: data.durationString || "Não disponível",
+          qualidade: "Melhor disponível",
+        }),
+        rule: "general",
+        sendVideoFromFile,
+      });
     } catch (error) {
       errorLog(error);
       await sendErrorReply(error.message);

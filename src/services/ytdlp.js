@@ -47,6 +47,11 @@ const BOT_CHECK_HINT =
   "datacenter, como o do Render). Configure YTDLP_COOKIES_PATH apontando para um " +
   "arquivo de cookies ou YTDLP_PROXY com um proxy residencial.";
 
+const IP_BLOCKED_HINT =
+  "O servidor de origem bloqueou o IP do bot (HTTP 403/Forbidden). Isso é comum " +
+  "em IP de datacenter (Render). Configure YTDLP_COOKIES_PATH com cookies válidos " +
+  "ou YTDLP_PROXY com um proxy residencial.";
+
 const UNSUPPORTED_URL_HINT =
   "O yt-dlp não reconhece este link. Posts de fotos/carrossel (TikTok, " +
   "Instagram, Facebook) não têm vídeo para baixar — reenvie o link de um vídeo.";
@@ -184,6 +189,9 @@ function normalizeInfo(info) {
     title: info?.title || "Mídia",
     artist: info?.uploader || info?.channel || info?.creator || "Artista desconhecido",
     duration: Number(info?.duration) || 0,
+    durationString: info?.duration_string || "",
+    followers: info?.channel_follower_count ?? null,
+    quality: info?.format_note || info?.resolution || null,
     filesize: Number(info?.filesize) || Number(info?.filesize_approx) || 0,
     thumbnail: info?.thumbnail || null,
   };
@@ -287,6 +295,11 @@ export function friendlyError(error) {
     return `yt-dlp: ${message}\n\n${BOT_CHECK_HINT}`;
   }
 
+  // IP bloqueado pela origem (403/Forbidden): orientar cookies/proxy.
+  if (/403|forbidden|access denied|ip.*blocked/i.test(message)) {
+    return `yt-dlp: ${message}\n\n${IP_BLOCKED_HINT}`;
+  }
+
   return `yt-dlp: ${message}`;
 }
 
@@ -334,12 +347,18 @@ async function pickOutputPath(stdout, id) {
  * Baixa a mídia com o yt-dlp.
  *
  * @param {string} url
- * @param {{ audio?: boolean, height?: number|string }} options
+ * @param {{ audio?: boolean, height?: number|string, maxBytes?: number }} options
+ *   `maxBytes` sobrepõe o limite padrão de 100 MB (os animes aceitam documento
+ *   até 150 MB, então precisam de um limite maior).
  * @returns {Promise<{ filePath: string, mimetype: string, fileName: string,
  *   title: string, artist: string, thumbnail: string|null, fileSize: number,
- *   duration: number }>}
+ *   duration: number, durationString: string, followers: number|null,
+ *   quality: string|null }>}
  */
-export async function downloadWithYtDlp(url, { audio = false, height } = {}) {
+export async function downloadWithYtDlp(
+  url,
+  { audio = false, height, maxBytes = MAX_FILE_SIZE_BYTES } = {},
+) {
   const binary = await resolveYtDlpBinary();
 
   if (!binary) {
@@ -357,7 +376,7 @@ export async function downloadWithYtDlp(url, { audio = false, height } = {}) {
   const args = [
     ...commonArgs(),
     "--max-filesize",
-    String(MAX_FILE_SIZE_BYTES),
+    String(maxBytes),
     "-o",
     template,
     "--print",
@@ -389,8 +408,10 @@ export async function downloadWithYtDlp(url, { audio = false, height } = {}) {
     const filePath = await pickOutputPath(stdout, id);
     const { size } = await stat(filePath);
 
-    if (size > MAX_FILE_SIZE_BYTES) {
-      throw new Error("O arquivo excede o limite de 100 MB do WhatsApp.");
+    if (size > maxBytes) {
+      throw new Error(
+        `O arquivo excede o limite de ${Math.floor(maxBytes / (1024 * 1024))} MB.`,
+      );
     }
 
     const extension = path.extname(filePath).slice(1).toLowerCase();
@@ -409,11 +430,14 @@ export async function downloadWithYtDlp(url, { audio = false, height } = {}) {
       thumbnail: info?.thumbnail || null,
       fileSize: size,
       duration: info?.duration || 0,
+      durationString: info?.durationString || "",
+      followers: info?.followers ?? null,
+      quality: info?.quality || null,
     };
   } catch (error) {
     await removeFilesByPrefix(id);
 
-    if (error.message?.includes("100 MB")) {
+    if (/excede o limite/i.test(error.message || "")) {
       throw error;
     }
 

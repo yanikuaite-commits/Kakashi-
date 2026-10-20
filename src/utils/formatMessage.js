@@ -251,6 +251,49 @@ export function downloadMessage({ titulo, canal, duracao, plataforma, usuario, e
   return formatMessage({ icone: "📥", titulo: "Download", campos });
 }
 
+/**
+ * 📥 LEGENDA DE MÍDIA — molde pedido para o envio final do arquivo:
+ *
+ *   🎬 *Título:* [title]
+ *   👤 *Canal/Conta:* [uploader ou channel]
+ *   👥 *Seguidores:* [channel_follower_count ou "Não disponível"]
+ *   ⏱️ *Duração:* [duration_string]
+ *   📺 *Qualidade:* [qualidade escolhida ou "Melhor disponível"]
+ *
+ * @param {object} options
+ * @param {string} [options.titulo]
+ * @param {string} [options.canal]
+ * @param {number|string} [options.seguidores]
+ * @param {string} [options.duracao]
+ * @param {string} [options.qualidade]
+ * @param {string} [options.extra] linha extra opcional no fim
+ */
+export function mediaCaption({
+  titulo,
+  canal,
+  seguidores,
+  duracao,
+  qualidade,
+  extra,
+} = {}) {
+  const seguidoresTexto =
+    seguidores === 0 || seguidores
+      ? String(seguidores)
+      : "Não disponível";
+
+  const campos = [
+    `🎬 *Título:* ${titulo || "Mídia"}`,
+    `👤 *Canal/Conta:* ${canal || "Não disponível"}`,
+    `👥 *Seguidores:* ${seguidoresTexto}`,
+    `⏱️ *Duração:* ${duracao || "Não disponível"}`,
+    `📺 *Qualidade:* ${qualidade || "Melhor disponível"}`,
+  ];
+
+  if (extra) campos.push("", extra);
+
+  return formatMessage({ icone: "📥", titulo: "Download", campos });
+}
+
 /** 🛡️ MODERAÇÃO — ação de administração aplicada a um membro. */
 export function moderationMessage({ resumo, motivo, detalhes = [] } = {}) {
   const campos = [];

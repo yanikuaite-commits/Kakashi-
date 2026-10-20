@@ -28,10 +28,11 @@ import {
   sendInteractiveWithFallback,
   singleSelectList,
 } from "./interactive.js";
-import { RODAPE, downloadMessage } from "./formatMessage.js";
+import { RODAPE, downloadMessage, mediaCaption } from "./formatMessage.js";
 import { errorLog, infoLog } from "./logger.js";
 import { withCreditsContext } from "../services/credits.js";
-import { downloadVideo } from "../services/downloader.js";
+import { downloadYouTubeVideo } from "../services/downloader.js";
+import { sendMediaByRule } from "./sendMedia.js";
 
 // TTL da pendência: 2 minutos para escolher a qualidade.
 export const VIDEO_FORMAT_TTL_MS = INTERACTIVE_MENU_TTL_MS;
@@ -187,6 +188,11 @@ export async function startVideoFormatMenu({
     ownerName: sanitizeName(ownerName) || "dono do pedido",
     sendReply,
     source,
+    meta: {
+      title: title || "Vídeo",
+      artist: artist || "",
+      duration: duration || "",
+    },
     onFinished,
   };
 
@@ -263,7 +269,7 @@ export async function handleVideoFormatReply({
   sendErrorReply,
   sendVideoFromFile,
   onFinished,
-  download = (source, height) => downloadVideo(source, height),
+  download = (source, height) => downloadYouTubeVideo(source, height),
 }) {
   const value = String(text || "").trim();
   const isToken = value.startsWith("vfmt:");
@@ -329,7 +335,25 @@ export async function handleVideoFormatReply({
     result = await withCreditsContext(jid, () =>
       download(pending.source, choice.height),
     );
-    await sendVideoFromFile(result.filePath, `🎬 Vídeo em ${choice.label}`);
+
+    // Legenda com os metadados do yt-dlp (título, canal, seguidores, duração).
+    const caption = mediaCaption({
+      titulo: result.title || pending.meta?.title || "Vídeo",
+      canal: result.artist || pending.meta?.artist || "",
+      seguidores: result.followers,
+      duracao: result.durationString || pending.meta?.duration || "Não disponível",
+      qualidade: choice.label,
+    });
+
+    // Regra do YouTube: documento acima de 100 MB, vídeo até 100 MB.
+    await sendMediaByRule({
+      socket,
+      chatId,
+      result,
+      caption,
+      rule: "youtube",
+      sendVideoFromFile,
+    });
 
     infoLog(
       `[vfmt] vídeo em ${choice.label} enviado (id ${result?.filePath || "?"}); a chamar onFinished`,

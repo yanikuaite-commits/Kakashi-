@@ -27,6 +27,7 @@ import { handleAudioFormatReply } from "../utils/audioFormatMenu.js";
 import { handleInteractiveMenuReply } from "../utils/interactive.js";
 import { handleVideoFormatReply } from "../utils/videoFormatMenu.js";
 import { handleGuidedFlow, resumePendingFunction } from "../interactive/flow.js";
+import { handleAnimeReply } from "../utils/animeMenu.js";
 
 export async function onMessagesUpsert({ socket, messages, startProcess }) {
   if (!messages.length) {
@@ -118,6 +119,21 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
       const commonFunctions = loadCommonFunctions({ socket, webMessage });
 
       if (!commonFunctions) {
+        continue;
+      }
+
+      // Fluxo de animes (HiAnime): antes do fluxo guiado, porque com uma
+      // sessão de anime aberta o próximo texto é o NOME do anime.
+      if (await handleAnimeReply({
+        socket,
+        chatId: commonFunctions.remoteJid,
+        senderLid: commonFunctions.userLid,
+        senderName: webMessage?.pushName,
+        text: commonFunctions.fullMessage,
+        sendReply: commonFunctions.sendReply,
+        sendVideoFromFile: commonFunctions.sendVideoFromFile,
+        prefix: getPrefix(commonFunctions.remoteJid) || PREFIX,
+      })) {
         continue;
       }
 
