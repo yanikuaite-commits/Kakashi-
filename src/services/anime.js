@@ -56,6 +56,17 @@ const PROVIDER_FACTORIES = {
   animekai: (A) => new A.AnimeKai(),
 };
 
+/**
+ * Providers próprios, extraídos do site sem passar pela biblioteca.
+ *
+ * O `anikoto` não depende do `@consumet/extensions`: fala diretamente com um
+ * site que responde a IPs de datacenter, ao contrário dos providers da
+ * biblioteca, que ficam atrás de Cloudflare.
+ */
+const PROVIDERS_PROPIOS = {
+  anikoto: () => import("./anikoto.js"),
+};
+
 let consumetAnime = null;
 const instancias = new Map();
 
@@ -108,34 +119,51 @@ async function loadConsumet() {
     const mod = await import("@consumet/extensions");
     consumetAnime = mod?.ANIME || mod?.default?.ANIME || null;
   } catch (error) {
-    errorLog(`[anime] falha ao carregar @consumet/extensions: ${error.message}`);
-    throw new AnimeApiError(DEP_MISSING_HINT, { cause: error });
+    // Só é erro se algum provider da biblioteca for realmente usado: o
+    // provider próprio (`anikoto`) não depende dela.
+    errorLog(`[anime] @consumet/extensions indisponível: ${error.message}`);
+    return null;
   }
 
-  if (!consumetAnime) throw new AnimeApiError(DEP_MISSING_HINT);
   return consumetAnime;
+}
+
+/** Exige a biblioteca apenas quando um provider dela vai ser construído. */
+async function requireConsumet() {
+  const A = await loadConsumet();
+  if (!A) throw new AnimeApiError(DEP_MISSING_HINT);
+  return A;
 }
 
 /**
  * Providers a tentar, na ordem configurada, ignorando nomes desconhecidos.
  *
- * @returns {Promise<Array<{nome: string, instance: object}>>}
+ * Cada entrada é `{nome, tipo, instance}`: `tipo: "consumet"` usa a biblioteca,
+ * `tipo: "proprio"` usa a extração direta (`src/services/anikoto.js`).
+ *
+ * @returns {Promise<Array<{nome: string, tipo: string, instance: object}>>}
  */
 async function activeProviders() {
-  const A = await loadConsumet();
   const lista = [];
 
   for (const nome of ANIME_PROVIDERS) {
+    const proprio = PROVIDERS_PROPIOS[nome];
     const fabrica = PROVIDER_FACTORIES[nome];
-    if (!fabrica) {
+
+    if (!proprio && !fabrica) {
       errorLog(`[anime] provider desconhecido em ANIME_PROVIDERS: "${nome}"`);
       continue;
     }
 
     if (!instancias.has(nome)) {
       try {
-        const instance = fabrica(A);
-        applyProviderClient(instance, nome);
+        let instance;
+        if (proprio) {
+          instance = await proprio();
+        } else {
+          instance = fabrica(await requireConsumet());
+          applyProviderClient(instance, nome);
+        }
         instancias.set(nome, instance);
       } catch (error) {
         errorLog(`[anime] provider "${nome}" indisponível: ${error.message}`);
@@ -143,7 +171,11 @@ async function activeProviders() {
       }
     }
 
-    lista.push({ nome, instance: instancias.get(nome) });
+    lista.push({
+      nome,
+      tipo: proprio ? "proprio" : "consumet",
+      instance: instancias.get(nome),
+    });
   }
 
   if (!lista.length) throw new AnimeApiError(NO_PROVIDER_HINT);
@@ -174,8 +206,32 @@ export async function searchAnime(nome) {
   const providers = await activeProviders();
   const falhas = [];
 
-  for (const { nome: provider, instance } of providers) {
+  for (const { nome: provider, tipo, instance } of providers) {
     try {
+      if (tipo === "proprio") {
+        const resultados = await withTimeout(
+          instance.search(termo),
+          ANIME_API_TIMEOUT_MS,
+          `${provider}.search`,
+        );
+        const primeiro = resultados?.[0];
+
+        if (!primeiro?.id) {
+          falhas.push(`${provider}: sem resultados`);
+          continue;
+        }
+
+        infoLog(`[anime] "${primeiro.title}" encontrado em ${provider}`);
+
+        return {
+          id: `${primeiro.id}:${primeiro.slug}`,
+          provider,
+          title: primeiro.title || termo,
+          image: primeiro.image || null,
+          releaseDate: null,
+        };
+      }
+
       const res = await withTimeout(
         instance.search(termo),
         ANIME_API_TIMEOUT_MS,
@@ -210,12 +266,48 @@ export async function searchAnime(nome) {
 /**
  * Informações do anime (com episódios) no provider onde foi encontrado.
  *
+ * No provider próprio, o `id` chega como `"<numId>:<slug>"` e cada episódio
+ * passa a carregar `"<slug>::<epId>::<dataIds>"`, porque a cadeia do anikoto
+ * precisa do slug (Referer) e do `data-ids` em todos os passos seguintes.
+ *
  * @param {string} id
  * @param {string} provider
  * @returns {Promise<{id: string, provider: string, title: string, episodes: Array<object>}>}
  */
 export async function getAnimeInfo(id, provider) {
-  const instance = await resolveProvider(provider);
+  const { tipo, instance } = await resolveProvider(provider);
+
+  if (tipo === "proprio") {
+    const [animeId, slug] = String(id).split(":");
+    const lista = await withTimeout(
+      instance.episodes(animeId, slug),
+      ANIME_API_TIMEOUT_MS,
+      `${provider}.episodes`,
+    ).catch((error) => {
+      errorLog(`[anime] ${provider} falhou em info: ${error.message}`);
+      throw new AnimeApiError(
+        "A fonte de animes não devolveu os episódios deste título. Tente outro nome.",
+        { cause: error },
+      );
+    });
+
+    if (!lista?.length) {
+      throw new AnimeApiError("Este anime não tem episódios disponíveis na fonte.");
+    }
+
+    return {
+      id: String(id),
+      provider,
+      // Vazio de propósito: o menu faz `info.title || anime.title` e o título
+      // da pesquisa ("Naruto") é melhor do que o slug ("naruto-eybxz").
+      title: "",
+      episodes: lista.map((episode) => ({
+        id: `${slug}::${episode.id}::${episode.ids}`,
+        number: episode.number,
+        title: "",
+      })),
+    };
+  }
 
   const info = await withTimeout(
     instance.fetchAnimeInfo(id),
@@ -250,7 +342,30 @@ export async function getAnimeInfo(id, provider) {
  * @returns {Promise<Array<{url: string, label: string, isM3U8: boolean}>>}
  */
 export async function getEpisodeSources(episodeId, provider) {
-  const instance = await resolveProvider(provider);
+  const { tipo, instance } = await resolveProvider(provider);
+
+  if (tipo === "proprio") {
+    const [slug, epId, ids] = String(episodeId).split("::");
+    const url = await withTimeout(
+      instance.sources({ id: epId, ids }, slug),
+      ANIME_API_TIMEOUT_MS,
+      `${provider}.sources`,
+    ).catch((error) => {
+      errorLog(`[anime] ${provider} falhou nas fontes: ${error.message}`);
+      throw new AnimeApiError(
+        "Não consegui obter o link de streaming deste episódio. Tente outro episódio ou qualidade.",
+        { cause: error },
+      );
+    });
+
+    if (!url) {
+      throw new AnimeApiError(
+        "Nenhum link de streaming foi encontrado para este episódio.",
+      );
+    }
+
+    return normalizeSources([{ url, quality: "auto", isM3U8: true }]);
+  }
 
   const data = await withTimeout(
     instance.fetchEpisodeSources(episodeId),
@@ -290,5 +405,5 @@ async function resolveProvider(provider) {
     );
   }
 
-  return encontrado.instance;
+  return encontrado;
 }

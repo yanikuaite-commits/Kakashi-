@@ -295,8 +295,13 @@ export const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || "";
 //
 // ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
 // preferência. Cada provider é tentado até um devolver o episódio.
+//
+// `anikoto` é o único extraído diretamente pelo bot (`src/services/anikoto.js`)
+// e o único que responde a IPs de datacenter — por isso vem primeiro. Os
+// restantes vêm da biblioteca e servem de alternativa (AnimeUnity funciona de
+// IP residencial e de alguns datacenters; ficam a seguir por isso).
 export const ANIME_PROVIDERS = (
-  process.env.ANIME_PROVIDERS || "animeunity,animepahe"
+  process.env.ANIME_PROVIDERS || "anikoto,animeunity,animepahe"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())

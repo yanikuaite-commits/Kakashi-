@@ -208,33 +208,50 @@ the GenDownload API when the binary is missing or the extraction fails.
 - `YTDLP_ENABLED=false` disables it entirely; nothing breaks without the binary
 - YouTube blocks datacenter IPs (Render included) with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
 
-### Animes (providers via @consumet/extensions)
+### Animes (anikoto + providers via @consumet/extensions)
 
 `src/services/anime.js` searches a live provider, lists episodes and returns
-streaming sources; `src/utils/animeMenu.js` runs the interactive flow (nome →
-episódios → qualidade → download) and `src/utils/animeFormat.js` holds the pure
-helpers.
+streaming sources; `src/services/anikoto.js` is the in-house provider;
+`src/utils/animeMenu.js` runs the interactive flow (nome → episódios →
+qualidade → download) and `src/utils/animeFormat.js` holds the pure helpers.
 
-- extraction runs **in-process** through the `@consumet/extensions` library, with
-  no Consumet server and no self-hosting. The public `api.consumet.org` instance
-  was shut down (HTTP 451) and the HiAnime provider (ex-Zoro) shut down for good
-  in March 2026, so pointing at a Consumet server would no longer help — there is
-  no live source underneath
+- **`anikoto` is the default and the only provider that works from a datacenter
+  IP (Render).** It is scraped by the bot itself, not by the library, because
+  every `@consumet/extensions` anime provider sits behind Cloudflare and/or is
+  dead. The chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
+  `/ajax/server/list?servers=<data-ids>` → `/ajax/server?get=<link>&sv=<sv>` →
+  the megaplay player → `/stream/getSources?id=<mediaid>`; the m3u8 comes in the
+  `enc` field, AES-256-CBC encrypted with a key/IV hardcoded in the player's JS
+  (`MEGAPLAY_KEY`/`MEGAPLAY_IV` in `src/services/anikoto.js` — public constants,
+  not our secret)
+- the anikoto `Referer` must be the watch page or the site answers "bad request";
+  episode ids therefore carry `<slug>::<epId>::<dataIds>`, and the anime id
+  carries `<numId>:<slug>`, so every later step has what it needs without state
+- the anikoto CDN (`fetch.nexabloom.top`) passes a **Cloudflare challenge** on
+  the m3u8 fetch. `src/utils/animeMenu.js` (`animeDownloadArgs`) adds
+  `--extractor-args generic:impersonate` and `--referer https://megaplay.buzz/`
+  to the yt-dlp call; `downloadWithYtDlp` accepts `extraArgs` for that. Without
+  impersonation (which needs the standalone binary's `curl_cffi`) the download
+  fails with HTTP 403
+- the library providers remain as fallback; extraction runs **in-process**
+  through `@consumet/extensions`, with no Consumet server and no self-hosting.
+  The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
+  provider (ex-Zoro) shut down for good in March 2026
 - `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `animeunity,animepahe`); each provider is tried until one
+  (default `anikoto,animeunity,animepahe`); each provider is tried until one
   returns the episode, and the winning provider is carried in the session so
-  `fetchAnimeInfo`/`fetchEpisodeSources` hit the same source
+  `getAnimeInfo`/`getEpisodeSources` hit the same source
 - the returned link is an m3u8/mp4 that yt-dlp downloads; HLS sources are
   preferred over DASH because some `.mpd` files from these sites ship without an
   audio track
 - these sites change domain and die without notice, so a provider that works
   today may need replacing tomorrow: fix by editing `ANIME_PROVIDERS`, never by
   hardcoding a domain in a command
-- **every one of these sites sits behind Cloudflare, and the library sends no
+- **the library sites sit behind Cloudflare, and the library sends no
   `User-Agent`** (axios defaults to `axios/1.x`), which Cloudflare blocks from
   datacenter IPs — Render included. This is the same class of block as YouTube's
   "confirm you're not a bot". `ANIME_USER_AGENT` / `ANIME_ACCEPT_LANGUAGE`
-  (`src/config.js`) are applied to each provider's HTTP client in
+  (`src/config.js`) are applied to each library provider's HTTP client in
   `applyProviderClient`; without them search fails with "nenhuma fonte respondeu"
   even while the site is up. If the host IP is challenged even with browser
   headers, set `ANIME_PROXY_URL` to a residential HTTP proxy

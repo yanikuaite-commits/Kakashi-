@@ -357,7 +357,7 @@ async function pickOutputPath(stdout, id) {
  */
 export async function downloadWithYtDlp(
   url,
-  { audio = false, height, maxBytes = MAX_FILE_SIZE_BYTES } = {},
+  { audio = false, height, maxBytes = MAX_FILE_SIZE_BYTES, extraArgs = [] } = {},
 ) {
   const binary = await resolveYtDlpBinary();
 
@@ -375,6 +375,9 @@ export async function downloadWithYtDlp(
 
   const args = [
     ...commonArgs(),
+    // Antes das flags fixas: quem chama pode acrescentar headers/impersonation
+    // (ex.: o CDN de animes exige Referer e passa por desafio Cloudflare).
+    ...extraArgs,
     "--max-filesize",
     String(maxBytes),
     "-o",

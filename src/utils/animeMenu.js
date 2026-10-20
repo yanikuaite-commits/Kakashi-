@@ -397,6 +397,28 @@ async function sendQualityList({ socket, session, episodeIndex }) {
 
 /* ═══════════ PASSO 4 · BAIXAR E ENVIAR ═══════════ */
 
+/**
+ * Argumentos extra do yt-dlp consoante o provider.
+ *
+ * O CDN do anikoto (`fetch.nexabloom.top`) entrega o m3u8 apenas a pedidos que
+ * pareçam um browser: o yt-dlp tem de imitar o TLS/HTTP de um Chrome
+ * (`generic:impersonate`) e enviar o `Referer` do player, senão responde 403
+ * (desafio Cloudflare). Nos outros providers não se acrescenta nada, para não
+ * mexer num caminho que já funciona.
+ *
+ * @param {string} provider
+ * @returns {string[]}
+ */
+function animeDownloadArgs(provider) {
+  if (String(provider || "").toLowerCase() !== "anikoto") return [];
+  return [
+    "--extractor-args",
+    "generic:impersonate",
+    "--referer",
+    "https://megaplay.buzz/",
+  ];
+}
+
 async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile }) {
   const source = session.sources[sourceIndex];
   if (!source?.url) {
@@ -423,7 +445,10 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
   let result;
   try {
     result = await withCreditsContext(session.ownerId, () =>
-      downloadWithYtDlp(source.url, { maxBytes: ANIME_MAX_DOWNLOAD_BYTES }),
+      downloadWithYtDlp(source.url, {
+        maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
+        extraArgs: animeDownloadArgs(session.provider),
+      }),
     );
 
     const tamanhoMB = result.fileSize / (1024 * 1024);
