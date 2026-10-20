@@ -37,6 +37,7 @@ import {
   YTDLP_TIMEOUT_MS,
 } from "../config.js";
 import { infoLog, warningLog } from "../utils/logger.js";
+import { downscaleVideo, probeVideoHeight } from "./videoDownscale.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
@@ -349,16 +350,20 @@ async function pickOutputPath(stdout, id) {
  *
  * @param {string} url
  * @param {{ audio?: boolean, height?: number|string, maxBytes?: number,
- *   extraArgs?: string[], concurrentFragments?: number }} options
+ *   extraArgs?: string[], concurrentFragments?: number,
+ *   downscaleHeight?: number }} options
  *   `maxBytes` sobrepõe o limite padrão de 100 MB (os animes aceitam documento
  *   até 200 MB, então precisam de um limite maior); `extraArgs` acrescenta
  *   flags ao yt-dlp (ex.: `--impersonate` e `--referer` para o CDN de animes);
  *   `concurrentFragments` controla o `-N` (1 = sequencial, para CDNs com rate
- *   limit).
+ *   limit); `downscaleHeight` baixa o melhor formato disponível e reduz o
+ *   ficheiro para essa altura com o ffmpeg — necessário quando a fonte só
+ *   publica 1080p e o `maxBytes` não pode ser aplicado à fonte (o
+ *   `--max-filesize` do yt-dlp é ignorado em HLS).
  * @returns {Promise<{ filePath: string, mimetype: string, fileName: string,
  *   title: string, artist: string, thumbnail: string|null, fileSize: number,
  *   duration: number, durationString: string, followers: number|null,
- *   quality: string|null }>}
+ *   quality: string|null, downscaled: boolean }>}
  */
 export async function downloadWithYtDlp(
   url,
@@ -368,6 +373,7 @@ export async function downloadWithYtDlp(
     maxBytes = MAX_FILE_SIZE_BYTES,
     extraArgs = [],
     concurrentFragments = YTDLP_CONCURRENT_FRAGMENTS,
+    downscaleHeight = 0,
   } = {},
 ) {
   const binary = await resolveYtDlpBinary();
@@ -421,6 +427,11 @@ export async function downloadWithYtDlp(
       "-N",
       String(concurrentFragments),
       "-f",
+      // O seletor prefere a altura pedida e só cai no melhor disponível quando
+      // a fonte não tem nada abaixo do limite. Com `downscaleHeight`, esse
+      // fallback é depois reduzido pelo ffmpeg — por isso o seletor continua a
+      // usar `height` (não "best"): quando a fonte JÁ tem 480p, nada é
+      // reduzido e não se desperdiça rede nem disco a baixar 1080p.
       buildFormatSelector(height),
     );
   }
@@ -429,7 +440,26 @@ export async function downloadWithYtDlp(
 
   try {
     const { stdout } = await runBinary(binary, args);
-    const filePath = await pickOutputPath(stdout, id);
+    let filePath = await pickOutputPath(stdout, id);
+
+    // A fonte só tinha uma resolução (ex.: 1080p): baixa-se o que existe e
+    // reduz-se localmente, porque o `--max-filesize` é ignorado em HLS e o
+    // ficheiro bruto estoura o teto antes de qualquer verificação.
+    let downscaled = false;
+    if (downscaleHeight && !audio) {
+      const alturaFonte = await probeVideoHeight(filePath);
+
+      if (alturaFonte && alturaFonte > downscaleHeight) {
+        infoLog(
+          `[ytdlp] fonte em ${alturaFonte}p; a reduzir para ${downscaleHeight}p`,
+        );
+        const reduzido = await downscaleVideo(filePath, downscaleHeight);
+        await rm(filePath, { force: true }).catch(() => {});
+        filePath = reduzido;
+        downscaled = true;
+      }
+    }
+
     const { size } = await stat(filePath);
 
     if (size > maxBytes) {
@@ -457,6 +487,7 @@ export async function downloadWithYtDlp(
       durationString: info?.durationString || "",
       followers: info?.followers ?? null,
       quality: info?.quality || null,
+      downscaled,
     };
   } catch (error) {
     await removeFilesByPrefix(id);

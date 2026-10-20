@@ -182,6 +182,20 @@ lista não abrir, responda com o número de 1 a 5. Links de outras plataformas e
 Downloads têm timeout de cinco minutos e limite de 100 MB por arquivo;
 os fallbacks de ATTP e os ajustes de IA ficam em `src/config.js`: modelos/temperatura da Groq (`GROQ_*`) e imagem da Google (`GEMINI_*`).
 
+### Animes (`.anime <nome>`)
+
+O fluxo é: escolher o título → temporada (quando a fonte as agrupa) → episódio →
+qualidade → download. O episódio é sempre entregue em **480p**, para caber no
+limite de envio (documento até 200 MB); acima disso o envio é cancelado e o bot
+pede outra qualidade.
+
+A fonte padrão (`anikoto`) publica o stream **só em 1080p** — não existe 480p
+para escolher. Por isso o bot baixa o episódio e reduz a resolução localmente
+com o `ffmpeg`, em vez de confiar no seletor de formatos do yt-dlp (que cairia
+em 1080p, ~350 MB). Um episódio de 23 min sai com ~70 MB depois da redução. O
+`ffmpeg` já vem na imagem do `Dockerfile`; em hosts sem ele, os animes não são
+reduzidos (e um episódio em 1080p pode ser cancelado pelo limite de 200 MB).
+
 ### Menu principal visual (`.menu`)
 
 O `.menu` abre um card com imagem de cabeçalho, o molde “🌐 / INFORMAÇÕES”,

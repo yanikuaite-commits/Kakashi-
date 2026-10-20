@@ -14,15 +14,19 @@
  *      fica curta e todos os episódios continuam alcançáveis;
  *   4. ao escolher o episódio, busca as `sources` e lista as qualidades
  *      (rowId `anm:src:<índice>`);
- *   5. ao escolher a qualidade, baixa com o yt-dlp limitado a `ANIME_MAX_HEIGHT`
- *      (480p) e aplica a regra de tamanho (a mesma do YouTube, com teto maior):
+ *   5. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
+ *      (a mesma do YouTube, com teto maior):
  *        > 200 MB   → cancela e pede qualidade menor;
  *        100–200 MB → envia como DOCUMENTO;
  *        ≤ 100 MB   → envia como VÍDEO.
  *
- * A resolução é fixa em 480p: o m3u8 do provider traz 240p–1080p e sem limite o
- * yt-dlp escolhia 1080p, estourando o teto de 200 MB. A lista de qualidades
- * escolhe a *fonte* (URL), não a resolução final.
+ * A resolução é fixa em 480p. O m3u8 de alguns providers (o `anikoto`) traz
+ * UMA só variante, em 1080p: não há 480p para escolher, o seletor do yt-dlp cai
+ * no melhor disponível e o episódio sai com ~350 MB. Como o `--max-filesize` é
+ * ignorado em HLS, o ficheiro é reduzido localmente com o ffmpeg
+ * (`downscaleHeight` → `src/services/videoDownscale.js`). Quando a fonte JÁ tem
+ * 480p, nada é reduzido. A lista de qualidades escolhe a *fonte* (URL), não a
+ * resolução final.
  *
  * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
  * tem limite de tamanho e os links de stream são longos/assinados; o array real
@@ -34,6 +38,7 @@ import fs from "node:fs";
 import { ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT } from "../config.js";
 import { getAnimeInfo, getAnimeSeasons, getEpisodeSources, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
+import { isFfmpegAvailable } from "../services/videoDownscale.js";
 import { withCreditsContext } from "../services/credits.js";
 import { mediaUploadFromFile } from "./mediaSend.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
@@ -542,7 +547,7 @@ async function sendQualityList({ socket, session, episodeIndex }) {
         canal: animeProviderLabel(session.provider),
         duracao: session.episode.title || "—",
         qualidade: "Escolha a qualidade",
-        extra: "⬇️ Escolha a qualidade para baixar.",
+        extra: `⬇️ O episódio sai em ${ANIME_MAX_HEIGHT}p para caber no limite de envio.`,
       }),
       title: "Qualidade",
       rows,
@@ -619,6 +624,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
         maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
         extraArgs: animeDownloadArgs(session.provider),
         concurrentFragments: animeConcurrentFragments(session.provider),
+        downscaleHeight: ANIME_MAX_HEIGHT,
       }),
     );
 

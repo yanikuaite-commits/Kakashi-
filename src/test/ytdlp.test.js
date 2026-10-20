@@ -13,8 +13,22 @@ const creditsFile = path.join(ROOT_DIR, "database", "credits.json");
 // O binário é falso: nenhum teste aqui acessa a internet.
 const fakeDir = path.join(TMP_DIR, `fake-ytdlp-${randomUUID()}`);
 const fakeBinary = path.join(fakeDir, "yt-dlp");
+const fakeFfmpeg = path.join(fakeDir, "ffmpeg");
+const fakeFfprobe = path.join(fakeDir, "ffprobe");
 const cookiesFile = path.join(fakeDir, "cookies.txt");
 const argsLog = path.join(fakeDir, "args.log");
+
+const fakeFfmpegSource = `#!/usr/bin/env node
+import fs from "node:fs";
+const args = process.argv.slice(2);
+if (args.includes("-version")) { console.log("ffmpeg version 7.1.5"); process.exit(0); }
+fs.writeFileSync(args.at(-1), Buffer.alloc(64, 98));
+`;
+
+const fakeFfprobeSource = `#!/usr/bin/env node
+// O ficheiro bruto do yt-dlp é 1080p: força a redução.
+console.log(JSON.stringify({ streams: [{ height: 1080 }] }));
+`;
 
 const fakeSource = `#!/usr/bin/env node
 import fs from "node:fs";
@@ -65,10 +79,15 @@ process.env.YTDLP_COOKIES_PATH = cookiesFile;
 process.env.YTDLP_PROXY = "http://proxy.exemplo:8080";
 process.env.YTDLP_IMPERSONATE = "chrome";
 process.env.FAKE_YTDLP_LOG = argsLog;
+process.env.FFMPEG_PATH = fakeFfmpeg;
 
 await mkdir(fakeDir, { recursive: true });
 await writeFile(fakeBinary, fakeSource);
+await writeFile(fakeFfmpeg, fakeFfmpegSource);
+await writeFile(fakeFfprobe, fakeFfprobeSource);
 await chmod(fakeBinary, 0o755);
+await chmod(fakeFfmpeg, 0o755);
+await chmod(fakeFfprobe, 0o755);
 await writeFile(cookiesFile, "# Netscape HTTP Cookie File\n");
 
 const {
@@ -239,6 +258,32 @@ test("o downloader usa o yt-dlp e cobra o extra de mídia longa", async () => {
   assert.equal(result.duration, 700);
   // 700s (10 a 30 min) => +4 créditos extras.
   assert.equal(accountBalance(getAccount(jid)), before - 4);
+
+  await rm(result.filePath, { force: true });
+});
+
+test("fonte só em 1080p é reduzida para 480p quando o downscale é pedido", async () => {
+  const result = await downloadWithYtDlp("https://exemplo.test/video", {
+    height: 480,
+    downscaleHeight: 480,
+  });
+
+  assert.equal(result.downscaled, true);
+  // O ffmpeg falso grava 64 bytes; o bruto do yt-dlp tinha 32.
+  assert.equal(result.fileSize, 64);
+  assert.match(result.filePath, /\.480p\.mp4$/);
+
+  await rm(result.filePath, { force: true });
+});
+
+test("sem downscale, o ficheiro bruto é entregue sem passar pelo ffmpeg", async () => {
+  const result = await downloadWithYtDlp("https://exemplo.test/video", {
+    height: 480,
+  });
+
+  assert.equal(result.downscaled, false);
+  assert.equal(result.fileSize, 32);
+  assert.doesNotMatch(result.filePath, /\.480p\.mp4$/);
 
   await rm(result.filePath, { force: true });
 });

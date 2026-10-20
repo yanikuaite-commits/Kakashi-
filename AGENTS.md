@@ -286,10 +286,20 @@ helpers.
   `≤ 100 MB` sends as video — the document threshold is the same rule YouTube
   uses (`decideYouTubeSend`), the 200 MB ceiling is anime-specific
   (see `src/utils/mediaSend.js`)
-- resolution is fixed at `ANIME_MAX_HEIGHT` (480p): the provider's m3u8 carries
-  240p–1080p and, with no limit, yt-dlp picked 1080p and blew past the 200 MB
-  ceiling (a 24 min episode is ~470 MB at 1080p vs ~70 MB at 480p). The quality
-  list picks the *source* (URL), not the final resolution
+- resolution is fixed at `ANIME_MAX_HEIGHT` (480p). **This cannot be done with
+  the yt-dlp format selector alone**: the anikoto master.m3u8 carries a single
+  variant (1920x1080), so `[height<=480]` matches nothing, the selector falls
+  back to the best available and the episode comes out at ~350 MB — above the
+  200 MB ceiling. `--max-filesize` does not help either: it is ignored for HLS
+  (verified — a `--max-filesize 100M` run still wrote 352 MB). The fix is to
+  download what exists and downscale locally with ffmpeg: `animeMenu` passes
+  `downscaleHeight` to `downloadWithYtDlp`, which probes the file with ffprobe
+  and, when it is taller than the target, re-encodes it
+  (`src/services/videoDownscale.js`, `scale=-2:480`, `libx264 -crf 28`).
+  Verified end to end: a 23 min episode went from 352 MB (1080p) to 72 MB
+  (854x480) and fits the ceiling. When the source already has 480p, nothing is
+  downscaled. The quality list picks the *source* (URL), not the final
+  resolution
 
 ### Media Services
 

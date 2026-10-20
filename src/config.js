@@ -292,6 +292,15 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 );
 
 // ==========================================================================
+// FFMPEG (redução de resolução dos animes)
+// ==========================================================================
+// Alguns providers publicam o m3u8 só em 1080p (sem 480p para escolher), então
+// o episódio é baixado e reduzido localmente. O ffmpeg vem na imagem do
+// Dockerfile; FFMPEG_PATH permite apontar para outro binário.
+export const FFMPEG_PATH = process.env.FFMPEG_PATH || "";
+export const FFMPEG_TIMEOUT_MS = Number(process.env.FFMPEG_TIMEOUT_MS) || 10 * 60 * 1000;
+
+// ==========================================================================
 // ANIMES (fontes de streaming via @consumet/extensions, em processo)
 // ==========================================================================
 // A API pública `api.consumet.org` foi DESATIVADA e o provider HiAnime fechou
