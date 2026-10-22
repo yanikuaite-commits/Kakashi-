@@ -3,7 +3,7 @@ import { sendTabela } from "../../utils/richTable.js";
 
 export default {
   name: "tabela-creditos",
-  description: "Mostra a tabela de pacotes de créditos (5, 10 e 20 MT)",
+  description: "Mostra a tabela de pacotes de créditos (5, 10, 20, 30 e 50 MT)",
   commands: ["tabela-creditos", "tabela-pacotes", "pacotes"],
   usage: `${PREFIX}tabela-creditos`,
   /**

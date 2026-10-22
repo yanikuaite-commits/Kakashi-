@@ -130,6 +130,8 @@ test("créditos por valor saem da tabela de créditos", () => {
   assert.equal(creditsForAmount(5), 15);
   assert.equal(creditsForAmount(10), 30);
   assert.equal(creditsForAmount(20), 55);
+  assert.equal(creditsForAmount(30), 85);
+  assert.equal(creditsForAmount(50), 120);
   assert.equal(creditsForAmount(7), null, "valor fora da tabela não inventa créditos");
   assert.equal(creditsForAmount(0), null);
 });
