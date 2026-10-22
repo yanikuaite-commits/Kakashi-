@@ -107,10 +107,10 @@ after(async () => {
 });
 
 test("custo por comando: tabela, isentos e padrão", () => {
-  assert.equal(commandCost({ name: "tik-tok", commands: ["tik-tok", "ttk", "tik"] }), 3);
-  assert.equal(commandCost({ name: "play-video", commands: ["play-video", "pv"] }), 4);
-  assert.equal(commandCost({ name: "deepseek", commands: ["deepseek"] }), 2);
-  assert.equal(commandCost({ name: "dado", commands: ["dado", "dice"] }), 1);
+  assert.equal(commandCost({ name: "tik-tok", commands: ["tik-tok", "ttk", "tik"] }), 7);
+  assert.equal(commandCost({ name: "play-video", commands: ["play-video", "pv"] }), 8);
+  assert.equal(commandCost({ name: "deepseek", commands: ["deepseek"] }), 6);
+  assert.equal(commandCost({ name: "dado", commands: ["dado", "dice"] }), 5);
   assert.equal(commandCost({ name: "conta", commands: ["conta", "creditos"] }), 0);
   assert.equal(commandCost({ name: "menu", commands: ["menu", "help"] }), 0);
   assert.equal(commandCost({ name: "ping", commands: ["ping"] }), 0);
@@ -255,7 +255,7 @@ test("mensagens de créditos explicam saldo, reset e recarga com o dono", () => 
 
   const costs = costsMessage({ prefix: "." });
   assert.match(costs, /CUSTOS EM CRÉDITOS/);
-  assert.match(costs, /\.tik tok — 3 créditos/);
+  assert.match(costs, /\.tik tok — 7 créditos/);
   assert.match(costs, /acima de 30 min — \+6/);
 });
 
@@ -325,23 +325,24 @@ test("dono recarrega créditos e o usuário recarregado volta a usar", async () 
     assert.equal(getAccount(memberJid).paidCredits, 50);
     assert.equal(accountBalance(getAccount(OWNER_LID)), ownerBefore);
 
-    // O usuário recarregado volta a usar: gasta 1 crédito dos recarregados.
+    // O usuário recarregado volta a usar: gasta o custo de .dado dos recarregados.
+    const dadoCost = commandCost({ name: "dado", commands: ["dado", "dice"] });
     const afterRecharge = await runCommand(memberJid, remoteJid, ".dado 3");
     assert.equal(afterRecharge.stickers.length, 1);
-    assert.equal(accountBalance(getAccount(memberJid)), 49);
-    assert.equal(getAccount(memberJid).paidCredits, 49);
+    assert.equal(accountBalance(getAccount(memberJid)), 50 - dadoCost);
+    assert.equal(getAccount(memberJid).paidCredits, 50 - dadoCost);
 
     // Recargas inválidas têm resposta clara e não mudam o saldo.
     const noUser = await runCommand(OWNER_LID, remoteJid, ".recarregar");
     assert.match(noUser.text, /Mencione o usuário/);
     const noAmount = await runCommand(OWNER_LID, remoteJid, `.recarregar ${mention}`);
     assert.match(noAmount.text, /quantos créditos/i);
-    assert.equal(accountBalance(getAccount(memberJid)), 49);
+    assert.equal(accountBalance(getAccount(memberJid)), 50 - dadoCost);
 
     // O dono consulta a conta de outro usuário.
     const ownerView = await runCommand(OWNER_LID, remoteJid, `.conta ${mention}`);
     assert.match(ownerView.text, /MINHA CONTA/);
-    assert.match(ownerView.text, /Recarregados: 49/);
+    assert.match(ownerView.text, new RegExp(`Recarregados: ${50 - dadoCost}`));
   } finally {
     activateGroup(remoteJid);
   }

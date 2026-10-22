@@ -210,47 +210,68 @@ export const FREE_COMMANDS = [
   "conta",
   "suporte",
   "exemplos-de-mensagens",
+  "tabela",
+  "tabela-dias",
+  "tabela-creditos",
 ];
 
 // Custo em créditos por comando (nome oficial do comando).
 // Comandos de membro que não estão aqui gastam DEFAULT_COMMAND_CREDITS.
 export const COMMAND_CREDITS = {
   // Downloads
-  "tik-tok": 3,
-  "tik-tok-audio": 2,
-  "instagram": 3,
-  "facebook": 3,
-  "pinterest": 2,
-  "x-twitter": 3,
-  "play-video": 4,
-  "play-audio": 3,
-  "baixar": 3,
-  "anime": 3,
-  "yt-search": 1,
+  "tik-tok": 7,
+  "tik-tok-audio": 6,
+  "instagram": 7,
+  "facebook": 7,
+  "pinterest": 6,
+  "x-twitter": 7,
+  "play-video": 8,
+  "play-audio": 7,
+  "baixar": 7,
+  "anime": 7,
+  "yt-search": 5,
   // Inteligência artificial
-  "deepseek": 2,
-  "gemini": 2,
-  "gpt-5-mini": 3,
-  "flux": 4,
-  "ia-sticker": 5,
-  "tts": 2,
+  "deepseek": 6,
+  "gemini": 6,
+  "gpt-5-mini": 7,
+  "flux": 8,
+  "ia-sticker": 9,
+  "tts": 6,
   // Mídia, stickers e utilidades
-  "sticker": 1,
-  "rename": 1,
-  "attp": 1,
-  "ttp": 1,
-  "brat": 1,
-  "bratvid": 3,
-  "to-mp3": 2,
-  "togif": 2,
-  "toimage": 1,
-  "transcrever": 4,
-  "removebg": 3,
-  "gerar-link": 2,
+  "sticker": 5,
+  "rename": 5,
+  "attp": 5,
+  "ttp": 5,
+  "brat": 5,
+  "bratvid": 7,
+  "to-mp3": 6,
+  "togif": 6,
+  "toimage": 5,
+  "transcrever": 8,
+  "removebg": 7,
+  "gerar-link": 6,
 };
 
 // Custo de qualquer outro comando de membro não listado acima.
-export const DEFAULT_COMMAND_CREDITS = 1;
+export const DEFAULT_COMMAND_CREDITS = 5;
+
+// Custo por episódio de anime baixado. O comando `anime` gasta o custo normal
+// (a pesquisa e o menu), mas cada episódio efetivamente baixado custa isto:
+// o gasto real é o download, não a navegação.
+export const ANIME_EPISODE_CREDITS = 20;
+
+// ==========================================================================
+// PAGAMENTOS E RECARGAS (e-mola / m-pesa)
+// ==========================================================================
+// Números que recebem os pagamentos. O bot só trata como pagamento as
+// mensagens de SMS que citem um destes números.
+export const PAYMENT_E_MOLA_NUMBER = process.env.PAYMENT_E_MOLA_NUMBER || "865672009";
+export const PAYMENT_M_PESA_NUMBER = process.env.PAYMENT_M_PESA_NUMBER || "850446446";
+
+// Quanto tempo o dono tem para confirmar uma recarga antes de a transação
+// caducar (10 horas). Depois disso o usuário tem de enviar o pagamento de novo.
+export const PAYMENT_CONFIRM_TTL_MS =
+  Number(process.env.PAYMENT_CONFIRM_TTL_MS) || 10 * 60 * 60 * 1000;
 
 // Créditos extras para mídias longas/pesadas.
 // A duração é usada quando a API informa; senão, o tamanho do arquivo.

@@ -32,6 +32,7 @@ const BOT_STATE_FILE = "bot-state";
 const PRIVATE_WHITELIST_FILE = "private-whitelist";
 const BLOCKED_COMMANDS_FILE = "blocked-commands";
 const CREDITS_FILE = "credits";
+const PENDING_RECHARGES_FILE = "pending-recharges";
 
 function createIfNotExists(fullPath, formatIfNotExists = []) {
   if (!fs.existsSync(fullPath)) {
@@ -607,4 +608,16 @@ export function readCreditsAccounts() {
 
 export function saveCreditsAccounts(accounts) {
   writeJSON(CREDITS_FILE, accounts, {});
+}
+
+/**
+ * Transações de pagamento pendentes de confirmação do dono (chave = id da
+ * transação). A regra de negócio fica em src/services/recharges.js.
+ */
+export function readPendingRecharges() {
+  return readJSON(PENDING_RECHARGES_FILE, {});
+}
+
+export function savePendingRecharges(recharges) {
+  writeJSON(PENDING_RECHARGES_FILE, recharges, {});
 }

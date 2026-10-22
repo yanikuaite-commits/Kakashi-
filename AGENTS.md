@@ -66,6 +66,8 @@ High-value architectural notes:
 | `src/utils/loadCommonFunctions.js` | Injected helper functions used by command handlers. |
 | `src/utils/database.js` | Safe access layer for JSON persistence. |
 | `src/utils/interactive.js` | Interactive-message builders: `singleSelectButton`, `urlButton`, `ownerButton` (owner WhatsApp link from `MAIN_MENU_OWNER_NUMBER`), `copyButton`. |
+| `src/utils/richTable.js` | Native WhatsApp tables (`RICH_RESPONSE_TABLE`) via `sendRichTable`, plus `sendTabela`, which sends a pricing table from `src/utils/tabelaPrecos.js` and falls back to aligned text when the relay fails. |
+| `src/utils/tabelaPrecos.js` | Pricing-table data and formatting only (no Baileys): `TABELAS` (`dias`, `creditos`), `tabelaOpcoes()`, `tabelaIdDoArgumento()`, `formatTabelaTexto()`. |
 | `src/@types/index.d.ts` | Typing and documentation for command and middleware props. |
 | `src/services/spider-x-api.js` | Spider X integration for downloads, AI, Pinterest, Brat, and related endpoints. |
 | `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
@@ -151,6 +153,84 @@ Mandatory rule:
 - always use `src/utils/database.js`
 
 This keeps persistence behavior consistent and avoids duplicated parsing logic.
+
+## TABLES_AND_PRICING
+
+`tabela` shows both pricing tables through one interactive list (1 = day plans,
+2 = credit packs); `tabela-dias` and `tabela-creditos` open one table directly.
+
+- the data lives in `src/utils/tabelaPrecos.js` (`TABELAS`), which holds no
+  Baileys code so it stays testable; `src/utils/richTable.js` does the sending
+- `tabelaOpcoes()` defines the numbering, so "1 = dias" and "2 = creditos" come
+  from the data, never from a hand-written branch
+- the list rows carry `kmenu:` tokens, not commands: WhatsApp drops oversized
+  `rowId`s, and the mapping to `${prefix}tabela-dias` / `${prefix}tabela-creditos`
+  is registered through `sendInteractiveWithFallback`'s `responseMappings`
+- the same helper registers the numeric fallback (1/2), so the text fallback and
+  the interactive list stay in sync
+- `.tabela 1` and `.tabela 2` skip the list; any other argument is an
+  `InvalidParameterError`
+- `sendTabela` tries the native table and falls back to aligned text
+  (`formatTabelaTexto`) when the relay fails, because not every client renders
+  `RICH_RESPONSE_TABLE`
+- add or change prices in `TABELAS` only; do not duplicate the rows in commands
+- the three commands are in `FREE_COMMANDS`, so checking prices never costs credits
+- each table also carries a structured `valores` array (`{mt, creditos}` /
+  `{dias, mt}`) next to the display `linhas`, so the recharge flow maps a paid
+  amount to credits without parsing the presentation strings
+
+## PAYMENT_RECHARGES
+
+A member pays by e-mola or m-pesa and forwards the SMS to the bot. The owner
+confirms the money by hand; nothing is credited automatically.
+
+Flow:
+
+1. `src/middlewares/onMesssagesUpsert.js` calls `handlePaymentSms` right after
+   `loadCommonFunctions`, before the anime and guided flows (an open anime
+   session would otherwise read the SMS as the anime name). The owner is skipped
+   — he is the one who confirms.
+2. `src/utils/paymentText.js` parses the SMS (`parsePaymentSms`) and is pure: no
+   Baileys, no I/O. It reads the transaction id, amount, fee, destination, name
+   and date/time for both operators, including the m-pesa AM/PM clock.
+3. only SMS that name `PAYMENT_E_MOLA_NUMBER` / `PAYMENT_M_PESA_NUMBER` are
+   treated as payments; a payment made to anyone else is ignored.
+4. `src/services/recharges.js` records the transaction in
+   `database/pending-recharges.json` keyed by the transaction id (or by a
+   signature of the fields when the SMS has no id), so the same SMS cannot pay
+   twice. Credits come from `TABELAS.creditos.valores` by the paid amount.
+5. the group gets the credit table plus a "payment received" note, and the owner
+   gets the transaction details in a private interactive list (confirm/refuse),
+   valid `PAYMENT_CONFIRM_TTL_MS` (10 hours).
+6. `confirmRecharge` closes the transaction before crediting, so a repeated
+   click cannot credit twice; `declineRecharge` cancels without crediting.
+7. after confirming, the owner command calls `notifyRechargeConfirmed`, which
+   posts the confirmation in the chat where the SMS arrived (mentioning who
+   paid) and then re-sends the credit table. The owner confirms in private, so
+   without this the paying member never learns the credits landed.
+8. `startRechargeSweeper` (started in `src/index.js`) expires stale requests
+   every 5 minutes and warns the member where the SMS was sent. The menu timer is
+   a weak guarantee (a new request replaces it), so expiry is confirmed here.
+
+Owner commands: `recarga-confirmar`, `recarga-recusar` and
+`recargas-pendentes`. A value outside the table is refused until the owner passes
+the credits explicitly (`${prefix}recarga-confirmar <id> <creditos>`).
+
+Do not credit on parse alone: the money is only real once the owner confirms.
+Do not lower the "same SMS twice" guard — the transaction id is the only thing
+stopping one payment from being credited repeatedly.
+
+## CREDIT_GATES
+
+Every member command checks the balance before running, not only at the end:
+
+- `dynamicCommand` calls `hasSufficientCredits` and then `chargeCredits`; with no
+  balance the command never starts and the member gets `creditsExhaustedMessage`
+- `ANIME_EPISODE_CREDITS` (20) is charged per downloaded episode in
+  `downloadAndSend`, after the same pre-check; the search and menus cost the
+  normal `anime` command price. A failed download is refunded with
+  `refundCredits`, because nobody pays for an episode that never arrived
+- the owner (`OWNER_LID`) never pays, in commands or in the anime flow
 
 ## ANTI_PAYMENT
 

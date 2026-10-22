@@ -31,10 +31,16 @@
  * @author Dev Gui
  */
 import fs from "node:fs";
-import { ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT } from "../config.js";
+import { ANIME_EPISODE_CREDITS, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
 import { getAnimeInfo, getAnimeSeasons, getEpisodeSources, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
-import { withCreditsContext } from "../services/credits.js";
+import {
+  chargeCredits,
+  creditsExhaustedMessage,
+  hasSufficientCredits,
+  refundCredits,
+  withCreditsContext,
+} from "../services/credits.js";
 import { mediaUploadFromFile } from "./mediaSend.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
@@ -631,6 +637,28 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
   const animeTitulo = session.anime?.title || "Anime";
   const alturaMaxima = animeMaxHeight(session.provider);
 
+  // Cada episódio baixado custa ANIME_EPISODE_CREDITS. A verificação é feita
+  // ANTES de arrancar o download: o dono do bot não gasta e um episódio não
+  // começa sem saldo para o pagar.
+  const contaId = session.ownerId;
+  const cobrar = contaId && contaId !== OWNER_LID;
+
+  if (cobrar) {
+    const saldo = hasSufficientCredits(contaId, ANIME_EPISODE_CREDITS);
+
+    if (!saldo.ok) {
+      dropSession(session);
+      await session.sendReply(
+        creditsExhaustedMessage({
+          commandName: "anime",
+          cost: ANIME_EPISODE_CREDITS,
+          account: saldo.account,
+        }),
+      ).catch(() => {});
+      return true;
+    }
+  }
+
   dropSession(session);
   await session.sendReply("⬇️ Baixando o episódio...").catch(() => {});
 
@@ -642,7 +670,29 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
   }
 
   let result;
+  let pago = 0;
+
   try {
+    if (cobrar) {
+      const charge = chargeCredits(contaId, ANIME_EPISODE_CREDITS, {
+        reason: "anime:episodio",
+        countUsage: true,
+      });
+
+      if (!charge.ok) {
+        await session.sendReply(
+          creditsExhaustedMessage({
+            commandName: "anime",
+            cost: ANIME_EPISODE_CREDITS,
+            account: charge.account,
+          }),
+        ).catch(() => {});
+        return true;
+      }
+
+      pago = charge.charged;
+    }
+
     result = await withCreditsContext(session.ownerId, () =>
       downloadWithYtDlp(source.url, {
         height: alturaMaxima,
@@ -690,6 +740,13 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
     }
   } catch (error) {
     errorLog(`[anime] falha no download: ${error.message}`);
+
+    // Não se cobra um episódio que não foi entregue.
+    if (pago > 0) {
+      refundCredits(contaId, pago);
+      pago = 0;
+    }
+
     await session.sendReply(`❌ Não consegui baixar o episódio: ${error.message}`).catch(
       () => {},
     );
@@ -701,6 +758,8 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
 
   return true;
 }
+
+
 
 /* ═══════════ HANDLER CENTRAL ═══════════ */
 
