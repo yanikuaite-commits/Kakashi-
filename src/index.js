@@ -75,6 +75,7 @@ import { connect } from "./connection.js";
 import { load } from "./loader.js";
 import { startPairingServer } from "./services/pairing-server.js";
 import { badMacHandler } from "./utils/badMacHandler.js";
+import { startRechargeSweeper } from "./utils/paymentFlow.js";
 import {
   bannerLog,
   errorLog,
@@ -127,6 +128,7 @@ async function startBot() {
     const socket = await connect();
 
     load(socket);
+    startRechargeSweeper(socket);
 
     setInterval(() => {
       const currentStats = badMacHandler.getStats();

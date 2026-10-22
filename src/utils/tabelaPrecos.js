@@ -24,6 +24,13 @@ const DIAS = {
     ["30 dias", "90 MT"],
     ["60 dias", "140 MT"],
   ],
+  valores: [
+    { dias: 7, mt: 20 },
+    { dias: 14, mt: 45 },
+    { dias: 20, mt: 60 },
+    { dias: 30, mt: 90 },
+    { dias: 60, mt: 140 },
+  ],
   comando: "tabela-dias",
   resumo: "7, 14, 20, 30 e 60 dias",
 };
@@ -37,6 +44,11 @@ const CREDITOS = {
     ["5 MT", "15 créditos"],
     ["10 MT", "30 créditos"],
     ["20 MT", "55 créditos"],
+  ],
+  valores: [
+    { mt: 5, creditos: 15 },
+    { mt: 10, creditos: 30 },
+    { mt: 20, creditos: 55 },
   ],
   comando: "tabela-creditos",
   resumo: "5, 10 e 20 MT",

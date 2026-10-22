@@ -175,6 +175,58 @@ This keeps persistence behavior consistent and avoids duplicated parsing logic.
   `RICH_RESPONSE_TABLE`
 - add or change prices in `TABELAS` only; do not duplicate the rows in commands
 - the three commands are in `FREE_COMMANDS`, so checking prices never costs credits
+- each table also carries a structured `valores` array (`{mt, creditos}` /
+  `{dias, mt}`) next to the display `linhas`, so the recharge flow maps a paid
+  amount to credits without parsing the presentation strings
+
+## PAYMENT_RECHARGES
+
+A member pays by e-mola or m-pesa and forwards the SMS to the bot. The owner
+confirms the money by hand; nothing is credited automatically.
+
+Flow:
+
+1. `src/middlewares/onMesssagesUpsert.js` calls `handlePaymentSms` right after
+   `loadCommonFunctions`, before the anime and guided flows (an open anime
+   session would otherwise read the SMS as the anime name). The owner is skipped
+   — he is the one who confirms.
+2. `src/utils/paymentText.js` parses the SMS (`parsePaymentSms`) and is pure: no
+   Baileys, no I/O. It reads the transaction id, amount, fee, destination, name
+   and date/time for both operators, including the m-pesa AM/PM clock.
+3. only SMS that name `PAYMENT_E_MOLA_NUMBER` / `PAYMENT_M_PESA_NUMBER` are
+   treated as payments; a payment made to anyone else is ignored.
+4. `src/services/recharges.js` records the transaction in
+   `database/pending-recharges.json` keyed by the transaction id (or by a
+   signature of the fields when the SMS has no id), so the same SMS cannot pay
+   twice. Credits come from `TABELAS.creditos.valores` by the paid amount.
+5. the group gets the credit table plus a "payment received" note, and the owner
+   gets the transaction details in a private interactive list (confirm/refuse),
+   valid `PAYMENT_CONFIRM_TTL_MS` (10 hours).
+6. `confirmRecharge` closes the transaction before crediting, so a repeated
+   click cannot credit twice; `declineRecharge` cancels without crediting.
+7. `startRechargeSweeper` (started in `src/index.js`) expires stale requests
+   every 5 minutes and warns the member where the SMS was sent. The menu timer is
+   a weak guarantee (a new request replaces it), so expiry is confirmed here.
+
+Owner commands: `recarga-confirmar`, `recarga-recusar` and
+`recargas-pendentes`. A value outside the table is refused until the owner passes
+the credits explicitly (`${prefix}recarga-confirmar <id> <creditos>`).
+
+Do not credit on parse alone: the money is only real once the owner confirms.
+Do not lower the "same SMS twice" guard — the transaction id is the only thing
+stopping one payment from being credited repeatedly.
+
+## CREDIT_GATES
+
+Every member command checks the balance before running, not only at the end:
+
+- `dynamicCommand` calls `hasSufficientCredits` and then `chargeCredits`; with no
+  balance the command never starts and the member gets `creditsExhaustedMessage`
+- `ANIME_EPISODE_CREDITS` (20) is charged per downloaded episode in
+  `downloadAndSend`, after the same pre-check; the search and menus cost the
+  normal `anime` command price. A failed download is refunded with
+  `refundCredits`, because nobody pays for an episode that never arrived
+- the owner (`OWNER_LID`) never pays, in commands or in the anime flow
 
 ## ANTI_PAYMENT
 

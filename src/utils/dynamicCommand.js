@@ -29,6 +29,7 @@ import {
   chargeCredits,
   commandCost,
   creditsExhaustedMessage,
+  hasSufficientCredits,
   refundCredits,
   withCreditsContext,
 } from "../services/credits.js";
@@ -232,7 +233,23 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   const cost = !isOwner && type === "member" ? commandCost(command, resolved.commandName) : 0;
   let chargedCredits = 0;
 
+  // Verificação explícita ANTES de executar: sem saldo, o comando nem começa.
   if (cost > 0) {
+    const saldo = hasSufficientCredits(accountId, cost);
+
+    if (!saldo.ok) {
+      await sendReply(
+        creditsExhaustedMessage({
+          commandName: command.name,
+          cost,
+          account: saldo.account,
+          prefix: groupPrefix,
+        }),
+      );
+
+      return;
+    }
+
     const charge = chargeCredits(accountId, cost, {
       reason: `comando:${command.name}`,
       countUsage: true,

@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { test } from "node:test";
+import { ANIME_EPISODE_CREDITS, DATABASE_DIR } from "../config.js";
+import { accountBalance, chargeCredits, getAccount } from "../services/credits.js";
 import {
   getAnimeSession,
   handleAnimeReply,
@@ -457,4 +461,124 @@ test("card de animes leva o botão do dono e mantém Canal", async () => {
   const canal = cta.find((p) => p.display_text === "📢 Canal");
   assert.ok(canal, "o Canal continua no card");
   assert.ok(botoes.length <= 3, "no máximo 3 botões por card");
+});
+
+/* ─────────── Cobrança de créditos por episódio ─────────── */
+
+/**
+ * O download custa ANIME_EPISODE_CREDITS (20) e é verificado ANTES de arrancar.
+ * Sem yt-dlp instalado, o fluxo para antes de tocar na rede, o que permite
+ * provar o portão de saldo e a mensagem de créditos.
+ */
+test("episódio sem saldo para 20 créditos é bloqueado antes do download", async () => {
+  resetAnimeSessions();
+  const dbDir = DATABASE_DIR;
+  const creditsFile = path.join(dbDir, "credits.json");
+  const anterior = await readFile(creditsFile, "utf8").catch(() => null);
+  await writeFile(creditsFile, "{}");
+
+  try {
+    const chatId = "120363111111111111@g.us";
+    const ownerLid = "258840000111@lid";
+    const socket = makeSocket();
+
+    await startAnimeFlow({
+      socket,
+      chatId,
+      ownerLid,
+      ownerName: "Y",
+      sendReply: async () => {},
+    });
+
+    const session = getAnimeSession(chatId, ownerLid);
+    session.stage = "qualidades";
+    session.provider = "anikoto";
+    session.anime = { title: "KAIJU GIRLS" };
+    session.episode = { index: 0, number: 1, title: "", id: "ep-1" };
+    session.sources = [{ url: "https://exemplo.invalido/a.m3u8", label: "480p" }];
+
+    // Zera o saldo: o episódio não pode começar.
+    chargeCredits(ownerLid, accountBalance(getAccount(ownerLid)));
+
+    const replies = [];
+    await handleAnimeReply({
+      socket,
+      chatId,
+      senderLid: ownerLid,
+      senderLids: [ownerLid],
+      senderName: "Y",
+      text: "anm:src:0",
+      sendReply: async (text) => replies.push(String(text)),
+    });
+
+    assert.ok(
+      replies.some((r) => /créditos acabaram/i.test(r)),
+      `esperava o aviso de créditos: ${replies.join(" | ")}`,
+    );
+    assert.equal(accountBalance(getAccount(ownerLid)), 0, "nada foi cobrado");
+  } finally {
+    resetAnimeSessions();
+    if (anterior === null) {
+      await rm(creditsFile, { force: true });
+    } else {
+      await writeFile(creditsFile, anterior);
+    }
+  }
+});
+
+test("com saldo, o episódio passa do portão e cobra 20 créditos", async () => {
+  resetAnimeSessions();
+  const creditsFile = path.join(DATABASE_DIR, "credits.json");
+  const anterior = await readFile(creditsFile, "utf8").catch(() => null);
+  await writeFile(creditsFile, "{}");
+
+  try {
+    const chatId = "120363222222222222@g.us";
+    const ownerLid = "258840000222@lid";
+    const socket = makeSocket();
+
+    await startAnimeFlow({
+      socket,
+      chatId,
+      ownerLid,
+      ownerName: "Y",
+      sendReply: async () => {},
+    });
+
+    const session = getAnimeSession(chatId, ownerLid);
+    session.stage = "qualidades";
+    session.provider = "anikoto";
+    session.anime = { title: "KAIJU GIRLS" };
+    session.episode = { index: 0, number: 1, title: "", id: "ep-1" };
+    session.sources = [{ url: "https://exemplo.invalido/a.m3u8", label: "480p" }];
+
+    // Saldo suficiente (os 30 diários cobrem os 20 do episódio).
+    const antes = accountBalance(getAccount(ownerLid));
+    assert.ok(antes >= ANIME_EPISODE_CREDITS);
+
+    const replies = [];
+    await handleAnimeReply({
+      socket,
+      chatId,
+      senderLid: ownerLid,
+      senderLids: [ownerLid],
+      senderName: "Y",
+      text: "anm:src:0",
+      sendReply: async (text) => replies.push(String(text)),
+    });
+
+    // Sem yt-dlp o download não acontece; o saldo volta ao que era (estorno).
+    assert.equal(
+      accountBalance(getAccount(ownerLid)),
+      antes,
+      "um episódio que falhou não fica cobrado",
+    );
+  } finally {
+    resetAnimeSessions();
+    if (anterior === null) {
+      await rm(creditsFile, { force: true });
+    } else {
+      await writeFile(creditsFile, anterior);
+    }
+  }
 });

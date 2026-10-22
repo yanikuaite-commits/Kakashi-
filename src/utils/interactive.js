@@ -150,6 +150,8 @@ function registerMenu({
   responseMappings = [],
   fallbackActions = [],
   sendReply,
+  ttlMs = INTERACTIVE_MENU_TTL_MS,
+  onExpire,
 }) {
   if (!ownerId || (!ids.length && !fallbackActions.length)) return;
 
@@ -181,10 +183,13 @@ function registerMenu({
   menu.cleanupTimer = setTimeout(() => {
     if (pendingMenus.get(key) !== menu) return;
     pendingMenus.delete(key);
-    Promise.resolve(
-      menu.sendReply?.("⏳ O tempo deste menu terminou. Abre-o novamente para escolher."),
-    ).catch(() => {});
-  }, INTERACTIVE_MENU_TTL_MS);
+    Promise.resolve(onExpire ? onExpire() : null).catch(() => {});
+    if (!onExpire) {
+      Promise.resolve(
+        menu.sendReply?.("⏳ O tempo deste menu terminou. Abre-o novamente para escolher."),
+      ).catch(() => {});
+    }
+  }, ttlMs);
   menu.cleanupTimer.unref?.();
 
   pendingMenus.set(key, menu);
@@ -262,6 +267,8 @@ export async function sendInteractiveWithFallback({
   ownerId,
   responseMappings = [],
   fallbackActions = [],
+  ttlMs = INTERACTIVE_MENU_TTL_MS,
+  onExpire,
 }) {
   /**
    * Envia o conteúdo (card nativeFlow com `interactiveButtons` só com
@@ -277,6 +284,8 @@ export async function sendInteractiveWithFallback({
       ids: idsFromContent(content),
       responseMappings,
       sendReply,
+      ttlMs,
+      onExpire,
     });
     return sent || true;
   } catch (error) {
@@ -299,6 +308,8 @@ export async function sendInteractiveWithFallback({
         responseMappings,
         fallbackActions,
         sendReply,
+        ttlMs,
+        onExpire,
       });
       return true;
     } catch (replyError) {
@@ -317,6 +328,8 @@ export async function sendInteractiveWithFallback({
           responseMappings,
           fallbackActions,
           sendReply,
+          ttlMs,
+          onExpire,
         });
         return true;
       } catch (fallbackError) {

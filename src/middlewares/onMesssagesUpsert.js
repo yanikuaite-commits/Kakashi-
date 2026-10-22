@@ -28,6 +28,8 @@ import { handleInteractiveMenuReply } from "../utils/interactive.js";
 import { handleVideoFormatReply } from "../utils/videoFormatMenu.js";
 import { handleGuidedFlow, resumePendingFunction } from "../interactive/flow.js";
 import { handleAnimeReply } from "../utils/animeMenu.js";
+import { handlePaymentSms } from "../utils/paymentFlow.js";
+import { isBotOwner } from "./index.js";
 
 export async function onMessagesUpsert({ socket, messages, startProcess }) {
   if (!messages.length) {
@@ -119,6 +121,23 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
       const commonFunctions = loadCommonFunctions({ socket, webMessage });
 
       if (!commonFunctions) {
+        continue;
+      }
+
+      // Pagamento (e-mola/m-pesa): lê o SMS reencaminhado antes de qualquer
+      // menu, porque com uma sessão de anime aberta o texto seria o nome do
+      // anime. O dono não entra (ele é quem confirma).
+      if (
+        !isBotOwner({ userLid: commonFunctions.userLid }) &&
+        (await handlePaymentSms({
+          socket,
+          chatId: commonFunctions.remoteJid,
+          senderLid: commonFunctions.userLid || commonFunctions.remoteJid,
+          senderName: webMessage?.pushName,
+          text: commonFunctions.fullMessage,
+          sendReply: commonFunctions.sendReply,
+        }))
+      ) {
         continue;
       }
 

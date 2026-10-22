@@ -148,6 +148,26 @@ export function accountBalance(account) {
   );
 }
 
+/**
+ * O usuário tem créditos suficientes?
+ *
+ * Verificação explícita, para ser usada ANTES de executar uma função: a cobrança
+ * de `chargeCredits` é a última palavra (é ela que debita), mas consultar o
+ * saldo primeiro evita começar um download caro que depois não se pode pagar.
+ *
+ * @param {string} jid
+ * @param {number} amount
+ * @param {{ now?: number }} [options]
+ * @returns {{ ok: boolean, cost: number, balance: number, account: object }}
+ */
+export function hasSufficientCredits(jid, amount, { now = Date.now() } = {}) {
+  const account = getAccount(jid, now);
+  const cost = Math.max(0, Math.ceil(Number(amount) || 0));
+  const balance = accountBalance(account);
+
+  return { ok: cost <= balance, cost, balance, account };
+}
+
 function createAccount(jid, now) {
   const { day } = mozambiqueClock(now);
   const timestamp = new Date(now).toISOString();
