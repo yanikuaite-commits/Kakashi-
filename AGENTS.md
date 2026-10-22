@@ -204,7 +204,11 @@ Flow:
    valid `PAYMENT_CONFIRM_TTL_MS` (10 hours).
 6. `confirmRecharge` closes the transaction before crediting, so a repeated
    click cannot credit twice; `declineRecharge` cancels without crediting.
-7. `startRechargeSweeper` (started in `src/index.js`) expires stale requests
+7. after confirming, the owner command calls `notifyRechargeConfirmed`, which
+   posts the confirmation in the chat where the SMS arrived (mentioning who
+   paid) and then re-sends the credit table. The owner confirms in private, so
+   without this the paying member never learns the credits landed.
+8. `startRechargeSweeper` (started in `src/index.js`) expires stale requests
    every 5 minutes and warns the member where the SMS was sent. The menu timer is
    a weak guarantee (a new request replaces it), so expiry is confirmed here.
 

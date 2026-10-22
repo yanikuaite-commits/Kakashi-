@@ -125,6 +125,62 @@ export function rechargeGroupMessage({ recharge, senderLid }) {
   ].join("\n");
 }
 
+/** Aviso ao usuário de que o dono confirmou e os créditos entraram. */
+export function rechargeConfirmedMessage({ recharge, credited, balance }) {
+  return [
+    "🎉 *Pagamento confirmado!*",
+    "",
+    `💰 Valor: ${recharge.amount} MT (${recharge.providerLabel})`,
+    `🔖 Transação: ${recharge.transactionId || recharge.key}`,
+    `➕ Créditos adicionados: ${credited}`,
+    `💳 Saldo atual: ${balance} créditos`,
+    "",
+    `📊 Vê a tua conta com *${PREFIX}conta*`,
+    `🛒 Queres mais? Confere os pacotes com *${PREFIX}tabela*`,
+  ].join("\n");
+}
+
+/**
+ * Avisa o usuário (no chat onde enviou o SMS) de que a recarga foi confirmada.
+ *
+ * Sem isto o membro que pagou nunca sabe que os créditos entraram: a
+ * confirmação do dono acontece no privado dele.
+ */
+export async function notifyRechargeConfirmed({
+  socket,
+  recharge,
+  credited,
+  balance,
+  sendReply,
+}) {
+  const chatId = recharge?.chatId;
+  if (!chatId) return false;
+
+  const texto = rechargeConfirmedMessage({ recharge, credited, balance });
+
+  try {
+    await socket.sendMessage(chatId, {
+      text: texto,
+      mentions: recharge.senderLid ? [recharge.senderLid] : [],
+    });
+  } catch (error) {
+    errorLog(`[pagamento] falha ao avisar ${recharge.senderLid}: ${error.message}`);
+    return false;
+  }
+
+  // A tabela fecha o ciclo: o membro vê quanto valem os próximos pagamentos.
+  await sendTabela({
+    socket,
+    remoteJid: chatId,
+    id: "creditos",
+    sendReply: sendReply || ((texto) => socket.sendMessage(chatId, { text: String(texto) })),
+  }).catch((error) =>
+    errorLog(`[pagamento] falha ao enviar a tabela ao usuário: ${error.message}`),
+  );
+
+  return true;
+}
+
 /** Aviso de caducidade enviado ao usuário. */
 export function rechargeExpiredMessage() {
   return [

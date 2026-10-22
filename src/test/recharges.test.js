@@ -450,3 +450,111 @@ test("o toque do dono na lista vira o comando de confirmar", async () => {
 
   assert.equal(accountBalance(getAccount(senderLid)), antes + 55);
 });
+
+test("confirmar avisa o usuário no grupo e manda a tabela de créditos", async () => {
+  const chatId = `pagamento-aviso-${runId}@g.us`;
+  const senderLid = testJid("aviso");
+  const enviados = [];
+  const relays = [];
+
+  const socket = {
+    sendMessage: async (jid, content) => {
+      enviados.push({ jid, content });
+      return { key: { id: "fake" } };
+    },
+    relayMessage: async (jid, message) => {
+      relays.push({ jid, message });
+      return { key: { id: "relay" } };
+    },
+  };
+
+  await handlePaymentSms({
+    socket,
+    chatId,
+    senderLid,
+    senderName: "Joel",
+    text: SMS_EMOLA.replace("PP261021.1823.W70113", "TX-AVISO-1"),
+    sendReply: async () => {},
+  });
+
+  const antes = accountBalance(getAccount(senderLid));
+  enviados.length = 0;
+
+  const comando = (
+    await import("../commands/owner/recarga-confirmar.js")
+  ).default;
+
+  await comando.handle({
+    fullArgs: "TX-AVISO-1",
+    socket,
+    sendReply: async (t) => enviados.push({ jid: "dono", content: { text: String(t) } }),
+    sendErrorReply: async () => {},
+  });
+
+  assert.equal(accountBalance(getAccount(senderLid)), antes + 55, "creditou");
+
+  // O usuário recebeu o aviso no chat onde enviou o SMS, não no privado do dono.
+  const aviso = enviados.find(
+    (e) => e.jid === chatId && /PAGAMENTO CONFIRMADO|Pagamento confirmado/i.test(e.content.text),
+  );
+  assert.ok(aviso, `esperava o aviso ao usuário: ${JSON.stringify(enviados.map((e) => e.jid))}`);
+  assert.match(aviso.content.text, /55/);
+  assert.match(aviso.content.text, /85 créditos/);
+  assert.deepEqual(aviso.content.mentions, [senderLid], "menciona quem pagou");
+
+  // E a tabela de créditos foi enviada a seguir (rich response).
+  assert.ok(
+    relays.some((r) => r.jid === chatId),
+    "a tabela de créditos seguiu para o grupo",
+  );
+});
+
+test("recusar não avisa o usuário de créditos nem manda tabela", async () => {
+  const chatId = `pagamento-sem-aviso-${runId}@g.us`;
+  const senderLid = testJid("semaviso");
+  const enviados = [];
+  const relays = [];
+
+  const socket = {
+    sendMessage: async (jid, content) => {
+      enviados.push({ jid, content });
+      return { key: { id: "fake" } };
+    },
+    relayMessage: async (jid, message) => {
+      relays.push({ jid, message });
+      return { key: { id: "relay" } };
+    },
+  };
+
+  await handlePaymentSms({
+    socket,
+    chatId,
+    senderLid,
+    senderName: "Joel",
+    text: SMS_EMOLA.replace("PP261021.1823.W70113", "TX-SEMAVISO-1"),
+    sendReply: async () => {},
+  });
+
+  const antes = accountBalance(getAccount(senderLid));
+  enviados.length = 0;
+  relays.length = 0;
+
+  const comando = (
+    await import("../commands/owner/recarga-recusar.js")
+  ).default;
+
+  await comando.handle({
+    fullArgs: "TX-SEMAVISO-1",
+    socket,
+    sendReply: async (t) => enviados.push({ jid: "dono", content: { text: String(t) } }),
+    sendErrorReply: async () => {},
+  });
+
+  assert.equal(accountBalance(getAccount(senderLid)), antes, "nada creditado");
+  assert.equal(
+    enviados.filter((e) => e.jid === chatId).length,
+    0,
+    "recusar não avisa o usuário de créditos",
+  );
+  assert.equal(relays.length, 0, "recusar não manda a tabela");
+});

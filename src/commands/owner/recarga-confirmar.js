@@ -7,6 +7,7 @@ import {
 } from "../../services/recharges.js";
 import { accountBalance, getAccount } from "../../services/credits.js";
 import { panelMessage } from "../../utils/formatMessage.js";
+import { notifyRechargeConfirmed } from "../../utils/paymentFlow.js";
 
 export default {
   name: "recarga-confirmar",
@@ -16,7 +17,7 @@ export default {
   /**
    * @param {CommandHandleProps} props
    */
-  handle: async ({ fullArgs, sendReply, sendErrorReply }) => {
+  handle: async ({ fullArgs, sendReply, sendErrorReply, socket }) => {
     const parts = fullArgs.trim().split(/\s+/).filter(Boolean);
     const key = parts.find((part) => !/^\d+$/.test(part)) || parts[0];
 
@@ -64,6 +65,8 @@ export default {
       return;
     }
 
+    const saldoAtual = accountBalance(getAccount(pendente.senderLid));
+
     await sendReply(
       panelMessage({
         icone: "✅",
@@ -73,10 +76,20 @@ export default {
           `👤 Usuário: @${String(pendente.senderLid).split("@")[0]}`,
           `💰 Valor: ${pendente.amount} MT (${pendente.providerLabel})`,
           `➕ Créditos: ${resultado.credited}`,
-          `💳 Saldo atual: ${accountBalance(getAccount(pendente.senderLid))} créditos`,
+          `💳 Saldo atual: ${saldoAtual} créditos`,
         ],
       }),
       [pendente.senderLid],
     );
+
+    // O usuário é avisado no chat onde enviou o SMS: sem isto ele nunca sabe
+    // que os créditos entraram. A tabela mostra quanto valem os próximos.
+    await notifyRechargeConfirmed({
+      socket,
+      recharge: pendente,
+      credited: resultado.credited,
+      balance: saldoAtual,
+      sendReply,
+    }).catch(() => {});
   },
 };
