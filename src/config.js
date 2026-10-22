@@ -305,12 +305,19 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 //
 // `anikoto` e `animeheaven` são extraídos diretamente pelo bot
 // (`src/services/anikoto.js`, `src/services/animeheaven.js`) e respondem a IPs
-// de datacenter — por isso vêm primeiro. O `animeheaven` serve MP4 direto em
-// 720p nativo (sem downscale); o `anikoto` serve HLS e só publica 1080p, o que
-// obriga a reduzir localmente. Os restantes vêm da biblioteca e servem de
-// alternativa (AnimeUnity funciona de IP residencial e de alguns datacenters).
+// de datacenter — por isso vêm primeiro. O `animeheaven` vem à frente porque
+// serve MP4 direto em 720p nativo (sem downscale): o episódio já cabe no teto de
+// 200 MB e sai bom de origem. O `anikoto` só publica 1080p (HLS), o que obriga a
+// baixar grande e a reduzir localmente.
+//
+// Nota: o `animeheaven` lista cada temporada como um título próprio, pelo que o
+// passo de escolha de temporada (que depende do agrupamento do `anikoto`) só
+// aparece quando a pesquisa cai no `anikoto` — ou seja, quando o título não
+// existe no `animeheaven` ou quando `ANIME_PROVIDERS` o põe à frente. Os
+// restantes vêm da biblioteca e servem de alternativa (AnimeUnity funciona de IP
+// residencial e de alguns datacenters).
 export const ANIME_PROVIDERS = (
-  process.env.ANIME_PROVIDERS || "anikoto,animeheaven,animeunity,animepahe"
+  process.env.ANIME_PROVIDERS || "animeheaven,anikoto,animeunity,animepahe"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())

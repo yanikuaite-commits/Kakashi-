@@ -236,8 +236,20 @@ export function aiMessage({ pergunta, resposta } = {}) {
   return formatMessage({ icone: "🤖", titulo: "Resposta da IA", campos });
 }
 
-/** 📥 DOWNLOAD — card de download com os campos do pedido. */
-export function downloadMessage({ titulo, canal, duracao, plataforma, usuario, extra } = {}) {
+/** 📥 DOWNLOAD — card de download com os campos do pedido.
+ *
+ * `rodape: null` quando o card que o envolve já leva `footer`, para o rodapé não
+ * sair impresso duas vezes.
+ */
+export function downloadMessage({
+  titulo,
+  canal,
+  duracao,
+  plataforma,
+  usuario,
+  extra,
+  rodape = RODAPE,
+} = {}) {
   const campos = [];
 
   if (titulo) campos.push(`📌 *Título:* ${titulo}`);
@@ -248,7 +260,7 @@ export function downloadMessage({ titulo, canal, duracao, plataforma, usuario, e
   if (campos.length) campos.push("");
   campos.push(extra || "✨ Escolha a qualidade desejada abaixo!");
 
-  return formatMessage({ icone: "📥", titulo: "Download", campos });
+  return formatMessage({ icone: "📥", titulo: "Download", campos, rodape });
 }
 
 /**
@@ -267,6 +279,8 @@ export function downloadMessage({ titulo, canal, duracao, plataforma, usuario, e
  * @param {string} [options.duracao]
  * @param {string} [options.qualidade]
  * @param {string} [options.extra] linha extra opcional no fim
+ * @param {string|null} [options.rodape] rodapé do corpo (null quando o card já
+ *   leva `footer`, para não imprimir "© Made by Yanik Uaite" duas vezes)
  */
 export function mediaCaption({
   titulo,
@@ -275,6 +289,7 @@ export function mediaCaption({
   duracao,
   qualidade,
   extra,
+  rodape = RODAPE,
 } = {}) {
   const seguidoresTexto =
     seguidores === 0 || seguidores
@@ -291,7 +306,7 @@ export function mediaCaption({
 
   if (extra) campos.push("", extra);
 
-  return formatMessage({ icone: "📥", titulo: "Download", campos });
+  return formatMessage({ icone: "📥", titulo: "Download", campos, rodape });
 }
 
 /** 🛡️ MODERAÇÃO — ação de administração aplicada a um membro. */

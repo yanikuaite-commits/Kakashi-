@@ -162,6 +162,7 @@ function legendOf(pending, extraPrompt) {
       : pending.payload?.platform,
     usuario: pending.ownerName,
     extra: extraPrompt,
+    rodape: null,
   });
 }
 

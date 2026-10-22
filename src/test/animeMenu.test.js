@@ -135,6 +135,67 @@ test("token de anime sem sessão avisa que o menu expirou", async () => {
   assert.match(replies[0], /expirou/i);
 });
 
+test("cards de anime não repetem o rodapé (o card já leva footer)", async () => {
+  resetAnimeSessions();
+
+  const respostas = {
+    "/filter?keyword=attack%20on%20titan": `
+      <div class="item ">
+        <div class="inner">
+          <div class="ani poster tip" data-tip="1631">
+            <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa/ep-1">
+              <img src="https://cdn.anipixcdn.co/a.jpg" alt="Attack on Titan" />
+            </a>
+          </div>
+        </div>
+      </div>`,
+    "/api/seasons/1631": JSON.stringify({
+      status: 200,
+      result: `
+        <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa"><div class="name">Season 1</div></a>
+        <a href="https://anikoto.cz/watch/attack-on-titan-season-2-0rtbh"><div class="name">Season 2</div></a>`,
+    }),
+  };
+
+  globalThis.fetch = async (url) => {
+    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const enviados = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "attack on titan",
+    });
+
+    const cardTemporadas = enviados[0];
+    assert.equal(
+      cardTemporadas.text.split("© Made by Yanik Uaite").length - 1,
+      0,
+      "o corpo do card não repete o rodapé que já vai em footer",
+    );
+    assert.equal(
+      cardTemporadas.footer,
+      "© Made by Yanik Uaite",
+      "o rodapé continua a ir no footer do card",
+    );
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
 test("anm:sea carrega os episódios da temporada escolhida", async () => {
   resetAnimeSessions();
 

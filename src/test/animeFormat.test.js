@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   ANIME_TOKEN_PREFIXES,
   EPISODES_PER_PAGE,
+  animeProviderLabel,
   animeQualityLabel,
   animeSessionKey,
   animeTokenIndex,
@@ -19,6 +20,16 @@ import {
 
 test("animeSessionKey junta chat e autor", () => {
   assert.equal(animeSessionKey("grupo@g.us", "autor@lid"), "grupo@g.us:autor@lid");
+});
+
+test("animeProviderLabel usa o nome próprio de cada provider", () => {
+  assert.equal(animeProviderLabel("animeheaven"), "AnimeHeaven");
+  assert.equal(animeProviderLabel("anikoto"), "Anikoto");
+  assert.equal(animeProviderLabel("AnimeHeaven"), "AnimeHeaven");
+  assert.equal(animeProviderLabel(""), "Animes");
+  assert.equal(animeProviderLabel(null), "Animes");
+  // Desconhecido continua a capitalizar em vez de desaparecer.
+  assert.equal(animeProviderLabel("novosite"), "Novosite");
 });
 
 test("animeQualityLabel deriva rótulos legíveis", () => {

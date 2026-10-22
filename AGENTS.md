@@ -275,7 +275,7 @@ are the in-house providers; `src/utils/animeMenu.js` runs the interactive flow
   The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
   provider (ex-Zoro) shut down for good in March 2026
 - `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `anikoto,animeheaven,animeunity,animepahe`); each provider is tried
+  (default `animeheaven,anikoto,animeunity,animepahe`); each provider is tried
   until one returns the episode, and the winning provider is carried in the
   session so `getAnimeInfo`/`getEpisodeSources` hit the same source
 - the returned link is an m3u8/mp4 that yt-dlp downloads; HLS sources are
