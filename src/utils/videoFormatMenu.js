@@ -216,6 +216,7 @@ export async function startVideoFormatMenu({
     plataforma: platformOf(source),
     usuario: pending.ownerName,
     extra: "✨ Escolhe a qualidade na lista!",
+    rodape: null,
   });
 
   infoLog(
@@ -309,6 +310,7 @@ export async function handleVideoFormatReply({
       plataforma: platformOf(pending.source),
       usuario: pending.ownerName,
       extra: "✨ Escolhe a qualidade na lista!",
+      rodape: null,
     });
     await sendInteractiveWithFallback({
       socket,

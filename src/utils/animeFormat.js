@@ -19,6 +19,19 @@ export const EPISODES_PER_PAGE = 10;
 /** Prefixos de token do menu de animes. */
 export const ANIME_TOKEN_PREFIXES = ["anm:sea:", "anm:ep:", "anm:src:", "anm:pg:"];
 
+/** Nomes próprios dos providers, para o card não mostrar "Animeheaven". */
+const PROVIDER_LABELS = {
+  anikoto: "Anikoto",
+  animeheaven: "AnimeHeaven",
+  animeunity: "AnimeUnity",
+  animepahe: "AnimePahe",
+  hianime: "HiAnime",
+  animekai: "AnimeKai",
+  kickassanime: "KickAssAnime",
+  animesaturn: "AnimeSaturn",
+  animesama: "AnimeSama",
+};
+
 /**
  * Rótulo legível de um provider de animes ("animeunity" → "AnimeUnity").
  *
@@ -28,7 +41,7 @@ export const ANIME_TOKEN_PREFIXES = ["anm:sea:", "anm:ep:", "anm:src:", "anm:pg:
 export function animeProviderLabel(provider) {
   const nome = String(provider || "").trim();
   if (!nome) return "Animes";
-  return nome.charAt(0).toUpperCase() + nome.slice(1);
+  return PROVIDER_LABELS[nome.toLowerCase()] || nome.charAt(0).toUpperCase() + nome.slice(1);
 }
 
 /**

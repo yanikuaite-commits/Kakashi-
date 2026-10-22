@@ -314,6 +314,7 @@ export async function startAnimeFlow({
       duracao: "—",
       qualidade: "—",
       extra: "✏️ Envie o *nome do anime* que quer ver (ex: Naruto).",
+      rodape: null,
     }),
     title: "Animes",
     rows: [cancelRow()],
@@ -377,6 +378,7 @@ async function sendSeasonList({ socket, session }) {
       duracao: `${session.seasons.length} temporadas`,
       qualidade: "—",
       extra: "📺 Escolhe a temporada que queres ver.",
+      rodape: null,
     }),
     title: "Temporadas",
     rows,
@@ -494,6 +496,7 @@ async function sendEpisodePage({ socket, session, page }) {
       extra: faltam
         ? `🎬 Faltam ${faltam}. Usa *Ver mais episódios* em baixo.`
         : "🎬 Estes são os últimos episódios.",
+      rodape: null,
     }),
     title: "Episódios",
     rows,
@@ -543,6 +546,7 @@ async function sendQualityList({ socket, session, episodeIndex }) {
         duracao: session.episode.title || "—",
         qualidade: "Escolha a qualidade",
         extra: `⬇️ O episódio sai em até ${animeMaxHeight(session.provider)}p para caber no limite de envio.`,
+        rodape: null,
       }),
       title: "Qualidade",
       rows,
