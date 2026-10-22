@@ -65,6 +65,7 @@ const PROVIDER_FACTORIES = {
  */
 const PROVIDERS_PROPIOS = {
   anikoto: () => import("./anikoto.js"),
+  animeheaven: () => import("./animeheaven.js"),
 };
 
 let consumetAnime = null;
@@ -411,7 +412,7 @@ export async function getEpisodeSources(episodeId, provider) {
 
   if (tipo === "proprio") {
     const [slug, epId, ids] = String(episodeId).split("::");
-    const url = await withTimeout(
+    const resolvido = await withTimeout(
       instance.sources({ id: epId, ids }, slug),
       ANIME_API_TIMEOUT_MS,
       `${provider}.sources`,
@@ -423,13 +424,25 @@ export async function getEpisodeSources(episodeId, provider) {
       );
     });
 
+    // O provider pode devolver só o URL (HLS, caso do anikoto) ou um objeto com
+    // o tipo de media (o animeheaven serve MP4 direto). Assumir sempre HLS
+    // marcava o MP4 como stream e o rótulo de qualidade saía errado.
+    const url = typeof resolvido === "string" ? resolvido : resolvido?.url;
+
     if (!url) {
       throw new AnimeApiError(
         "Nenhum link de streaming foi encontrado para este episódio.",
       );
     }
 
-    return normalizeSources([{ url, quality: "auto", isM3U8: true }]);
+    return normalizeSources([
+      {
+        url,
+        quality: typeof resolvido === "object" ? resolvido?.quality : undefined,
+        resolution: typeof resolvido === "object" ? resolvido?.resolution : undefined,
+        isM3U8: typeof resolvido === "object" ? Boolean(resolvido?.isM3U8) : true,
+      },
+    ]);
   }
 
   const data = await withTimeout(

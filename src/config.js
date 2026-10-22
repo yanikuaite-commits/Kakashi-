@@ -303,12 +303,14 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
 // preferência. Cada provider é tentado até um devolver o episódio.
 //
-// `anikoto` é o único extraído diretamente pelo bot (`src/services/anikoto.js`)
-// e o único que responde a IPs de datacenter — por isso vem primeiro. Os
-// restantes vêm da biblioteca e servem de alternativa (AnimeUnity funciona de
-// IP residencial e de alguns datacenters; ficam a seguir por isso).
+// `anikoto` e `animeheaven` são extraídos diretamente pelo bot
+// (`src/services/anikoto.js`, `src/services/animeheaven.js`) e respondem a IPs
+// de datacenter — por isso vêm primeiro. O `animeheaven` serve MP4 direto em
+// 720p nativo (sem downscale); o `anikoto` serve HLS e só publica 1080p, o que
+// obriga a reduzir localmente. Os restantes vêm da biblioteca e servem de
+// alternativa (AnimeUnity funciona de IP residencial e de alguns datacenters).
 export const ANIME_PROVIDERS = (
-  process.env.ANIME_PROVIDERS || "anikoto,animeunity,animepahe"
+  process.env.ANIME_PROVIDERS || "anikoto,animeheaven,animeunity,animepahe"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())
@@ -346,6 +348,12 @@ export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 // mantém o episódio dentro do limite. Se a faixa de 480p não existir, o seletor
 // do yt-dlp cai para a melhor disponível em vez de falhar.
 export const ANIME_MAX_HEIGHT = Number(process.env.ANIME_MAX_HEIGHT) || 480;
+
+// Teto do provider AnimeHeaven, que publica 720p nativo (~112–164 MB): o
+// episódio já cabe no limite de 200 MB, por isso não há razão para o degradar
+// para 480p. Mantém-se configurável para o caso de episódios mais pesados.
+export const ANIME_HEAVEN_MAX_HEIGHT =
+  Number(process.env.ANIME_HEAVEN_MAX_HEIGHT) || 720;
 
 export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 export const AI_TIMEOUT_MS = 30 * 1000;

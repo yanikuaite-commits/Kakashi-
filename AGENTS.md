@@ -216,18 +216,18 @@ The Baileys path encrypts chunk by chunk, so a 350 MB episode costs ~65 MB of
 RSS as a stream against ~351 MB as a buffer. The Render `starter` plan has
 512 MB, so buffering a large episode gets the process killed by OOM.
 
-### Animes (anikoto + providers via @consumet/extensions)
+### Animes (anikoto + animeheaven + providers via @consumet/extensions)
 
 `src/services/anime.js` searches a live provider, lists episodes and returns
-streaming sources; `src/services/anikoto.js` is the in-house provider;
-`src/utils/animeMenu.js` runs the interactive flow (nome → temporadas →
-episódios → qualidade → download) and `src/utils/animeFormat.js` holds the pure
-helpers.
+streaming sources; `src/services/anikoto.js` and `src/services/animeheaven.js`
+are the in-house providers; `src/utils/animeMenu.js` runs the interactive flow
+(nome → temporadas → episódios → qualidade → download) and
+`src/utils/animeFormat.js` holds the pure helpers.
 
-- **`anikoto` is the default and the only provider that works from a datacenter
-  IP (Render).** It is scraped by the bot itself, not by the library, because
+- **`anikoto` and `animeheaven` are the providers that work from a datacenter IP
+  (Render).** Both are scraped by the bot itself, not by the library, because
   every `@consumet/extensions` anime provider sits behind Cloudflare and/or is
-  dead. The chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
+  dead. The anikoto chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
   `/ajax/server/list?servers=<data-ids>` → `/ajax/server?get=<link>&sv=<sv>` →
   the megaplay player → `/stream/getSources?id=<mediaid>`; the m3u8 comes in the
   `enc` field, AES-256-CBC encrypted with a key/IV hardcoded in the player's JS
@@ -250,14 +250,34 @@ helpers.
   to the yt-dlp call; `downloadWithYtDlp` accepts `extraArgs` for that. Without
   impersonation (which needs the standalone binary's `curl_cffi`) the download
   fails with HTTP 403
+- **`animeheaven` serves a direct 720p MP4 (~112–164 MB), inside the 200 MB
+  send limit, so it is not capped to 480p.** The chain is: `/search.php?s=<termo>`
+  → `/anime.php?<id>` (each
+  episode carries a 32-hex hash) → `/gate.php` with the `key=<hash>` cookie,
+  which returns the `<source>` mirrors. `/gate.php` without the cookie answers
+  404 — the hash *is* the credential, which is why `sources` takes the hash and
+  not a numeric id
+- **not every `<source>` on AnimeHeaven is the episode.** `ax` always serves a
+  ~3.7 s trailer (88 KB) and `ct`/`ck` answer 0 bytes/error; yt-dlp cannot tell
+  them apart (the URL is `video.mp4` with no metadata), so the mirror is chosen
+  in `escolherMirror` by `Content-Length` — the only honest signal. The good
+  mirrors vary per title (`rx`, `co`, `cy`, `ci`, `sr`, `rt`, `cx`, `cz`, ...),
+  so the choice is by size, not by a fixed list. `animeheaven` returns an object
+  (`{url, quality: "720p", isM3U8: false}`) instead of a bare URL string, which
+  is why `getEpisodeSources` accepts both shapes: assuming HLS for a direct MP4
+  printed the wrong quality label
+- `ANIME_HEAVEN_MAX_HEIGHT` (default 720) is the AnimeHeaven ceiling: the
+  episode already fits the 200 MB limit, so forcing 480p would only degrade the
+  image for nothing. `ANIME_MAX_HEIGHT` (480) still applies to anikoto, whose
+  master.m3u8 carries a single 1080p variant
 - the library providers remain as fallback; extraction runs **in-process**
   through `@consumet/extensions`, with no Consumet server and no self-hosting.
   The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
   provider (ex-Zoro) shut down for good in March 2026
 - `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `anikoto,animeunity,animepahe`); each provider is tried until one
-  returns the episode, and the winning provider is carried in the session so
-  `getAnimeInfo`/`getEpisodeSources` hit the same source
+  (default `anikoto,animeheaven,animeunity,animepahe`); each provider is tried
+  until one returns the episode, and the winning provider is carried in the
+  session so `getAnimeInfo`/`getEpisodeSources` hit the same source
 - the returned link is an m3u8/mp4 that yt-dlp downloads; HLS sources are
   preferred over DASH because some `.mpd` files from these sites ship without an
   audio track
