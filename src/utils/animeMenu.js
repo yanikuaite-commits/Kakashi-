@@ -31,7 +31,7 @@
  * @author Dev Gui
  */
 import fs from "node:fs";
-import { ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT } from "../config.js";
+import { ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT } from "../config.js";
 import { getAnimeInfo, getAnimeSeasons, getEpisodeSources, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withCreditsContext } from "../services/credits.js";
@@ -542,7 +542,7 @@ async function sendQualityList({ socket, session, episodeIndex }) {
         canal: animeProviderLabel(session.provider),
         duracao: session.episode.title || "—",
         qualidade: "Escolha a qualidade",
-        extra: "⬇️ Escolha a qualidade para baixar.",
+        extra: `⬇️ O episódio sai em até ${animeMaxHeight(session.provider)}p para caber no limite de envio.`,
       }),
       title: "Qualidade",
       rows,
@@ -563,20 +563,45 @@ async function sendQualityList({ socket, session, episodeIndex }) {
  * O CDN do anikoto (`fetch.nexabloom.top`) entrega o m3u8 apenas a pedidos que
  * pareçam um browser: o yt-dlp tem de imitar o TLS/HTTP de um Chrome
  * (`generic:impersonate`) e enviar o `Referer` do player, senão responde 403
- * (desafio Cloudflare). Nos outros providers não se acrescenta nada, para não
- * mexer num caminho que já funciona.
+ * (desafio Cloudflare). O AnimeHeaven serve o MP4 direto e aceita o pedido sem
+ * impersonation, mas o mirror confere o `Referer` do `gate.php`.
  *
  * @param {string} provider
  * @returns {string[]}
  */
 function animeDownloadArgs(provider) {
-  if (String(provider || "").toLowerCase() !== "anikoto") return [];
-  return [
-    "--extractor-args",
-    "generic:impersonate",
-    "--referer",
-    "https://megaplay.buzz/",
-  ];
+  const nome = String(provider || "").toLowerCase();
+
+  if (nome === "anikoto") {
+    return [
+      "--extractor-args",
+      "generic:impersonate",
+      "--referer",
+      "https://megaplay.buzz/",
+    ];
+  }
+
+  if (nome === "animeheaven") {
+    return ["--referer", "https://animeheaven.me/gate.php"];
+  }
+
+  return [];
+}
+
+/**
+ * Altura máxima por provider.
+ *
+ * O anikoto só publica 1080p, por isso o download é limitado a 480p para caber
+ * no limite de envio. O AnimeHeaven já publica 720p nativo (~112–164 MB, dentro
+ * do teto de 200 MB): limitar a 480p só degradaria a imagem sem ganhar nada.
+ *
+ * @param {string} provider
+ * @returns {number}
+ */
+function animeMaxHeight(provider) {
+  return String(provider || "").toLowerCase() === "animeheaven"
+    ? ANIME_HEAVEN_MAX_HEIGHT
+    : ANIME_MAX_HEIGHT;
 }
 
 /**
@@ -600,6 +625,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
 
   const episode = session.episode;
   const animeTitulo = session.anime?.title || "Anime";
+  const alturaMaxima = animeMaxHeight(session.provider);
 
   dropSession(session);
   await session.sendReply("⬇️ Baixando o episódio...").catch(() => {});
@@ -615,7 +641,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
   try {
     result = await withCreditsContext(session.ownerId, () =>
       downloadWithYtDlp(source.url, {
-        height: ANIME_MAX_HEIGHT,
+        height: alturaMaxima,
         maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
         extraArgs: animeDownloadArgs(session.provider),
         concurrentFragments: animeConcurrentFragments(session.provider),
