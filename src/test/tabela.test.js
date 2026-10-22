@@ -162,7 +162,7 @@ test("os comandos secundários enviam a respetiva tabela", async () => {
     sendReact: async () => {},
   });
   const textoCreditos = JSON.stringify(socketCreditos.ricos[0]);
-  assert.ok(textoCreditos.includes("20 MT") && textoCreditos.includes("55 créditos"));
+  assert.ok(textoCreditos.includes("20 MT") && textoCreditos.includes("65 créditos"));
 });
 
 test("quando o rich response falha, a tabela cai no texto", async () => {

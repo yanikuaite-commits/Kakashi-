@@ -30,7 +30,9 @@ test("tabela 2 lista os pacotes de créditos pedidos", () => {
   assert.deepEqual(TABELAS.creditos.linhas, [
     ["5 MT", "15 créditos"],
     ["10 MT", "30 créditos"],
-    ["20 MT", "55 créditos"],
+    ["20 MT", "65 créditos"],
+    ["30 MT", "85 créditos"],
+    ["50 MT", "120 créditos"],
   ]);
   assert.deepEqual(TABELAS.creditos.cabecalho, ["Preço", "Créditos"]);
 });
