@@ -129,7 +129,7 @@ test("só números conhecidos do bot são aceites", () => {
 test("créditos por valor saem da tabela de créditos", () => {
   assert.equal(creditsForAmount(5), 15);
   assert.equal(creditsForAmount(10), 30);
-  assert.equal(creditsForAmount(20), 55);
+  assert.equal(creditsForAmount(20), 65);
   assert.equal(creditsForAmount(30), 85);
   assert.equal(creditsForAmount(50), 120);
   assert.equal(creditsForAmount(7), null, "valor fora da tabela não inventa créditos");
@@ -165,21 +165,21 @@ test("confirmar credita uma vez e não credita duas", () => {
     amount: 20,
     destination: "865672009",
     senderLid,
-    credits: 55,
+    credits: 65,
   });
 
   const antes = accountBalance(getAccount(senderLid));
   const primeiro = confirmRecharge("TX-CONF-1", { by: "dono" });
   assert.equal(primeiro.ok, true);
-  assert.equal(primeiro.credited, 55);
-  assert.equal(accountBalance(getAccount(senderLid)), antes + 55);
+  assert.equal(primeiro.credited, 65);
+  assert.equal(accountBalance(getAccount(senderLid)), antes + 65);
 
   const segundo = confirmRecharge("TX-CONF-1", { by: "dono" });
   assert.equal(segundo.ok, false);
   assert.equal(segundo.reason, "confirmed");
   assert.equal(
     accountBalance(getAccount(senderLid)),
-    antes + 55,
+    antes + 65,
     "não creditou duas vezes",
   );
 });
@@ -213,7 +213,7 @@ test("transação fora do prazo caduca e não credita", () => {
     amount: 20,
     destination: "865672009",
     senderLid,
-    credits: 55,
+    credits: 65,
   });
 
   const antes = accountBalance(getAccount(senderLid));
@@ -300,12 +300,12 @@ test("SMS no grupo abre pedido, avisa o dono e credita após confirmação", asy
   assert.match(dm.content.text, /21\/10\/2026 18:23/);
 
   const pendente = getPendingRecharge("PP261021.1823.W70113");
-  assert.equal(pendente.credits, 55);
+  assert.equal(pendente.credits, 65);
 
   const antes = accountBalance(getAccount(senderLid));
   const confirmado = confirmRecharge(pendente.key, { by: "dono" });
   assert.equal(confirmado.ok, true);
-  assert.equal(accountBalance(getAccount(senderLid)), antes + 55);
+  assert.equal(accountBalance(getAccount(senderLid)), antes + 65);
 });
 
 test("SMS para um número que não é do bot é ignorado", async () => {
@@ -344,11 +344,11 @@ test("a ficha do dono e o aviso de caducidade citam o prefixo", () => {
     senderLid: "258840000000@lid",
     senderName: "Joel",
     chatId: "grupo@g.us",
-    credits: 55,
+    credits: 65,
   });
 
   assert.match(ficha, /NOVO PAGAMENTO PARA CONFIRMAR/);
-  assert.match(ficha, /55 créditos/);
+  assert.match(ficha, /65 créditos/);
 
   assert.match(rechargeExpiredMessage(), new RegExp(PREFIX + "tabela"));
 });
@@ -361,7 +361,7 @@ test("os comandos de dono existem e confirmam pelo id", async () => {
     amount: 20,
     destination: "865672009",
     senderLid,
-    credits: 55,
+    credits: 65,
   });
 
   const confirmar = (
@@ -377,7 +377,7 @@ test("os comandos de dono existem e confirmam pelo id", async () => {
   });
 
   assert.ok(respostas.some((t) => /RECARGA CONFIRMADA/i.test(t)), respostas.join(" | "));
-  assert.equal(accountBalance(getAccount(senderLid)), antes + 55);
+  assert.equal(accountBalance(getAccount(senderLid)), antes + 65);
 
   const recusar = (await import("../commands/owner/recarga-recusar.js")).default;
   const respostas2 = [];
@@ -450,7 +450,7 @@ test("o toque do dono na lista vira o comando de confirmar", async () => {
     sendErrorReply: async () => {},
   });
 
-  assert.equal(accountBalance(getAccount(senderLid)), antes + 55);
+  assert.equal(accountBalance(getAccount(senderLid)), antes + 65);
 });
 
 test("confirmar avisa o usuário no grupo e manda a tabela de créditos", async () => {
@@ -493,15 +493,15 @@ test("confirmar avisa o usuário no grupo e manda a tabela de créditos", async 
     sendErrorReply: async () => {},
   });
 
-  assert.equal(accountBalance(getAccount(senderLid)), antes + 55, "creditou");
+  assert.equal(accountBalance(getAccount(senderLid)), antes + 65, "creditou");
 
   // O usuário recebeu o aviso no chat onde enviou o SMS, não no privado do dono.
   const aviso = enviados.find(
     (e) => e.jid === chatId && /PAGAMENTO CONFIRMADO|Pagamento confirmado/i.test(e.content.text),
   );
   assert.ok(aviso, `esperava o aviso ao usuário: ${JSON.stringify(enviados.map((e) => e.jid))}`);
-  assert.match(aviso.content.text, /55/);
-  assert.match(aviso.content.text, /85 créditos/);
+  assert.match(aviso.content.text, /65/);
+  assert.match(aviso.content.text, /95 créditos/);
   assert.deepEqual(aviso.content.mentions, [senderLid], "menciona quem pagou");
 
   // E a tabela de créditos foi enviada a seguir (rich response).

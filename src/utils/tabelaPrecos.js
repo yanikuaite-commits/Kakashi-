@@ -43,14 +43,14 @@ const CREDITOS = {
   linhas: [
     ["5 MT", "15 créditos"],
     ["10 MT", "30 créditos"],
-    ["20 MT", "55 créditos"],
+    ["20 MT", "65 créditos"],
     ["30 MT", "85 créditos"],
     ["50 MT", "120 créditos"],
   ],
   valores: [
     { mt: 5, creditos: 15 },
     { mt: 10, creditos: 30 },
-    { mt: 20, creditos: 55 },
+    { mt: 20, creditos: 65 },
     { mt: 30, creditos: 85 },
     { mt: 50, creditos: 120 },
   ],
