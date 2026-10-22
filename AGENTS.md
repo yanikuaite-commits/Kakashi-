@@ -66,6 +66,8 @@ High-value architectural notes:
 | `src/utils/loadCommonFunctions.js` | Injected helper functions used by command handlers. |
 | `src/utils/database.js` | Safe access layer for JSON persistence. |
 | `src/utils/interactive.js` | Interactive-message builders: `singleSelectButton`, `urlButton`, `ownerButton` (owner WhatsApp link from `MAIN_MENU_OWNER_NUMBER`), `copyButton`. |
+| `src/utils/richTable.js` | Native WhatsApp tables (`RICH_RESPONSE_TABLE`) via `sendRichTable`, plus `sendTabela`, which sends a pricing table from `src/utils/tabelaPrecos.js` and falls back to aligned text when the relay fails. |
+| `src/utils/tabelaPrecos.js` | Pricing-table data and formatting only (no Baileys): `TABELAS` (`dias`, `creditos`), `tabelaOpcoes()`, `tabelaIdDoArgumento()`, `formatTabelaTexto()`. |
 | `src/@types/index.d.ts` | Typing and documentation for command and middleware props. |
 | `src/services/spider-x-api.js` | Spider X integration for downloads, AI, Pinterest, Brat, and related endpoints. |
 | `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
@@ -151,6 +153,28 @@ Mandatory rule:
 - always use `src/utils/database.js`
 
 This keeps persistence behavior consistent and avoids duplicated parsing logic.
+
+## TABLES_AND_PRICING
+
+`tabela` shows both pricing tables through one interactive list (1 = day plans,
+2 = credit packs); `tabela-dias` and `tabela-creditos` open one table directly.
+
+- the data lives in `src/utils/tabelaPrecos.js` (`TABELAS`), which holds no
+  Baileys code so it stays testable; `src/utils/richTable.js` does the sending
+- `tabelaOpcoes()` defines the numbering, so "1 = dias" and "2 = creditos" come
+  from the data, never from a hand-written branch
+- the list rows carry `kmenu:` tokens, not commands: WhatsApp drops oversized
+  `rowId`s, and the mapping to `${prefix}tabela-dias` / `${prefix}tabela-creditos`
+  is registered through `sendInteractiveWithFallback`'s `responseMappings`
+- the same helper registers the numeric fallback (1/2), so the text fallback and
+  the interactive list stay in sync
+- `.tabela 1` and `.tabela 2` skip the list; any other argument is an
+  `InvalidParameterError`
+- `sendTabela` tries the native table and falls back to aligned text
+  (`formatTabelaTexto`) when the relay fails, because not every client renders
+  `RICH_RESPONSE_TABLE`
+- add or change prices in `TABELAS` only; do not duplicate the rows in commands
+- the three commands are in `FREE_COMMANDS`, so checking prices never costs credits
 
 ## ANTI_PAYMENT
 

@@ -210,6 +210,9 @@ export const FREE_COMMANDS = [
   "conta",
   "suporte",
   "exemplos-de-mensagens",
+  "tabela",
+  "tabela-dias",
+  "tabela-creditos",
 ];
 
 // Custo em créditos por comando (nome oficial do comando).
