@@ -58,7 +58,7 @@ import {
   buildNextPageRow,
   buildQualityRows,
   buildSeasonRows,
-  commonAudioVersions,
+  availableAudioVersions,
   episodePageCount,
   identitiesOverlap,
   jidIdentities,
@@ -446,7 +446,7 @@ async function loadEpisodesAndSend({ socket, session, id }) {
  * @returns {Promise<boolean>}
  */
 async function routeAfterEpisodes({ socket, session }) {
-  const versoes = commonAudioVersions(session.episodes);
+  const versoes = availableAudioVersions(session.episodes);
 
   session.audioVersions = versoes;
   session.audioVersion = versoes.length === 1 ? versoes[0] : "";

@@ -472,13 +472,24 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   (long, signed) stream URLs stay in the session, because WhatsApp drops
   oversized `rowId`s
 - **the audio track is a step of its own (`anm:aud:subbed` / `anm:aud:dubbed`),
-  asked BEFORE the episode list and only when the whole list has both tracks.**
+  asked BEFORE the episode list and only when the list publishes more than one.**
   The episode list comes from `getAnimeInfo`/`getSeasonEpisodes`, which carry
-  `versions` per episode; `commonAudioVersions` intersects them and
+  `versions` per episode; `availableAudioVersions` UNIONS them and
   `routeAfterEpisodes` decides: 2+ → ask, exactly 1 → fix it silently (no false
   choice), none → ask nothing and behave as before. Asking per episode instead
   would let the user pick "Dublado" and then hit an episode that has no dub, so
   the choice is made once, for the list
+- **the track rule is a UNION, not an intersection, and this is the difference
+  between the feature working and not existing.** Requiring every episode to have
+  both tracks looks safer but hides the choice almost always, because the series
+  page fragment only covers part of the list: One Piece has 583 episodes with
+  both, 577 subbed-only and 2 dubbed-only, so the intersection was EMPTY and the
+  menu asked nothing. Naruto (218 both, 2 subbed-only) collapsed to `subbed` and
+  never asked. Measured across series, only titles whose list is uniformly both
+  (e.g. Jujutsu Kaisen, 24/24) reached the question. With the union, One Piece
+  and Naruto ask; series with a single track (Kaijuu Girls, Attack on Titan)
+  silently fix it. An episode that lacks the chosen track fails with a clear
+  message, which beats never offering the choice
 - the chosen track is stored in `session.audioVersion` and travels as the third
   argument of `getEpisodeSources(episodeId, provider, audioVersion)` down to
   `provider.sources(episode, slug, audioVersion)`; providers that do not
@@ -486,7 +497,13 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   the user can confirm what was sent
 - the fallback keeps the track: `fontesDoProvider` filters candidates by
   `versions`, because in AniTube the dubbed episode is a different post and
-  matching on the number alone would silently hand back the subtitled one
+  matching on the number alone would silently hand back the subtitled one.
+  `searchWithEpisodes` (the AniTube fallback entry point) must also forward
+  `versions`, or the choice is lost on that path
+- the series-page fragment is trustworthy where it exists: sampled against the
+  real episode tabs on Naruto, One Piece, Bleach and Death Note, `#subbed`/
+  `#dubbed` always matched the tabs actually present. Where it is absent the
+  episode list has no track information and the flow behaves as before
 - episodes are listed 10 at a time (`anm:ep:<i>` uses the ABSOLUTE index) with a
   single `anm:pg:<p>` "ver mais" row at the bottom for the rest, so the list
   stays short and every episode is still reachable — WhatsApp drops oversized

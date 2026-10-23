@@ -48,37 +48,33 @@ export function audioVersionLabel(versao) {
 }
 
 /**
- * Faixas comuns a todos os episódios de uma lista.
+ * Faixas publicadas em PELO MENOS um episódio da lista (união, não intersecção).
  *
- * A escolha da faixa é feita UMA vez, antes da lista de episódios, e não em cada
- * episódio: só se oferece a escolha quando a lista inteira tem as duas, senão um
- * episódio sem dublagem falharia depois de o utilizador já a ter escolhido. Uma
- * lista sem informação de faixa devolve `[]` e o fluxo segue como antes.
+ * A escolha é feita UMA vez, antes da lista, e não em cada episódio. Exigir que
+ * TODOS os episódios tivessem as duas faixas parecia mais seguro, mas escondia a
+ * escolha quase sempre: o fragmento da faixa só cobre parte da lista (o One Piece
+ * tem 583 episódios com as duas, 577 só legendado e 2 só dublado) e há séries
+ * inteiras que não o trazem em nenhum. A união é o que o utilizador vê no site:
+ * se algum episódio tem dublado, ele pode escolher dublado. Num episódio sem
+ * dublagem o download falha com uma mensagem clara, o que é melhor do que o menu
+ * nunca chegar a perguntar.
+ *
+ * Uma lista sem informação de faixa devolve `[]` e o fluxo segue como antes.
  *
  * @param {Array<{versions?: string[]}>} episodes
  * @returns {string[]} por ordem de `AUDIO_VERSIONS`
  */
-export function commonAudioVersions(episodes = []) {
+export function availableAudioVersions(episodes = []) {
   const lista = Array.isArray(episodes) ? episodes : [];
-  if (!lista.length) return [];
+  const presentes = new Set();
 
-  const primeira = lista[0]?.versions;
-  if (!Array.isArray(primeira) || !primeira.length) return [];
+  for (const episode of lista) {
+    const versoes = Array.isArray(episode?.versions) ? episode.versions : [];
 
-  const presentes = new Set(primeira.map((v) => String(v).toLowerCase()));
-
-  for (const episode of lista.slice(1)) {
-    const versoes = new Set(
-      (Array.isArray(episode?.versions) ? episode.versions : []).map((v) =>
-        String(v).toLowerCase(),
-      ),
-    );
-
-    for (const versao of [...presentes]) {
-      if (!versoes.has(versao)) presentes.delete(versao);
+    for (const versao of versoes) {
+      const valor = String(versao || "").trim().toLowerCase();
+      if (valor) presentes.add(valor);
     }
-
-    if (!presentes.size) break;
   }
 
   return AUDIO_VERSIONS.filter((versao) => presentes.has(versao));

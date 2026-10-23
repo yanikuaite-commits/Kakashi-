@@ -8,12 +8,12 @@ import {
   animeSessionKey,
   animeTokenIndex,
   audioVersionLabel,
+  availableAudioVersions,
   buildAudioRows,
   buildEpisodeRows,
   buildNextPageRow,
   buildQualityRows,
   buildSeasonRows,
-  commonAudioVersions,
   episodePageCount,
   identitiesOverlap,
   jidDigits,
@@ -149,29 +149,42 @@ test("os prefixos de token cobrem episódio, faixa, qualidade e página", () => 
   ]);
 });
 
-test("commonAudioVersions só devolve o que TODOS os episódios publicam", () => {
-  // A lista inteira tem as duas faixas → pode oferecer a escolha.
+test("availableAudioVersions devolve a UNIÃO das faixas da lista", () => {
+  // Lista inteira com as duas → pergunta as duas.
   assert.deepEqual(
-    commonAudioVersions([
+    availableAudioVersions([
       { versions: ["subbed", "dubbed"] },
       { versions: ["dubbed", "subbed"] },
     ]),
     ["subbed", "dubbed"],
   );
 
-  // Um episódio só legendado: oferecer "Dublado" falharia nesse episódio.
+  // Caso REAL do Naruto (218 eps com as duas, 2 só legendado): exigir a
+  // intersecção dava só "subbed" e o menu nunca perguntava.
   assert.deepEqual(
-    commonAudioVersions([
+    availableAudioVersions([
       { versions: ["subbed", "dubbed"] },
       { versions: ["subbed"] },
     ]),
-    ["subbed"],
+    ["subbed", "dubbed"],
+  );
+
+  // Caso REAL do One Piece (583 com as duas, 577 só legendado, 2 só dublado):
+  // a intersecção era VAZIA e o menu não perguntava nada.
+  assert.deepEqual(
+    availableAudioVersions([
+      { versions: ["subbed", "dubbed"] },
+      { versions: ["subbed"] },
+      { versions: ["dubbed"] },
+    ]),
+    ["subbed", "dubbed"],
   );
 
   // Sem informação de faixa (anikoto/animeheaven): o menu não pergunta nada.
-  assert.deepEqual(commonAudioVersions([{ number: 1 }, { number: 2 }]), []);
-  assert.deepEqual(commonAudioVersions([]), []);
-  assert.deepEqual(commonAudioVersions([{ versions: [] }]), []);
+  assert.deepEqual(availableAudioVersions([{ number: 1 }, { number: 2 }]), []);
+  assert.deepEqual(availableAudioVersions([]), []);
+  assert.deepEqual(availableAudioVersions([{ versions: [] }]), []);
+  assert.deepEqual(availableAudioVersions([{ versions: ["subbed"] }]), ["subbed"]);
 });
 
 test("audioVersionLabel traduz as faixas e não inventa as desconhecidas", () => {

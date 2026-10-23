@@ -433,6 +433,60 @@ test("com as duas faixas, o menu pergunta Legendado/Dublado antes dos episódios
   }
 });
 
+test("lista MISTA (parte só legendada) ainda pergunta a faixa", async () => {
+  resetAnimeSessions();
+
+  // Regressão: a lista real do Naruto tem 218 episódios com as duas faixas e 2
+  // só legendados. Com a regra de intersecção o menu concluía "subbed" e nunca
+  // perguntava, pelo que o dublado era inalcançável em quase todas as séries.
+  const respostas = {
+    "/search/?q=naruto": `
+      <div class="media searchre">
+        <a href="/series/naruto" class="mse"><div class="media-body"><div class="first"><h2>Naruto</h2></div></div></a>
+      </div>`,
+    "/series/naruto": `
+      <a href="/naruto-episode-1" class="anm_det_pop"><strong>Naruto 1</strong></a><a href="/naruto-episode-1#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-1#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
+      <a href="/naruto-episode-2" class="anm_det_pop"><strong>Naruto 2</strong></a><a href="/naruto-episode-2#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-2#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
+      <a href="/naruto-episode-3" class="anm_det_pop"><strong>Naruto 3</strong></a><a href="/naruto-episode-3#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a>`,
+  };
+
+  globalThis.fetch = async (url) => {
+    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const enviados = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "naruto",
+    });
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.stage, "faixas", "o ep 3 não ter dublado não pode esconder a escolha");
+    assert.deepEqual(sessao.audioVersions, ["subbed", "dubbed"]);
+
+    const ids = enviados[0].interactiveButtons
+      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+      .find((p) => p.sections)?.sections?.[0]?.rows
+      ?.map((r) => r.id);
+    assert.ok(ids.includes("anm:aud:dubbed"), "Dublado tem de ser alcançável");
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
 test("com uma só faixa, o menu não pergunta e fixa-a sozinho", async () => {
   resetAnimeSessions();
 
