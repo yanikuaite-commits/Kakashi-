@@ -71,7 +71,9 @@ High-value architectural notes:
 | `src/@types/index.d.ts` | Typing and documentation for command and middleware props. |
 | `src/services/spider-x-api.js` | Spider X integration for downloads, AI, Pinterest, Brat, and related endpoints. |
 | `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
-| `src/services/anime.js` | HiAnime (Consumet) search, episodes and streaming sources. |
+| `src/services/anime.js` | Anime search, episodes, streaming sources and the episode-level provider fallback. |
+| `src/services/animegg.js` | AnimeGG provider: search, episodes and 480p MP4 sources (no browser). |
+| `src/services/anitube.js` | AniTube provider: WordPress REST search and HLS sources. |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
 | `src/services/ffmpeg.js` | Media conversion and audio/video processing. |
 
@@ -296,18 +298,19 @@ The Baileys path encrypts chunk by chunk, so a 350 MB episode costs ~65 MB of
 RSS as a stream against ~351 MB as a buffer. The Render `starter` plan has
 512 MB, so buffering a large episode gets the process killed by OOM.
 
-### Animes (anikoto + animeheaven + providers via @consumet/extensions)
+### Animes (animegg + anitube + animeheaven + anikoto + providers via @consumet/extensions)
 
 `src/services/anime.js` searches a live provider, lists episodes and returns
-streaming sources; `src/services/anikoto.js` and `src/services/animeheaven.js`
-are the in-house providers; `src/utils/animeMenu.js` runs the interactive flow
+streaming sources; `src/services/animegg.js`, `src/services/anitube.js`,
+`src/services/anikoto.js` and `src/services/animeheaven.js` are the in-house
+providers; `src/utils/animeMenu.js` runs the interactive flow
 (nome → temporadas → episódios → qualidade → download) and
 `src/utils/animeFormat.js` holds the pure helpers.
 
-- **`anikoto` and `animeheaven` are the providers that work from a datacenter IP
-  (Render).** Both are scraped by the bot itself, not by the library, because
-  every `@consumet/extensions` anime provider sits behind Cloudflare and/or is
-  dead. The anikoto chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
+- **`animegg`, `anitube`, `anikoto` and `animeheaven` are the providers that work
+  from a datacenter IP (Render).** All are scraped by the bot itself, not by the
+  library, because every `@consumet/extensions` anime provider sits behind
+  Cloudflare and/or is dead. The anikoto chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
   `/ajax/server/list?servers=<data-ids>` → `/ajax/server?get=<link>&sv=<sv>` →
   the megaplay player → `/stream/getSources?id=<mediaid>`; the m3u8 comes in the
   `enc` field, AES-256-CBC encrypted with a key/IV hardcoded in the player's JS
@@ -355,9 +358,72 @@ are the in-house providers; `src/utils/animeMenu.js` runs the interactive flow
   The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
   provider (ex-Zoro) shut down for good in March 2026
 - `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `animeheaven,anikoto,animeunity,animepahe`); each provider is tried
+  (default `animegg,anitube,animeheaven,anikoto`); each provider is tried
   until one returns the episode, and the winning provider is carried in the
   session so `getAnimeInfo`/`getEpisodeSources` hit the same source
+- **the fallback happens at the EPISODE level, not only at search time.** The
+  episode id is internal to the site that listed it, so when a provider has no
+  video for one episode, `getEpisodeSourcesWithFallback` (`src/services/anime.js`)
+  re-finds that same episode in the next providers by title + episode number and
+  returns the winning provider and the new id. `src/utils/animeMenu.js` writes
+  both back to the session, because the yt-dlp args and the max height depend on
+  the provider. If the number does not exist in a provider, it returns null
+  instead of risking the wrong episode.
+- **AnimeGG (`animegg.org`) is the default first provider: no browser, H.264
+  (`avc1`), and it fails on roughly one episode in eight — which is exactly why
+  the episode-level fallback exists.** The chain is plain `fetch` + regex, no
+  Playwright:
+  `/search/?q=` → `href="/series/<slug>"` → `/<slug>-episode-<n>` →
+  `/embed/<id>` → the inline
+  `var videoSources = [{file: "/play/<id>/video.mp4?for=<n>", label: "480p"}, …]`
+  → that path answers 302 to `s<n>.vidcache.net:8166/play/<token>/video.mp4`,
+  which yt-dlp downloads with only `--referer https://www.animegg.org/` (no
+  cookies needed).
+  - the embed link lives in `<iframe src="/embed/<id>">`, not in an `href`; the
+    regex accepts both.
+  - `videoSources` already carries the `label` (`360p`/`480p`/`720p`), so the
+    quality is known without a `HEAD` per entry. The size still has to be
+    measured: a 24 min episode was 31 MB at 360p, 80 MB at 480p and **201 MB at
+    720p**, i.e. above the 200 MB ceiling. `escolherDegrau` measures each tier
+    and prefers `ANIME_GG_MAX_HEIGHT` (480p), falling back to the tier below
+    before the one above.
+  - an entry may carry a `bk` field: a base64-encoded mp4upload embed that acts
+    as a backup mirror.
+  - **`var videoSources = []` is the failure mode, and it is persistent, not
+    transient** — the same episode repeats empty across retries, so retrying the
+    embed does not help. Measured over 40 episodes across 10 series: 35 (88%)
+    served a source, 5 (13%) were empty (e.g. `kaijuu-8-gou-episode-1`,
+    `dungeon-meshi-episode-24`, `kimetsu-no-yaiba-episode-52`). A slug may also
+    need a suffix (`jujutsu-kaisen-tv`, not `jujutsu-kaisen`), which is why the
+    slug must come from `/search/?q=` and never be guessed from the title.
+- **AniTube (`anitube.zip`) is a WordPress site, so search uses the native REST
+  API** (`/wp-json/wp/v2/posts?search=`) instead of HTML scraping. It serves
+  H.264 (`avc1`) HLS, and the episode page carries the m3u8 inside the player
+  iframe: `videohls.php?d=<m3u8>` — the `d` parameter is the URL to download, and
+  `parseVideo` reads it BEFORE any bare `.m3u8` match, because the player URL also
+  contains `.m3u8` and downloading the player returns HTML.
+  - **each episode is its own post and there is only one tier, at 720p (~257 MB
+    for a 24 min episode, over the 200 MB ceiling).** Series are reconstructed by
+    the title minus the episode suffix, and "dublado"/"legendado" is kept in the
+    key because they are separate posts of the same anime.
+  - because the playlist carries no `Content-Length`, the size is estimated by
+    sampling 5 segments and multiplying by the segment count. Measuring only the
+    first segment overestimates ~2.5x (the first carries the header at 4.7 MB,
+    the last drops to 0.1 MB); sampling gives 266 MB against 257 MB measured.
+    Without this check the user would only find out after downloading it all, so
+    the provider rejects the episode and the fallback moves on.
+  - the segments are MPEG-TS disguised with a `.webp` extension, so a downloaded
+    file needs a remux to MP4 before it can be sent.
+- **anime7 (`anime7.net`) works without a browser too, but serves AV1
+  (`av01`), which WhatsApp cannot play.** Its catalogue is 4423 animes and
+  ~59 k episodes, readable from `sitemap.xml` → `sitemap/animes.xml` +
+  `sitemap/episodes-{1,2}.xml` (one request per file, ~30 s total). The
+  `mp4upload` embed answers the direct MP4 in the raw HTML
+  (`https://a<n>.mp4upload.com:183/d/<token>/video.mp4`). Kept as reference
+  only; do not wire it as a provider while the codec is AV1.
+- animesonline.cloud exposes the MP4 in the raw HTML but its CDN
+  (`mangas.cloud`) answers 403 to every request — it needs its own
+  `cf_clearance`, so it is not usable from the bot.
 - the returned link is an m3u8/mp4 that yt-dlp downloads; HLS sources are
   preferred over DASH because some `.mpd` files from these sites ship without an
   audio track

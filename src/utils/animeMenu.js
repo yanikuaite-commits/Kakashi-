@@ -31,8 +31,8 @@
  * @author Dev Gui
  */
 import fs from "node:fs";
-import { ANIME_EPISODE_CREDITS, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
-import { getAnimeInfo, getAnimeSeasons, getEpisodeSources, getSeasonEpisodes, searchAnime } from "../services/anime.js";
+import { ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
+import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import {
   chargeCredits,
@@ -525,13 +525,31 @@ async function sendQualityList({ socket, session, episodeIndex }) {
   touch(session);
 
   try {
-    const sources = await getEpisodeSources(episode.id, session.provider);
+    // O fallback reencontra este episódio nos providers seguintes quando o
+    // provider de origem não tem vídeo (o AnimeGG falha ~1 em 8 episódios).
+    // O provider vencedor substitui o da sessão: os argumentos do yt-dlp e a
+    // resolução máxima dependem dele.
+    const resolvido = await getEpisodeSourcesWithFallback(
+      episode.id,
+      session.provider,
+      { titulo: session.anime?.title || "", numero: episode.number },
+    );
+
+    const sources = resolvido.sources;
+
+    if (resolvido.provider !== session.provider) {
+      infoLog(
+        `[anime] episódio servido por ${resolvido.provider} (fallback de ${session.provider})`,
+      );
+    }
+
+    session.provider = resolvido.provider;
 
     session.episode = {
       index: episodeIndex,
       number: episode.number ?? episodeIndex + 1,
       title: episode.title || "",
-      id: episode.id,
+      id: resolvido.episodeId,
     };
     session.sources = sources;
     session.stage = "qualidades";
@@ -574,7 +592,8 @@ async function sendQualityList({ socket, session, episodeIndex }) {
  * pareçam um browser: o yt-dlp tem de imitar o TLS/HTTP de um Chrome
  * (`generic:impersonate`) e enviar o `Referer` do player, senão responde 403
  * (desafio Cloudflare). O AnimeHeaven serve o MP4 direto e aceita o pedido sem
- * impersonation, mas o mirror confere o `Referer` do `gate.php`.
+ * impersonation, mas o mirror confere o `Referer` do `gate.php`. O AnimeGG serve
+ * o MP4 direto do CDN `vidcache.net`, que só exige o `Referer` do site.
  *
  * @param {string} provider
  * @returns {string[]}
@@ -595,6 +614,14 @@ function animeDownloadArgs(provider) {
     return ["--referer", "https://animeheaven.me/gate.php"];
   }
 
+  if (nome === "animegg") {
+    return ["--referer", "https://www.animegg.org/"];
+  }
+
+  if (nome === "anitube") {
+    return ["--referer", "https://www.anitube.zip/"];
+  }
+
   return [];
 }
 
@@ -603,15 +630,17 @@ function animeDownloadArgs(provider) {
  *
  * O anikoto só publica 1080p, por isso o download é limitado a 480p para caber
  * no limite de envio. O AnimeHeaven já publica 720p nativo (~112–164 MB, dentro
- * do teto de 200 MB): limitar a 480p só degradaria a imagem sem ganhar nada.
+ * do teto de 200 MB): limitar a 480p só degradaria a imagem sem ganhar nada. O
+ * AnimeGG é fixado em 480p (ANIME_GG_MAX_HEIGHT) porque o 720p passa os 200 MB.
  *
  * @param {string} provider
  * @returns {number}
  */
 function animeMaxHeight(provider) {
-  return String(provider || "").toLowerCase() === "animeheaven"
-    ? ANIME_HEAVEN_MAX_HEIGHT
-    : ANIME_MAX_HEIGHT;
+  const nome = String(provider || "").toLowerCase();
+  if (nome === "animeheaven") return ANIME_HEAVEN_MAX_HEIGHT;
+  if (nome === "animegg") return ANIME_GG_MAX_HEIGHT;
+  return ANIME_MAX_HEIGHT;
 }
 
 /**
