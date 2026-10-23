@@ -229,7 +229,7 @@ export const COMMAND_CREDITS = {
   "play-video": 8,
   "play-audio": 7,
   "baixar": 7,
-  "anime": 7,
+  "anime": 2,
   "yt-search": 5,
   // Inteligência artificial
   "deepseek": 6,
@@ -256,9 +256,10 @@ export const COMMAND_CREDITS = {
 // Custo de qualquer outro comando de membro não listado acima.
 export const DEFAULT_COMMAND_CREDITS = 5;
 
-// Custo por episódio de anime baixado. O comando `anime` gasta o custo normal
-// (a pesquisa e o menu), mas cada episódio efetivamente baixado custa isto:
-// o gasto real é o download, não a navegação.
+// Custo por episódio de anime baixado. A pesquisa e o menu custam
+// `COMMAND_CREDITS.anime` (2 créditos, barato porque só pesquisar não gasta
+// banda), mas cada episódio efetivamente baixado custa isto: o gasto real é o
+// download, não a navegação.
 export const ANIME_EPISODE_CREDITS = 20;
 
 // ==========================================================================
