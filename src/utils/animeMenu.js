@@ -11,9 +11,12 @@
  *      diferentes;
  *   3. escolhida a temporada, lista 10 episódios (`rowId` `anm:ep:<índice>`),
  *      com um botão `anm:pg:<página>` no fundo para os restantes — a lista
- *      fica curta e todos os episódios continuam alcançáveis;
- *   4. ao escolher o episódio, busca as `sources` e lista as qualidades
- *      (rowId `anm:src:<índice>`);
+ *      fica curta e todos os episódios continuam alcançáveis. Antes da lista,
+ *      quando o provider publica as duas faixas em TODOS os episódios, pergunta
+ *      a faixa (`rowId` `anm:aud:<faixa>`): a escolha é feita uma vez, para a
+ *      lista, e não episódio a episódio;
+ *   4. ao escolher o episódio, busca as `sources` (na faixa escolhida) e lista
+ *      as qualidades (rowId `anm:src:<índice>`);
  *   5. ao escolher a qualidade, baixa com o yt-dlp limitado a `ANIME_MAX_HEIGHT`
  *      (480p) e aplica a regra de tamanho (a mesma do YouTube, com teto maior):
  *        > 200 MB   → cancela e pede qualidade menor;
@@ -49,10 +52,13 @@ import {
   animeProviderLabel,
   animeSessionKey,
   animeTokenIndex,
+  audioVersionLabel,
+  buildAudioRows,
   buildEpisodeRows,
   buildNextPageRow,
   buildQualityRows,
   buildSeasonRows,
+  commonAudioVersions,
   episodePageCount,
   identitiesOverlap,
   jidIdentities,
@@ -198,6 +204,8 @@ function ensureSession({
       page: 0,
       episode: null,
       sources: [],
+      audioVersions: [],
+      audioVersion: "",
       cleanupTimer: null,
     };
     sessoesAnime.set(key, session);
@@ -308,6 +316,8 @@ export async function startAnimeFlow({
   session.episodes = [];
   session.episode = null;
   session.sources = [];
+  session.audioVersions = [];
+  session.audioVersion = "";
 
   infoLog(`[anime] a pedir o nome do anime para "${chatId}" (owner ${ownerId})`);
 
@@ -344,6 +354,8 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
     session.episodes = [];
     session.episode = null;
     session.sources = [];
+    session.audioVersions = [];
+    session.audioVersion = "";
 
     // Só há passo de temporada quando a fonte agrupa 2+ títulos: um grupo de
     // um é o próprio anime e a escolha seria ruído.
@@ -409,19 +421,99 @@ async function loadEpisodesAndSend({ socket, session, id }) {
     session.episode = null;
     session.sources = [];
     session.seasonTitle = "";
-    session.stage = "episodios";
 
     infoLog(
       `[anime] "${session.anime.title}" (id ${id}) com ${info.episodes.length} episódios`,
     );
 
-    return sendEpisodePage({ socket, session, page: 0 });
+    return routeAfterEpisodes({ socket, session });
   } catch (error) {
     dropSession(session);
     errorLog(`[anime] falha ao buscar episódios (id ${id}): ${error.message}`);
     await session.sendReply(`❌ ${error.message}`).catch(() => {});
     return false;
   }
+}
+
+/**
+ * Decide o passo seguinte depois de os episódios estarem carregados.
+ *
+ * Pergunta a faixa (Legendado/Dublado) só quando a lista inteira publica as
+ * duas — perguntar por um episódio que só tem uma delas seria uma escolha falsa.
+ * Quando há uma só faixa, fica logo fixada sem incomodar o utilizador; quando o
+ * provider não distingue faixas (`[]`), o fluxo segue como sempre.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function routeAfterEpisodes({ socket, session }) {
+  const versoes = commonAudioVersions(session.episodes);
+
+  session.audioVersions = versoes;
+  session.audioVersion = versoes.length === 1 ? versoes[0] : "";
+  session.episode = null;
+  session.sources = [];
+
+  if (versoes.length > 1) {
+    return sendAudioList({ socket, session });
+  }
+
+  session.stage = "episodios";
+  return sendEpisodePage({ socket, session, page: 0 });
+}
+
+/**
+ * Envia a escolha da faixa de áudio (Legendado / Dublado).
+ *
+ * @returns {Promise<boolean>}
+ */
+async function sendAudioList({ socket, session }) {
+  session.stage = "faixas";
+  touch(session);
+
+  const rows = [...buildAudioRows(session.audioVersions), cancelRow()];
+
+  return sendCard({
+    socket,
+    session,
+    text: mediaCaption({
+      titulo: session.seasonTitle
+        ? `${session.anime?.title || "Anime"} — ${session.seasonTitle}`
+        : session.anime?.title || "Anime",
+      canal: animeProviderLabel(session.provider),
+      duracao: `${session.episodes.length} episódios`,
+      qualidade: "—",
+      extra: "🔊 Este anime tem as duas faixas. Escolhe como queres ver.",
+      rodape: null,
+    }),
+    title: "Áudio",
+    rows,
+  });
+}
+
+/**
+ * Aplica a faixa escolhida e segue para a lista de episódios.
+ *
+ * A faixa pedida é validada contra as que a lista realmente publica: um token
+ * antigo (o site mudou) ou forjado não pode fixar uma faixa inexistente, senão o
+ * download falharia mais tarde com um erro difícil de entender.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function chooseAudioVersion({ socket, session, version }) {
+  const disponiveis = session.audioVersions || [];
+
+  if (!disponiveis.includes(version)) {
+    dropSession(session);
+    await session.sendReply(
+      "❌ Essa faixa já não está disponível. Envia .menu para recomeçar.",
+    ).catch(() => {});
+    return true;
+  }
+
+  session.audioVersion = version;
+  infoLog(`[anime] faixa escolhida: ${version}`);
+
+  return sendEpisodePage({ socket, session, page: 0 });
 }
 
 /**
@@ -448,14 +540,13 @@ async function chooseSeasonAndSendEpisodes({ socket, session, seasonIndex }) {
     session.episodes = episodes;
     session.episode = null;
     session.sources = [];
-    session.stage = "episodios";
     session.seasonTitle = temporada.title;
 
     infoLog(
       `[anime] temporada "${temporada.title}" com ${episodes.length} episódios`,
     );
 
-    return sendEpisodePage({ socket, session, page: 0 });
+    return routeAfterEpisodes({ socket, session });
   } catch (error) {
     dropSession(session);
     errorLog(`[anime] falha na temporada "${temporada.slug}": ${error.message}`);
@@ -532,7 +623,11 @@ async function sendQualityList({ socket, session, episodeIndex }) {
     const resolvido = await getEpisodeSourcesWithFallback(
       episode.id,
       session.provider,
-      { titulo: session.anime?.title || "", numero: episode.number },
+      {
+        titulo: session.anime?.title || "",
+        numero: episode.number,
+        audioVersion: session.audioVersion || "",
+      },
     );
 
     const sources = resolvido.sources;
@@ -568,7 +663,9 @@ async function sendQualityList({ socket, session, episodeIndex }) {
         titulo: `${session.anime?.title || "Anime"} — Ep. ${session.episode.number}`,
         canal: animeProviderLabel(session.provider),
         duracao: session.episode.title || "—",
-        qualidade: "Escolha a qualidade",
+        qualidade: session.audioVersion
+          ? `${audioVersionLabel(session.audioVersion)} · Escolhe a qualidade`
+          : "Escolha a qualidade",
         extra: `⬇️ O episódio sai em até ${animeMaxHeight(session.provider)}p para caber no limite de envio.`,
         rodape: null,
       }),
@@ -738,7 +835,9 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
       titulo: `${animeTitulo} — Ep. ${episode?.number ?? "?"}`,
       canal: animeProviderLabel(session.provider),
       duracao: result.durationString || "Não disponível",
-      qualidade: source.label,
+      qualidade: session.audioVersion
+        ? `${audioVersionLabel(session.audioVersion)} · ${source.label}`
+        : source.label,
     });
 
     if (acao === "cancel") {
@@ -889,6 +988,14 @@ export async function handleAnimeReply({
     const epIndex = animeTokenIndex(value, "anm:ep:");
     if (epIndex >= 0) {
       return sendQualityList({ socket, session: sessao, episodeIndex: epIndex });
+    }
+
+    if (value.startsWith("anm:aud:")) {
+      return chooseAudioVersion({
+        socket,
+        session: sessao,
+        version: value.slice("anm:aud:".length).trim().toLowerCase(),
+      });
     }
 
     const pgIndex = animeTokenIndex(value, "anm:pg:");

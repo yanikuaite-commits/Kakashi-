@@ -85,6 +85,22 @@ export function chaveDaSerie(titulo) {
 }
 
 /**
+ * Faixa de áudio de um título de post.
+ *
+ * O site publica "dublado"/"legendado" no próprio título e o post é único, pelo
+ * que o título é a fonte da verdade. Sem marca assume-se legendado: é o caso
+ * comum no site e evita prometer dublagem onde ela não foi anunciada.
+ *
+ * @param {string} titulo
+ * @returns {string} "dubbed" ou "subbed"
+ */
+export function versaoDoTitulo(titulo) {
+  return /dublado|dublagem|\bdub\b/i.test(String(titulo ?? ""))
+    ? "dubbed"
+    : "subbed";
+}
+
+/**
  * Extrai o número do episódio do título ("... – Episódio 500" → 500).
  *
  * @param {string} titulo
@@ -226,7 +242,13 @@ export async function buscarSeries(termo) {
       });
     }
 
-    series.get(slug).episodes.push({ id: String(post.id), number: numero });
+    // A faixa sai do próprio título ("... - Episódio 12 Dublado"), que é como o
+    // site separa os posts. Sem marca, assume-se legendado (o caso comum).
+    series.get(slug).episodes.push({
+      id: String(post.id),
+      number: numero,
+      versions: [versaoDoTitulo(titulo)],
+    });
   }
 
   for (const serie of series.values()) {
@@ -276,6 +298,7 @@ export async function episodes(animeId, slug) {
     id: ep.id,
     number: ep.number,
     ids: ep.id,
+    versions: ep.versions || [],
   }));
 }
 

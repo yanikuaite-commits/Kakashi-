@@ -358,6 +358,137 @@ test("sem temporadas agrupadas, salta direto para os episódios", async () => {
   }
 });
 
+test("com as duas faixas, o menu pergunta Legendado/Dublado antes dos episódios", async () => {
+  resetAnimeSessions();
+
+  // AnimeGG com as duas faixas: a escolha da faixa tem de vir ANTES dos episódios.
+  const respostas = {
+    "/search/?q=naruto": `
+      <div class="media searchre">
+        <a href="/series/naruto" class="mse"><div class="media-body"><div class="first"><h2>Naruto</h2></div></div></a>
+      </div>`,
+    "/series/naruto": `
+      <a href="/naruto-episode-1" class="anm_det_pop"><strong>Naruto 1</strong></a><a href="/naruto-episode-1#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-1#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
+      <a href="/naruto-episode-2" class="anm_det_pop"><strong>Naruto 2</strong></a><a href="/naruto-episode-2#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-2#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>`,
+  };
+
+  globalThis.fetch = async (url) => {
+    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const enviados = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "naruto",
+    });
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.stage, "faixas", "para na escolha da faixa");
+    assert.deepEqual(sessao.audioVersions, ["subbed", "dubbed"]);
+
+    const ids = enviados[0].interactiveButtons
+      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+      .find((p) => p.sections)?.sections?.[0]?.rows
+      ?.map((r) => r.id);
+    assert.ok(ids.includes("anm:aud:subbed"), "oferece Legendado");
+    assert.ok(ids.includes("anm:aud:dubbed"), "oferece Dublado");
+    assert.ok(
+      !ids.some((id) => id.startsWith("anm:ep:")),
+      "ainda NÃO mostra episódios: a faixa vem primeiro",
+    );
+
+    // Escolher dublado → guarda a faixa e segue para os episódios.
+    await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: "anm:aud:dubbed",
+      sendReply: async () => {},
+    });
+
+    assert.equal(getAnimeSession(CHAT, LID).stage, "episodios");
+    assert.equal(getAnimeSession(CHAT, LID).audioVersion, "dubbed");
+
+    const idsEp = enviados[1].interactiveButtons
+      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+      .find((p) => p.sections)?.sections?.[0]?.rows
+      ?.map((r) => r.id);
+    assert.ok(idsEp.includes("anm:ep:0"), "agora sim mostra os episódios");
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
+test("com uma só faixa, o menu não pergunta e fixa-a sozinho", async () => {
+  resetAnimeSessions();
+
+  // AnimeGG com apenas dublado (caso real do One Piece 1156): perguntar seria
+  // uma escolha falsa, mas a faixa tem de ficar fixada para o download.
+  const respostas = {
+    "/search/?q=one%20piece": `
+      <div class="media searchre">
+        <a href="/series/one-piece" class="mse"><div class="media-body"><div class="first"><h2>One Piece</h2></div></div></a>
+      </div>`,
+    "/series/one-piece": `
+      <a href="/one-piece-episode-1156" class="anm_det_pop"><strong>One Piece 1156</strong></a><a href="/one-piece-episode-1156#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
+      <a href="/one-piece-episode-1157" class="anm_det_pop"><strong>One Piece 1157</strong></a><a href="/one-piece-episode-1157#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>`,
+  };
+
+  globalThis.fetch = async (url) => {
+    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const enviados = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "one piece",
+    });
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.stage, "episodios", "não para na escolha de faixa");
+    assert.equal(sessao.audioVersion, "dubbed", "mas fixa a única faixa existente");
+
+    const ids = enviados[0].interactiveButtons
+      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+      .find((p) => p.sections)?.sections?.[0]?.rows
+      ?.map((r) => r.id);
+    assert.ok(ids.includes("anm:ep:0"), "mostra logo os episódios");
+    assert.ok(
+      !ids.some((id) => id.startsWith("anm:aud:")),
+      "não pergunta uma escolha que não existe",
+    );
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
 test("anm:sea com sessão inexistente avisa que o menu expirou", async () => {
   resetAnimeSessions();
 

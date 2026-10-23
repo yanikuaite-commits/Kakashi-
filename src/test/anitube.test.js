@@ -4,6 +4,7 @@ import {
   chaveDaSerie,
   numeroDoEpisodio,
   parseVideo,
+  versaoDoTitulo,
 } from "../services/anitube.js";
 
 /**
@@ -63,4 +64,13 @@ test("chaveDaSerie distingue dublado de legendado", () => {
     chaveDaSerie("Naruto Shippuden (Dublado) – Episódio 1"),
     chaveDaSerie("Naruto Shippuden (Legendado) – Episódio 1"),
   );
+});
+
+test("versaoDoTitulo lê a faixa do título do post", () => {
+  assert.equal(versaoDoTitulo("Naruto Shippuden (Dublado) – Episódio 500"), "dubbed");
+  assert.equal(versaoDoTitulo("Naruto Shippuden Dublagem – Episódio 1"), "dubbed");
+  assert.equal(versaoDoTitulo("Kaijuu 8-gou – Episódio 12"), "subbed");
+  assert.equal(versaoDoTitulo("Naruto Shippuden (Legendado) – Episódio 1"), "subbed");
+  // Um "Dubai" no título não pode passar por dublagem.
+  assert.equal(versaoDoTitulo("Dubai no Anime – Episódio 3"), "subbed");
 });

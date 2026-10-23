@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  escolherEmbed,
   ordenarPorPreferencia,
   parseEpisodes,
+  parseEpisodeVersions,
   parseSearch,
   parseVideoSources,
 } from "../services/animegg.js";
@@ -70,6 +72,68 @@ test("parseSearch devolve [] sem resultados", () => {
   assert.deepEqual(parseSearch("<div>No results</div>"), []);
   assert.deepEqual(parseSearch(""), []);
   assert.deepEqual(parseSearch(null), []);
+});
+
+// Trecho real de /<slug>-episode-1: as duas abas, com o `subbed` PRIMEIRO.
+const HTML_EPISODIO_DUAS_FAIXAS = `
+<ul id="videos" class="nav nav-tabs">
+  <li><a href="#subbed-Animegg" data-toggle="tab" data-id='27657' data-mirror="Animegg" data-version="subbed"><span class="btn-xs btn-subbed">SUBBED</span></a></li>
+  <li><a href="#dubbed-Animegg" data-toggle="tab" data-id='27658' data-mirror="Animegg" data-version="dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a></li>
+</ul>
+<div class="tab-content">
+  <div id="subbed-Animegg" class="tab-pane"><iframe src="/embed/27657" class="video"></iframe></div>
+  <div id="dubbed-Animegg" class="tab-pane"><iframe src="/embed/27658" class="video"></iframe></div>
+</div>
+`;
+
+// Trecho real de /<slug>-episode-1156: só dublado.
+const HTML_EPISODIO_SO_DUB = `
+<ul id="videos" class="nav nav-tabs">
+  <li><a href="#dubbed-Animegg" data-toggle="tab" data-id='147620' data-mirror="Animegg" data-version="dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a></li>
+</ul>
+<div class="tab-content">
+  <div id="dubbed-Animegg" class="tab-pane"><iframe src="/embed/147620" class="video"></iframe></div>
+</div>
+`;
+
+// Trecho real de /series/<slug>: cada faixa é um link próprio com fragmento.
+const HTML_SERIE_FAIXAS = `
+<a href="/naruto-episode-220" class="anm_det_pop"><strong>Naruto 220</strong></a><a href="/naruto-episode-220#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a>
+<a href="/one-piece-episode-1156" class="anm_det_pop"><strong>One Piece 1156</strong></a><a href="/one-piece-episode-1156#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
+<a href="/one-piece-episode-1" class="anm_det_pop"><strong>One Piece 1</strong></a><a href="/one-piece-episode-1#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/one-piece-episode-1#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
+`;
+
+test("escolherEmbed distingue dublado de legendado (o bug: era sempre o 1º)", () => {
+  // O `subbed` vem primeiro no HTML; pedir dublado tem de dar o OUTRO embed.
+  assert.equal(escolherEmbed(HTML_EPISODIO_DUAS_FAIXAS, "subbed"), "27657");
+  assert.equal(escolherEmbed(HTML_EPISODIO_DUAS_FAIXAS, "dubbed"), "27658");
+
+  // Só dublado: pedir legendado não pode devolver o embed do dublado.
+  assert.equal(escolherEmbed(HTML_EPISODIO_SO_DUB, "dubbed"), "147620");
+  assert.equal(escolherEmbed(HTML_EPISODIO_SO_DUB, "subbed"), null);
+});
+
+test("escolherEmbed sem faixa mantém o primeiro embed (compatibilidade)", () => {
+  assert.equal(escolherEmbed(HTML_EPISODIO_DUAS_FAIXAS, ""), "27657");
+  assert.equal(escolherEmbed(HTML_EPISODIO_SO_DUB, ""), "147620");
+  assert.equal(escolherEmbed("<html></html>", "dubbed"), null);
+});
+
+test("escolherEmbed ignora faixas desconhecidas (não injeta no regex)", () => {
+  // Um valor forjado não pode escapar da whitelist nem rebentar o regex.
+  assert.equal(escolherEmbed(HTML_EPISODIO_DUAS_FAIXAS, 'x"|.*'), "27657");
+  assert.equal(escolherEmbed(HTML_EPISODIO_DUAS_FAIXAS, "raw"), "27657");
+  assert.equal(escolherEmbed(HTML_EPISODIO_SO_DUB, "SUBBED"), null);
+});
+
+test("parseEpisodeVersions lê as faixas de cada episódio", () => {
+  const faixas = parseEpisodeVersions(HTML_SERIE_FAIXAS, "one-piece");
+
+  assert.deepEqual(faixas.get(1), ["subbed", "dubbed"]);
+  assert.deepEqual(faixas.get(1156), ["dubbed"]);
+  // O 220 é de OUTRA série (naruto) e não pode aparecer na lista do one-piece.
+  assert.equal(faixas.has(220), false);
+  assert.deepEqual(parseEpisodeVersions("<html></html>", "one-piece").size, 0);
 });
 
 test("parseEpisodes extrai números, sem duplicados e ordenados", () => {

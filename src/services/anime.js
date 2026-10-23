@@ -308,6 +308,9 @@ export async function getAnimeInfo(id, provider) {
         id: `${slug}::${episode.id}::${episode.ids}`,
         number: episode.number,
         title: "",
+        // Faixas publicadas ("subbed"/"dubbed"). Vazio quando a fonte não as
+        // distingue — o menu então nem pergunta, como antes.
+        versions: episode.versions || [],
       })),
     };
   }
@@ -399,23 +402,29 @@ export async function getSeasonEpisodes(slug, provider) {
     id: `${slug}::${episode.id}::${episode.ids}`,
     number: episode.number,
     title: "",
+    versions: episode.versions || [],
   }));
 }
 
 /**
  * Fontes de streaming de um episódio, já normalizadas por qualidade.
  *
+ * `audioVersion` ("subbed"/"dubbed") é a faixa pedida. Só os providers que
+ * publicam as duas faixas a usam (AnimeGG); os restantes ignoram-no, pelo que o
+ * parâmetro é opcional e sem ele o comportamento é o de sempre.
+ *
  * @param {string} episodeId
  * @param {string} provider
+ * @param {string} [audioVersion]
  * @returns {Promise<Array<{url: string, label: string, isM3U8: boolean}>>}
  */
-export async function getEpisodeSources(episodeId, provider) {
+export async function getEpisodeSources(episodeId, provider, audioVersion = "") {
   const { tipo, instance } = await resolveProvider(provider);
 
   if (tipo === "proprio") {
     const [slug, epId, ids] = String(episodeId).split("::");
     const resolvido = await withTimeout(
-      instance.sources({ id: epId, ids }, slug),
+      instance.sources({ id: epId, ids }, slug, audioVersion),
       ANIME_API_TIMEOUT_MS,
       `${provider}.sources`,
     ).catch((error) => {
@@ -500,9 +509,10 @@ async function resolveProvider(provider) {
  * @param {{nome: string, tipo: string, instance: object}} entrada
  * @param {string} titulo
  * @param {number} numero
+ * @param {string} [audioVersion]
  * @returns {Promise<{sources: Array<object>, episodeId: string}|null>}
  */
-async function fontesDoProvider(entrada, titulo, numero) {
+async function fontesDoProvider(entrada, titulo, numero, audioVersion = "") {
   const { nome, tipo, instance } = entrada;
 
   if (tipo === "proprio") {
@@ -521,11 +531,19 @@ async function fontesDoProvider(entrada, titulo, numero) {
         `${nome}.episodes`,
       ).catch(() => null);
 
-      const episodio = lista?.find((ep) => Number(ep.number) === Number(numero));
+      // A faixa pedida faz parte da escolha do episódio: no AniTube o dublado é
+      // um post DIFERENTE, pelo que procurar só pelo número traria o legendado.
+      const candidatos = (lista || []).filter(
+        (ep) => Number(ep.number) === Number(numero),
+      );
+      const episodio =
+        candidatos.find((ep) => (ep.versions || []).includes(audioVersion)) ||
+        (audioVersion ? null : candidatos[0]);
+
       if (!episodio) continue;
 
       const resolvido = await withTimeout(
-        instance.sources({ id: episodio.id, ids: episodio.ids }, resultado.slug),
+        instance.sources({ id: episodio.id, ids: episodio.ids }, resultado.slug, audioVersion),
         ANIME_API_TIMEOUT_MS,
         `${nome}.sources`,
       );
@@ -604,17 +622,18 @@ async function fontesDoProvider(entrada, titulo, numero) {
  *
  * @param {string} episodeId
  * @param {string} provider
- * @param {{titulo?: string, numero?: number}} [contexto]
+ * @param {{titulo?: string, numero?: number, audioVersion?: string}} [contexto]
  * @returns {Promise<{sources: Array<object>, provider: string, episodeId: string}>}
  */
 export async function getEpisodeSourcesWithFallback(episodeId, provider, contexto = {}) {
   const titulo = String(contexto.titulo || "").trim();
   const numero = Number(contexto.numero) || 0;
+  const audioVersion = String(contexto.audioVersion || "").trim().toLowerCase();
 
   let erroOriginal;
 
   try {
-    const sources = await getEpisodeSources(episodeId, provider);
+    const sources = await getEpisodeSources(episodeId, provider, audioVersion);
     return { sources, provider, episodeId };
   } catch (error) {
     erroOriginal = error;
@@ -628,7 +647,7 @@ export async function getEpisodeSourcesWithFallback(episodeId, provider, context
 
   for (const entrada of restantes) {
     try {
-      const resolvido = await fontesDoProvider(entrada, titulo, numero);
+      const resolvido = await fontesDoProvider(entrada, titulo, numero, audioVersion);
 
       if (!resolvido) {
         infoLog(`[anime] fallback ${entrada.nome}: episódio ${numero} não existe`);
