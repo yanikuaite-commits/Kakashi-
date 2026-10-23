@@ -471,6 +471,8 @@ export const FUNCTIONS = [
     ["bot-off", "Desligar bot", "Desliga o bot para os usuários."],
     ["bot-status", "Estado do bot", "Mostra se o bot está ligado."],
     ["backup", "Backup", "Cria um backup dos dados (a sessão só com .backup sessao)."],
+    ["restore", "Restaurar", "Restaura os dados do GitHub (a sessão só com .restore sessao)."],
+    ["delete-backup", "Apagar backup", "Apaga o arquivo de backup do GitHub."],
     ["get-group-id", "ID do grupo", "Mostra o ID do chat atual."],
     ["blocked-commands", "Comandos bloqueados", "Lista os comandos bloqueados."],
   ].map(([comando, titulo, descricao]) =>

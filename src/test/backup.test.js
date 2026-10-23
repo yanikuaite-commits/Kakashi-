@@ -62,3 +62,86 @@ test("o comando .backup documenta a opção da sessão", async () => {
   // Não invocamos handle() aqui: com GITHUB_TOKEN no ambiente ele faria um
   // upload real do backup, incluindo o .env.
 });
+
+test("o comando .restore documenta a opção da sessão", async () => {
+  const comando = (await import("../commands/owner/restore.js")).default;
+  assert.match(comando.usage, /sessao/);
+});
+
+/**
+ * Constrói um arquivo de backup falso (com sessão e dados) e restaura-o sobre
+ * um diretório temporário, exercitando `applyArchive` a sério.
+ */
+async function arquivoFalso({ comSessao }) {
+  const src = path.join(os.tmpdir(), `fake-src-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await fs.mkdir(path.join(src, "database"), { recursive: true });
+  await fs.writeFile(path.join(src, "database", "credits.json"), '{"a":{"balance":5}}');
+  if (comSessao) {
+    await fs.mkdir(path.join(src, "assets", "auth", "baileys"), { recursive: true });
+    await fs.writeFile(path.join(src, "assets", "auth", "baileys", "creds.json"), '{"privada":true}');
+  }
+  const archivePath = path.join(os.tmpdir(), `fake-${Date.now()}-${Math.random().toString(36).slice(2)}.tar.gz`);
+  await execFileAsync("tar", ["-czf", archivePath, "-C", src, ...(comSessao ? ["database", "assets"] : ["database"])]);
+  await fs.rm(src, { recursive: true, force: true });
+  return archivePath;
+}
+
+async function dirTemporario() {
+  return fs.mkdtemp(path.join(os.tmpdir(), "restore-target-"));
+}
+
+test("restauro sem autorização restaura os dados e IGNORA a sessão do arquivo", async () => {
+  const { applyArchive } = await import("../services/backup.js");
+  const archivePath = await arquivoFalso({ comSessao: true });
+  const target = await dirTemporario();
+  try {
+    const result = await applyArchive(archivePath, { includeAuth: false, targetRoot: target });
+
+    assert.equal(result.includesSession, false);
+    assert.ok(
+      await fs.stat(path.join(target, "database", "credits.json")),
+      "os dados têm de ser restaurados",
+    );
+    await assert.rejects(
+      fs.access(path.join(target, "assets", "auth", "baileys", "creds.json")),
+      "a sessão do arquivo NÃO pode ser restaurada sem autorização",
+    );
+  } finally {
+    await fs.rm(archivePath, { force: true });
+    await fs.rm(target, { recursive: true, force: true });
+  }
+});
+
+test("restauro com autorização restaura também a sessão do arquivo", async () => {
+  const { applyArchive } = await import("../services/backup.js");
+  const archivePath = await arquivoFalso({ comSessao: true });
+  const target = await dirTemporario();
+  try {
+    const result = await applyArchive(archivePath, { includeAuth: true, targetRoot: target });
+
+    assert.equal(result.includesSession, true);
+    assert.ok(await fs.stat(path.join(target, "assets", "auth", "baileys", "creds.json")));
+  } finally {
+    await fs.rm(archivePath, { force: true });
+    await fs.rm(target, { recursive: true, force: true });
+  }
+});
+
+test("restauro sobre um projeto com sessão já instalada não a apaga", async () => {
+  const { applyArchive } = await import("../services/backup.js");
+  const archivePath = await arquivoFalso({ comSessao: true });
+  const target = await dirTemporario();
+  try {
+    // Simula o bot já pareado: existe uma sessão local que deve sobreviver.
+    await fs.mkdir(path.join(target, "assets", "auth", "baileys"), { recursive: true });
+    await fs.writeFile(path.join(target, "assets", "auth", "baileys", "creds.json"), '{"local":true}');
+
+    await applyArchive(archivePath, { includeAuth: false, targetRoot: target });
+
+    const creds = await fs.readFile(path.join(target, "assets", "auth", "baileys", "creds.json"), "utf8");
+    assert.match(creds, /local/, "a sessão local do bot não pode ser tocada");
+  } finally {
+    await fs.rm(archivePath, { force: true });
+    await fs.rm(target, { recursive: true, force: true });
+  }
+});

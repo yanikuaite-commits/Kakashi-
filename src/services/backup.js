@@ -40,6 +40,25 @@ async function githubRequest(config, endpoint, options = {}) {
 }
 
 /**
+ * Recusa enviar o backup para um repositório público.
+ *
+ * O arquivo leva o `.env` e pode levar a sessão do WhatsApp. Num repositório
+ * público isso é uma fuga de segredos, e o GitHub guarda o ficheiro no histórico
+ * de commits mesmo depois de ele ser apagado — a exposição é permanente. Por
+ * isso o envio falha em vez de avisar: um aviso perdido num log é uma fuga.
+ */
+async function assertPrivateRepository(config) {
+  const repo = await githubRequest(config, `/repos/${config.repository}`);
+  if (repo.private !== true) {
+    throw new Error(
+      `O repositório ${config.repository} é PÚBLICO. O backup contém o .env ` +
+        "(segredos) e seria publicado. Torne o repositório privado ou aponte " +
+        "GITHUB_REPOSITORY para um repositório privado.",
+    );
+  }
+}
+
+/**
  * Candidatos a backup, com o que exigem.
  *
  * `database/` é o estado do bot (créditos, pagamentos pendentes, avisos,
@@ -99,6 +118,7 @@ export async function createBackup({ includeAuth = false } = {}) {
   try {
     const config = githubConfig();
     if (!config) return { archivePath, github: false, includesSession };
+    await assertPrivateRepository(config);
     const content = (await fs.readFile(archivePath)).toString("base64");
     const endpoint = `/repos/${config.repository}/contents/${config.path}`;
     let sha;
@@ -124,7 +144,20 @@ export async function createBackup({ includeAuth = false } = {}) {
   }
 }
 
-export async function restoreBackup() {
+/**
+ * Restaura os dados a partir do GitHub.
+ *
+ * A sessão do WhatsApp que o arquivo trouxer é DESCARTADA, a não ser que o dono
+ * a autorize com `restoreBackup({ includeAuth: true })`. Restaurar a sessão de
+ * um backup substitui as chaves privadas do número por outras: se o arquivo for
+ * antigo ou de outra instalação, o bot deixa de conseguir falar e fica ligado a
+ * uma sessão que já não é a sua. Os dados (`database/`) e o `.env` são
+ * restaurados sempre.
+ *
+ * @param {{includeAuth?: boolean}} [options]
+ * @returns {Promise<{destination: string, includesSession: boolean}>}
+ */
+export async function restoreBackup({ includeAuth = false } = {}) {
   const config = githubConfig();
   if (!config) throw new Error("Configure GITHUB_TOKEN e GITHUB_REPOSITORY para restaurar pelo GitHub.");
   const endpoint = `/repos/${config.repository}/contents/${config.path}?ref=${encodeURIComponent(config.branch)}`;
@@ -132,9 +165,89 @@ export async function restoreBackup() {
   const archivePath = path.join(os.tmpdir(), `kakashi-restore-${Date.now()}.tar.gz`);
   try {
     await fs.writeFile(archivePath, Buffer.from(data.content.replace(/\n/g, ""), "base64"));
-    await execFileAsync("tar", ["-xzf", archivePath, "-C", projectRoot]);
-    return `${config.repository}/${config.path}`;
+    const { includesSession } = await applyArchive(archivePath, { includeAuth });
+    return { destination: `${config.repository}/${config.path}`, includesSession };
   } finally {
     await fs.rm(archivePath, { force: true });
   }
+}
+
+/**
+ * Aplica um arquivo de backup sobre a raiz do projeto.
+ *
+ * Extrai primeiro para um diretório temporário, para poder filtrar o que entra:
+ * assim a sessão do WhatsApp é descartada antes de tocar no projeto, e o
+ * conteúdo do arquivo nunca escreve diretamente na raiz.
+ *
+ * Exportado para os testes exercitarem o restauro real sem falar com o GitHub.
+ *
+ * @param {string} archivePath
+ * @param {{includeAuth?: boolean, targetRoot?: string}} [options]
+ * @returns {Promise<{includesSession: boolean}>}
+ */
+export async function applyArchive(archivePath, { includeAuth = false, targetRoot = projectRoot } = {}) {
+  const stageDir = path.join(os.tmpdir(), `kakashi-restore-stage-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  try {
+    await fs.mkdir(stageDir, { recursive: true });
+    await execFileAsync("tar", ["-xzf", archivePath, "-C", stageDir]);
+
+    const includesSession = await pathExists(path.join(stageDir, "assets", "auth", "baileys"));
+    if (includesSession && !includeAuth) {
+      await fs.rm(path.join(stageDir, "assets"), { recursive: true, force: true });
+    }
+
+    for (const entry of await fs.readdir(stageDir)) {
+      await fs.cp(path.join(stageDir, entry), path.join(targetRoot, entry), {
+        recursive: true,
+        force: true,
+      });
+    }
+
+    return { includesSession: includesSession && includeAuth };
+  } finally {
+    await fs.rm(stageDir, { recursive: true, force: true });
+  }
+}
+
+async function pathExists(target) {
+  try {
+    await fs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Apaga o arquivo de backup do repositório remoto.
+ *
+ * Serve para fechar a exposição: um arquivo que já foi público fica no histórico
+ * de commits do GitHub mesmo depois de apagado, portanto apagar só ajuda se o
+ * repositório for privado e o ficheiro nunca tiver sido publicado.
+ *
+ * @returns {Promise<{destination: string}>}
+ */
+export async function deleteRemoteBackup() {
+  const config = githubConfig();
+  if (!config) throw new Error("Configure GITHUB_TOKEN e GITHUB_REPOSITORY para apagar o backup remoto.");
+  const endpoint = `/repos/${config.repository}/contents/${config.path}`;
+  let sha;
+  try {
+    sha = (await githubRequest(config, `${endpoint}?ref=${encodeURIComponent(config.branch)}`)).sha;
+  } catch (error) {
+    if (String(error.message).includes("HTTP 404")) {
+      throw new Error("Não existe backup no GitHub para apagar.");
+    }
+    throw error;
+  }
+  await githubRequest(config, endpoint, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: `backup: apagar arquivo a pedido do dono ${new Date().toISOString()}`,
+      sha,
+      branch: config.branch,
+    }),
+  });
+  return { destination: `${config.repository}/${config.path}` };
 }

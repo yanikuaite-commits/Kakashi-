@@ -167,6 +167,14 @@ A sessão do WhatsApp (`assets/auth/baileys/`) NÃO entra no backup por padrão:
 são as chaves privadas do pareamento e quem tiver esse ficheiro fala pelo número
 do bot. Para a incluir, é preciso pedir explicitamente com `.backup sessao`.
 
+No restauro a regra é a mesma: `.restore` recupera os dados e ignora a sessão
+que venha dentro do arquivo, para não substituir as chaves do bot em execução.
+Use `.restore sessao` apenas quando quiser mesmo trocar a sessão.
+
+O repositório de destino tem de ser privado. O bot recusa o envio se detetar um
+repositório público, porque o arquivo leva o `.env`. Para apagar o arquivo
+remoto, use `.delete-backup`.
+
 Os downloads por link usam a API do GenDownload via `axios`. Configure
 `GENDOWNLOAD_API_URL` com o endpoint POST `/api/extract` para usar uma instância
 autorizada diferente; o padrão é `https://gendownload.com/api/extract`.

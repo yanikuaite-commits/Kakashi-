@@ -260,13 +260,28 @@ What goes into the archive, and what does not:
   archive can talk as the bot's number. `backupEntries({ includeAuth })` is the
   single place that decides this, and the default is `false`.
 
+- on restore, the archive's session is **discarded** unless
+  `.restore sessao` asks for it. `applyArchive` extracts to a temp directory
+  first, drops `assets/auth/`, then copies into the project: a stale archive can
+  no longer overwrite the pairing keys of a running bot, and an existing local
+  session is left untouched. Restoring the session of an old or foreign archive
+  is how a bot ends up unable to talk.
+
 Destination: with `GITHUB_TOKEN` set it uploads to
 `GITHUB_REPOSITORY`/`GITHUB_BACKUP_PATH` (`backups/kakashi-database.tar.gz` on
 `main`, all fixed in `src/config.js`); without it the archive stays local in
 `/tmp`. There is no scheduler — only the owner command triggers it.
 
-The repository holding the archive must stay private: the `.env` alone makes it
-a secrets container.
+`assertPrivateRepository` refuses the upload when the target repository is not
+private, because the archive carries the `.env` and a public repo would publish
+it. The check fails the command instead of warning: the file would stay in the
+GitHub commit history even after deletion, so the leak is permanent. This repo
+was public at the time of writing, so the upload is blocked until it is made
+private.
+
+`.delete-backup` (`deleteRemoteBackup`) removes the remote file on request.
+Deleting only helps while the repository was never public; the commit history
+keeps the blob, so secrets from an already-public archive must be rotated.
 
 ## ANTI_PAYMENT
 
