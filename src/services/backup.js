@@ -39,28 +39,66 @@ async function githubRequest(config, endpoint, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
-async function createArchive() {
-  const archivePath = path.join(os.tmpdir(), `kakashi-backup-${Date.now()}.tar.gz`);
-  const candidates = ["database", ".env", "assets/auth/baileys"];
+/**
+ * Candidatos a backup, com o que exigem.
+ *
+ * `database/` é o estado do bot (créditos, pagamentos pendentes, avisos,
+ * prefixos, silenciados, restrições). O `.env` traz os segredos.
+ *
+ * `assets/auth/baileys` é a SESSÃO do WhatsApp: as chaves privadas de
+ * pareamento. Quem tiver esse ficheiro fala pelo número do bot, por isso ele
+ * NÃO entra no backup sem pedido explícito do dono.
+ */
+const CANDIDATES = [
+  { entry: "database", requiresAuth: false },
+  { entry: ".env", requiresAuth: false },
+  { entry: "assets/auth/baileys", requiresAuth: true },
+];
+
+/**
+ * Decide quais caminhos entram no arquivo. Exportado para os testes poderem
+ * exercitar a regra da sessão sem falar com o GitHub.
+ *
+ * @param {{includeAuth?: boolean}} [options]
+ * @returns {Promise<string[]>}
+ */
+export async function backupEntries({ includeAuth = false } = {}) {
   const entries = [];
-  for (const candidate of candidates) {
+  for (const { entry, requiresAuth } of CANDIDATES) {
+    if (requiresAuth && !includeAuth) continue;
     try {
-      await fs.access(path.join(projectRoot, candidate));
-      entries.push(candidate);
+      await fs.access(path.join(projectRoot, entry));
+      entries.push(entry);
     } catch {
       // O arquivo pode não existir em uma instalação nova.
     }
   }
-  if (!entries.length) throw new Error("Não há dados disponíveis para criar o backup.");
-  await execFileAsync("tar", ["-czf", archivePath, "-C", projectRoot, ...entries]);
-  return archivePath;
+  return entries;
 }
 
-export async function createBackup() {
-  const archivePath = await createArchive();
+async function createArchive({ includeAuth = false } = {}) {
+  const archivePath = path.join(os.tmpdir(), `kakashi-backup-${Date.now()}.tar.gz`);
+  const entries = await backupEntries({ includeAuth });
+  if (!entries.length) throw new Error("Não há dados disponíveis para criar o backup.");
+  await execFileAsync("tar", ["-czf", archivePath, "-C", projectRoot, ...entries]);
+  return { archivePath, entries };
+}
+
+/**
+ * Cria o backup dos dados do bot.
+ *
+ * A sessão do Baileys só entra com `includeAuth: true`, que o comando
+ * `.backup sessao` traduz. Sem isso, o arquivo leva só o `database/` e o `.env`.
+ *
+ * @param {{includeAuth?: boolean}} [options]
+ * @returns {Promise<{archivePath: string, github: boolean, destination?: string, includesSession: boolean}>}
+ */
+export async function createBackup({ includeAuth = false } = {}) {
+  const { archivePath, entries } = await createArchive({ includeAuth });
+  const includesSession = entries.includes("assets/auth/baileys");
   try {
     const config = githubConfig();
-    if (!config) return { archivePath, github: false };
+    if (!config) return { archivePath, github: false, includesSession };
     const content = (await fs.readFile(archivePath)).toString("base64");
     const endpoint = `/repos/${config.repository}/contents/${config.path}`;
     let sha;
@@ -79,7 +117,7 @@ export async function createBackup() {
         ...(sha ? { sha } : {}),
       }),
     });
-    return { archivePath, github: true, destination: `${config.repository}/${config.path}` };
+    return { archivePath, github: true, destination: `${config.repository}/${config.path}`, includesSession };
   } catch (error) {
     await fs.rm(archivePath, { force: true });
     throw error;

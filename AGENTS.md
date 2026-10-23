@@ -235,10 +235,38 @@ Every member command checks the balance before running, not only at the end:
 - `dynamicCommand` calls `hasSufficientCredits` and then `chargeCredits`; with no
   balance the command never starts and the member gets `creditsExhaustedMessage`
 - `ANIME_EPISODE_CREDITS` (20) is charged per downloaded episode in
-  `downloadAndSend`, after the same pre-check; the search and menus cost the
-  normal `anime` command price. A failed download is refunded with
-  `refundCredits`, because nobody pays for an episode that never arrived
+  `downloadAndSend`, after the same pre-check. The search and the menus cost the
+  `anime` command price (`COMMAND_CREDITS.anime`, 2) — cheap because searching
+  spends no bandwidth; the real cost is the episode that gets downloaded. A
+  failed download is refunded with `refundCredits`, because nobody pays for an
+  episode that never arrived
 - the owner (`OWNER_LID`) never pays, in commands or in the anime flow
+
+## BACKUP
+
+`src/services/backup.js` builds the archive, `src/commands/owner/backup.js` is
+the owner command, and `src/commands/owner/restore.js` pulls it back.
+
+What goes into the archive, and what does not:
+
+- `database/` — always. This is where the credits live
+  (`database/credits.json`, `readCreditsAccounts`), plus the pending payment
+  confirmations (`database/pending-recharges.json`), warns, prefixes, muted
+  users and restrictions. **Anything the credits feature writes is backed up,
+  because the whole folder travels.**
+- `.env` — always. It carries the secrets.
+- `assets/auth/baileys/` — **only with explicit authorisation**, via
+  `.backup sessao`. These are the pairing private keys: whoever holds the
+  archive can talk as the bot's number. `backupEntries({ includeAuth })` is the
+  single place that decides this, and the default is `false`.
+
+Destination: with `GITHUB_TOKEN` set it uploads to
+`GITHUB_REPOSITORY`/`GITHUB_BACKUP_PATH` (`backups/kakashi-database.tar.gz` on
+`main`, all fixed in `src/config.js`); without it the archive stays local in
+`/tmp`. There is no scheduler — only the owner command triggers it.
+
+The repository holding the archive must stay private: the `.env` alone makes it
+a secrets container.
 
 ## ANTI_PAYMENT
 

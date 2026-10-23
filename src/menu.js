@@ -125,7 +125,7 @@ export const MENU_CATEGORIES = [
     key: "dono", label: "Dono", icon: "👑", aliases: ["cdono", "owner"],
     commands: [
       ["bot-on"], ["bot-off"], ["bot-status"],
-      ["backup"], ["restore"], ["get-group-id"],
+      ["backup", "dados (a sessão só com backup sessao)"], ["restore"], ["get-group-id"],
       ["recarregar <créditos> @usuario", "adicionar créditos após pagamento"],
       ["block-command <nome>"], ["unblock-command <nome>"], ["blocked-commands"],
       ["private-whitelist <add|remove|list>"],

@@ -151,16 +151,21 @@ unblock command play video
 blocked commands
 ```
 
-O backup salva a pasta `database/`, o `.env` e a sessão `assets/auth/baileys/` em um arquivo compactado. Para sincronizar
-com um repositório GitHub, configure no ambiente, nunca no código:
+O backup salva a pasta `database/` (créditos, pagamentos pendentes, avisos,
+prefixos, silenciados e restrições) e o `.env` em um arquivo compactado. Para
+sincronizar com um repositório GitHub, configure no ambiente, nunca no código:
 
 ```sh
 O backup usa o repositório `yanikuaite-commits/Kakashi` e as configurações ficam
 em `src/config.js`.
 ```
 
-Depois use `.backup` e `.restore`. O repositório deve permanecer privado, pois o
-backup inclui credenciais da sessão e variáveis secretas do `.env`.
+Use `.backup` para salvar os dados e `.restore` para restaurar. O repositório
+deve permanecer privado, pois o backup inclui as variáveis secretas do `.env`.
+
+A sessão do WhatsApp (`assets/auth/baileys/`) NÃO entra no backup por padrão:
+são as chaves privadas do pareamento e quem tiver esse ficheiro fala pelo número
+do bot. Para a incluir, é preciso pedir explicitamente com `.backup sessao`.
 
 Os downloads por link usam a API do GenDownload via `axios`. Configure
 `GENDOWNLOAD_API_URL` com o endpoint POST `/api/extract` para usar uma instância
