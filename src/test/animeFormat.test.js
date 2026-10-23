@@ -7,10 +7,13 @@ import {
   animeQualityLabel,
   animeSessionKey,
   animeTokenIndex,
+  audioVersionLabel,
+  buildAudioRows,
   buildEpisodeRows,
   buildNextPageRow,
   buildQualityRows,
   buildSeasonRows,
+  commonAudioVersions,
   episodePageCount,
   identitiesOverlap,
   jidDigits,
@@ -136,13 +139,65 @@ test("animeTokenIndex lê o índice do token", () => {
   assert.equal(animeTokenIndex("", "anm:ep:"), -1);
 });
 
-test("os prefixos de token cobrem episódio, qualidade e página", () => {
+test("os prefixos de token cobrem episódio, faixa, qualidade e página", () => {
   assert.deepEqual(ANIME_TOKEN_PREFIXES, [
     "anm:sea:",
     "anm:ep:",
+    "anm:aud:",
     "anm:src:",
     "anm:pg:",
   ]);
+});
+
+test("commonAudioVersions só devolve o que TODOS os episódios publicam", () => {
+  // A lista inteira tem as duas faixas → pode oferecer a escolha.
+  assert.deepEqual(
+    commonAudioVersions([
+      { versions: ["subbed", "dubbed"] },
+      { versions: ["dubbed", "subbed"] },
+    ]),
+    ["subbed", "dubbed"],
+  );
+
+  // Um episódio só legendado: oferecer "Dublado" falharia nesse episódio.
+  assert.deepEqual(
+    commonAudioVersions([
+      { versions: ["subbed", "dubbed"] },
+      { versions: ["subbed"] },
+    ]),
+    ["subbed"],
+  );
+
+  // Sem informação de faixa (anikoto/animeheaven): o menu não pergunta nada.
+  assert.deepEqual(commonAudioVersions([{ number: 1 }, { number: 2 }]), []);
+  assert.deepEqual(commonAudioVersions([]), []);
+  assert.deepEqual(commonAudioVersions([{ versions: [] }]), []);
+});
+
+test("audioVersionLabel traduz as faixas e não inventa as desconhecidas", () => {
+  assert.equal(audioVersionLabel("subbed"), "Legendado");
+  assert.equal(audioVersionLabel("dubbed"), "Dublado");
+  assert.equal(audioVersionLabel("SUBBED"), "Legendado");
+  assert.equal(audioVersionLabel(""), "");
+  assert.equal(audioVersionLabel("raw"), "raw");
+});
+
+test("buildAudioRows só cria linhas para as faixas oferecidas", () => {
+  const ambas = buildAudioRows(["subbed", "dubbed"]);
+  assert.deepEqual(
+    ambas.map((r) => r.id),
+    ["anm:aud:subbed", "anm:aud:dubbed"],
+  );
+  assert.equal(ambas[0].title, "Legendado");
+  assert.equal(ambas[1].title, "Dublado");
+
+  // Uma lista só com dublado não pode mostrar a linha do legendado.
+  const soDub = buildAudioRows(["dubbed"]);
+  assert.deepEqual(
+    soDub.map((r) => r.id),
+    ["anm:aud:dubbed"],
+  );
+  assert.deepEqual(buildAudioRows([]), []);
 });
 
 test("buildSeasonRows usa anm:sea:<i> e guarda o slug", () => {

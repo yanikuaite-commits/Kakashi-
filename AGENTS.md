@@ -387,6 +387,19 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   cookies needed).
   - the embed link lives in `<iframe src="/embed/<id>">`, not in an `href`; the
     regex accepts both.
+  - **the episode page carries one tab per audio track, and the `subbed` tab
+    comes FIRST — so "the first embed" was always the subtitled one.**
+    `escolherEmbed` now reads `data-version` next to `data-id` and picks the
+    requested track instead:
+    `<li><a href="#subbed-Animegg" data-version="subbed" data-id='27657'>` and
+    `<li><a href="#dubbed-Animegg" data-version="dubbed" data-id='27658'>`.
+    Without a requested track it keeps the old "first embed" behaviour, which is
+    the only option for pages with no identified tabs.
+  - the series page marks the track per episode with its own fragment
+    (`/<slug>-episode-<n>#subbed` / `#dubbed`), and `parseEpisodeVersions` reads
+    it. Coverage is uneven: on One Piece, 583 episodes have both tracks, 578 are
+    subbed-only and 1 is dubbed-only (1156) — which is why the menu only offers
+    the choice when the WHOLE list has both tracks.
   - `videoSources` already carries the `label` (`360p`/`480p`/`720p`), so the
     quality is known without a `HEAD` per entry. The size still has to be
     measured: a 24 min episode was 31 MB at 360p, 80 MB at 480p and **201 MB at
@@ -412,6 +425,14 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
     for a 24 min episode, over the 200 MB ceiling).** Series are reconstructed by
     the title minus the episode suffix, and "dublado"/"legendado" is kept in the
     key because they are separate posts of the same anime.
+  - the audio track comes from the title (`versaoDoTitulo`) and is carried on the
+    episode, so the menu can offer the choice here too. Naruto Shippuden is the
+    real case: `naruto-shippuden-dublado` (500 dubbed episodes) and
+    `naruto-shippuden` (98 subbed) are two different series.
+  - **because the dubbed episode is a DIFFERENT post, the fallback must match the
+    track as well as the number.** Looking up only by episode number would
+    happily return the subtitled post for a user who asked for dubbed, so
+    `fontesDoProvider` filters the candidates by track.
   - because the playlist carries no `Content-Length`, the size is estimated by
     sampling 5 segments and multiplying by the segment count. Measuring only the
     first segment overestimates ~2.5x (the first carries the header at 4.7 MB,
@@ -450,6 +471,22 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
 - list rows carry only indices (`anm:ep:<i>` / `anm:src:<i>`); the real
   (long, signed) stream URLs stay in the session, because WhatsApp drops
   oversized `rowId`s
+- **the audio track is a step of its own (`anm:aud:subbed` / `anm:aud:dubbed`),
+  asked BEFORE the episode list and only when the whole list has both tracks.**
+  The episode list comes from `getAnimeInfo`/`getSeasonEpisodes`, which carry
+  `versions` per episode; `commonAudioVersions` intersects them and
+  `routeAfterEpisodes` decides: 2+ → ask, exactly 1 → fix it silently (no false
+  choice), none → ask nothing and behave as before. Asking per episode instead
+  would let the user pick "Dublado" and then hit an episode that has no dub, so
+  the choice is made once, for the list
+- the chosen track is stored in `session.audioVersion` and travels as the third
+  argument of `getEpisodeSources(episodeId, provider, audioVersion)` down to
+  `provider.sources(episode, slug, audioVersion)`; providers that do not
+  distinguish tracks simply ignore it. The card shows it (`Dublado · 480p`) so
+  the user can confirm what was sent
+- the fallback keeps the track: `fontesDoProvider` filters candidates by
+  `versions`, because in AniTube the dubbed episode is a different post and
+  matching on the number alone would silently hand back the subtitled one
 - episodes are listed 10 at a time (`anm:ep:<i>` uses the ABSOLUTE index) with a
   single `anm:pg:<p>` "ver mais" row at the bottom for the rest, so the list
   stays short and every episode is still reachable — WhatsApp drops oversized

@@ -16,10 +16,96 @@
 /** Quantos episódios aparecem por página da lista. */
 export const EPISODES_PER_PAGE = 10;
 
-/** Prefixos de token do menu de animes. */
-export const ANIME_TOKEN_PREFIXES = ["anm:sea:", "anm:ep:", "anm:src:", "anm:pg:"];
+/** Faixas de áudio que os providers podem publicar. */
+export const AUDIO_SUBBED = "subbed";
+export const AUDIO_DUBBED = "dubbed";
+export const AUDIO_VERSIONS = [AUDIO_SUBBED, AUDIO_DUBBED];
 
-/** Nomes próprios dos providers, para o card não mostrar "Animeheaven". */
+/** Prefixos de token do menu de animes. */
+export const ANIME_TOKEN_PREFIXES = [
+  "anm:sea:",
+  "anm:ep:",
+  "anm:aud:",
+  "anm:src:",
+  "anm:pg:",
+];
+
+/**
+ * Nome próprio de uma faixa, para o card ("subbed" → "Legendado").
+ *
+ * O AnimeGG e o AniTube publicam as duas faixas em inglês; o utilizador do bot
+ * fala português, pelo que o rótulo é traduzido. Um valor desconhecido é
+ * devolvido como veio, para nunca esconder uma faixa nova do provider.
+ *
+ * @param {string} versao
+ * @returns {string}
+ */
+export function audioVersionLabel(versao) {
+  const valor = String(versao || "").trim().toLowerCase();
+  if (valor === AUDIO_SUBBED) return "Legendado";
+  if (valor === AUDIO_DUBBED) return "Dublado";
+  return valor;
+}
+
+/**
+ * Faixas comuns a todos os episódios de uma lista.
+ *
+ * A escolha da faixa é feita UMA vez, antes da lista de episódios, e não em cada
+ * episódio: só se oferece a escolha quando a lista inteira tem as duas, senão um
+ * episódio sem dublagem falharia depois de o utilizador já a ter escolhido. Uma
+ * lista sem informação de faixa devolve `[]` e o fluxo segue como antes.
+ *
+ * @param {Array<{versions?: string[]}>} episodes
+ * @returns {string[]} por ordem de `AUDIO_VERSIONS`
+ */
+export function commonAudioVersions(episodes = []) {
+  const lista = Array.isArray(episodes) ? episodes : [];
+  if (!lista.length) return [];
+
+  const primeira = lista[0]?.versions;
+  if (!Array.isArray(primeira) || !primeira.length) return [];
+
+  const presentes = new Set(primeira.map((v) => String(v).toLowerCase()));
+
+  for (const episode of lista.slice(1)) {
+    const versoes = new Set(
+      (Array.isArray(episode?.versions) ? episode.versions : []).map((v) =>
+        String(v).toLowerCase(),
+      ),
+    );
+
+    for (const versao of [...presentes]) {
+      if (!versoes.has(versao)) presentes.delete(versao);
+    }
+
+    if (!presentes.size) break;
+  }
+
+  return AUDIO_VERSIONS.filter((versao) => presentes.has(versao));
+}
+
+/**
+ * Monta as linhas da escolha de faixa.
+ *
+ * @param {string[]} versions
+ * @returns {Array<{id: string, title: string, description: string}>}
+ */
+export function buildAudioRows(versions = []) {
+  return AUDIO_VERSIONS.filter((versao) =>
+    versions.map((v) => String(v).toLowerCase()).includes(versao),
+  ).map((versao) => ({
+    id: `anm:aud:${versao}`,
+    title: audioVersionLabel(versao),
+    description:
+      versao === AUDIO_DUBBED
+        ? "Áudio em português"
+        : "Áudio original com legendas",
+  }));
+}
+
+/**
+ * Nomes próprios dos providers, para o card não mostrar "Animeheaven".
+ */
 const PROVIDER_LABELS = {
   anikoto: "Anikoto",
   animeheaven: "AnimeHeaven",

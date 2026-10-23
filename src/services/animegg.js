@@ -34,6 +34,7 @@ import {
   ANIME_USER_AGENT,
 } from "../config.js";
 import { errorLog, infoLog } from "../utils/logger.js";
+import { audioVersionLabel } from "../utils/animeFormat.js";
 import { AnimeApiError } from "./anime.js";
 
 const BASE = "https://www.animegg.org";
@@ -159,6 +160,43 @@ export function parseEpisodes(html, slug) {
 }
 
 /**
+ * Faixas publicadas de cada episódio da página da série.
+ *
+ * O site marca cada faixa com um link próprio e um fragmento:
+ *
+ *   <a href="/naruto-episode-220#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a>
+ *   <a href="/one-piece-episode-1156#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
+ *
+ * O fragmento é o sinal fiável: há episódios com as duas faixas, outros só com
+ * uma. Ler isto evita prometer uma faixa que o episódio não tem.
+ *
+ * @param {string} html
+ * @param {string} slug
+ * @returns {Map<number, string[]>} número do episódio → faixas publicadas
+ */
+export function parseEpisodeVersions(html, slug) {
+  const escapado = String(slug).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const padrao = new RegExp(
+    `href="/${escapado}-episode-(\\d+)#(subbed|dubbed)"`,
+    "gi",
+  );
+  const mapa = new Map();
+
+  for (const [, numero, versao] of String(html ?? "").matchAll(padrao)) {
+    const chave = Number(numero);
+    if (!Number.isFinite(chave) || chave <= 0) continue;
+
+    const faixa = versao.toLowerCase();
+    const lista = mapa.get(chave) || [];
+    if (!lista.includes(faixa)) lista.push(faixa);
+
+    mapa.set(chave, lista);
+  }
+
+  return mapa;
+}
+
+/**
  * Extrai os degraus de qualidade do `var videoSources` do embed.
  *
  * @param {string} html
@@ -251,6 +289,60 @@ export async function escolherDegrau(fontes) {
 }
 
 /**
+ * Escolhe o embed do episódio, pela faixa pedida.
+ *
+ * A página do episódio traz uma aba por faixa, cada uma com o seu `iframe`:
+ *
+ *   <li><a href="#subbed-Animegg" data-version="subbed" data-id='27657'>SUBBED</a></li>
+ *   <li><a href="#dubbed-Animegg" data-version="dubbed" data-id='27658'>DUBBED</a></li>
+ *   <div id="subbed-Animegg"><iframe src="/embed/27657"></iframe></div>
+ *   <div id="dubbed-Animegg"><iframe src="/embed/27658"></iframe></div>
+ *
+ * Ler o `data-version` junto do `data-id` (e não só o primeiro iframe) é o que
+ * evita servir sempre o legendado: o `subbed` vem primeiro no HTML, portanto o
+ * "primeiro embed" era o legendado mesmo quando o utilizador queria o dublado.
+ *
+ * Sem faixa pedida, mantém-se o comportamento antigo — o primeiro embed — que
+ * é o único caminho possível para as páginas sem abas identificadas.
+ *
+ * @param {string} html
+ * @param {string} [audioVersion]
+ * @returns {string|null}
+ */
+export function escolherEmbed(html, audioVersion = "") {
+  const pagina = String(html ?? "");
+  // Whitelist: o valor vem de um token do menu e é interpolado num regex, pelo
+  // que só as faixas conhecidas podem chegar ao padrão.
+  const pedida = ["subbed", "dubbed"].includes(
+    String(audioVersion || "").trim().toLowerCase(),
+  )
+    ? String(audioVersion).trim().toLowerCase()
+    : "";
+
+  if (pedida) {
+    const padrao = new RegExp(
+      `data-version="${pedida}"[^>]*data-id='(\\d+)'|data-id='(\\d+)'[^>]*data-version="${pedida}"`,
+      "i",
+    );
+    const porAtributo = pagina.match(padrao);
+
+    if (porAtributo) return porAtributo[1] || porAtributo[2];
+
+    // Variante sem `data-id` no mesmo elemento: usa o painel da aba.
+    const painel = new RegExp(
+      `id="${pedida}-[^"]*"[\\s\\S]{0,400}?src="/embed/(\\d+)"`,
+      "i",
+    ).exec(pagina);
+
+    if (painel) return painel[1];
+
+    return null;
+  }
+
+  return pagina.match(/(?:src|href)="\/embed\/(\d+)"/)?.[1] || null;
+}
+
+/**
  * Pesquisa animes e devolve os resultados com o slug de cada um.
  *
  * @param {string} termo
@@ -286,20 +378,23 @@ export async function episodes(animeId, slug) {
     throw new AnimeApiError("Este anime não tem episódios disponíveis na fonte.");
   }
 
+  const faixas = parseEpisodeVersions(html, serie);
+
   return numeros.map((numero) => {
     const id = `${serie}-episode-${numero}`;
-    return { id, number: numero, ids: id };
+    return { id, number: numero, ids: id, versions: faixas.get(numero) || [] };
   });
 }
 
 /**
- * Link do MP4 direto de um episódio, no degrau preferido.
+ * Link do MP4 direto de um episódio, na faixa e no degrau pedidos.
  *
  * @param {{id: string, ids: string}} episodio
  * @param {string} slug
+ * @param {string} [audioVersion] "subbed" ou "dubbed"
  * @returns {Promise<{url: string, quality: string, isM3U8: boolean}>}
  */
-export async function sources(episodio, slug) {
+export async function sources(episodio, slug, audioVersion = "") {
   const paginaEp = String(episodio?.ids || episodio?.id || "").trim();
 
   if (!paginaEp) {
@@ -309,13 +404,16 @@ export async function sources(episodio, slug) {
   const serie = String(slug || "").split(":")[0] || paginaEp.replace(/-episode-\d+$/, "");
   const referer = `${BASE}/${paginaEp}`;
   const pagina = await fetchText(referer, `${BASE}/series/${serie}`);
-  // O embed vem no `<iframe src="/embed/<id>">` (aba "subbed-Animegg"), não num
-  // `href` — daí o padrão aceitar as duas formas.
-  const embedId = pagina.match(/(?:src|href)="\/embed\/(\d+)"/)?.[1];
+  const embedId = escolherEmbed(pagina, audioVersion);
 
   if (!embedId) {
+    // A faixa pedida pode não existir (a lista dizia que sim, mas o site mudou).
+    // O erro diz qual foi, para o utilizador perceber o que aconteceu.
+    const pedida = audioVersionLabel(audioVersion);
     throw new AnimeApiError(
-      "Nenhum link de streaming foi encontrado para este episódio.",
+      pedida
+        ? `Esta faixa (${pedida}) não está disponível neste episódio.`
+        : "Nenhum link de streaming foi encontrado para este episódio.",
     );
   }
 
