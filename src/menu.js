@@ -117,6 +117,7 @@ export const MENU_CATEGORIES = [
     commands: [
       ["conta", "saldo de créditos e estatísticas"],
       ["conta custos", "tabela de custos por função"],
+      ["pagamento", "números de e-mola e m-pesa"],
       ["tabela", "tabelas de preços (planos e créditos)"],
     ],
   },

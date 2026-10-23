@@ -186,6 +186,12 @@ This keeps persistence behavior consistent and avoids duplicated parsing logic.
 A member pays by e-mola or m-pesa and forwards the SMS to the bot. The owner
 confirms the money by hand; nothing is credited automatically.
 
+`pagamento` (member, free) is the public entry point: it shows the two numbers
+with the account holder under each one (`PAYMENT_E_MOLA_NAME` = Yanik,
+`PAYMENT_M_PESA_NAME` = Helton), the "forward the receipt SMS" instruction and
+the owner's `wa.me` link. The holder name is what tells the member who they are
+paying, so keep it next to the number it belongs to — never swap the two.
+
 Flow:
 
 1. `src/middlewares/onMesssagesUpsert.js` calls `handlePaymentSms` right after

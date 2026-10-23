@@ -196,7 +196,7 @@ export const DAILY_FREE_CREDITS = 30;
 
 // Contato do dono para receber pagamento e recarregar créditos.
 // Use o número com DDI e DDD, apenas dígitos (ex: "258840000000").
-export const OWNER_CONTACT = "";
+export const OWNER_CONTACT = "258834788141";
 
 // Comandos isentos de créditos (navegação, ajuda e a própria conta).
 // A comparação usa o nome "oficial" do comando (não os atalhos).
@@ -213,6 +213,7 @@ export const FREE_COMMANDS = [
   "tabela",
   "tabela-dias",
   "tabela-creditos",
+  "pagamento",
 ];
 
 // Custo em créditos por comando (nome oficial do comando).
@@ -267,6 +268,11 @@ export const ANIME_EPISODE_CREDITS = 20;
 // mensagens de SMS que citem um destes números.
 export const PAYMENT_E_MOLA_NUMBER = process.env.PAYMENT_E_MOLA_NUMBER || "865672009";
 export const PAYMENT_M_PESA_NUMBER = process.env.PAYMENT_M_PESA_NUMBER || "850446446";
+
+// Titular de cada número, mostrado pelo comando `.pagamento` por baixo do
+// respetivo número. O nome confirma ao usuário para quem está a transferir.
+export const PAYMENT_E_MOLA_NAME = process.env.PAYMENT_E_MOLA_NAME || "Yanik";
+export const PAYMENT_M_PESA_NAME = process.env.PAYMENT_M_PESA_NAME || "Helton";
 
 // Quanto tempo o dono tem para confirmar uma recarga antes de a transação
 // caducar (10 horas). Depois disso o usuário tem de enviar o pagamento de novo.
