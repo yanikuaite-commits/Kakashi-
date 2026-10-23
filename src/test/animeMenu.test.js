@@ -86,7 +86,7 @@ test("o autor cancela o próprio menu mesmo com forma de JID diferente", async (
   assert.match(replies[0], /cancelado/i);
 });
 
-test("outro membro continua a ser negado", async () => {
+test("outro membro é ignorado em silêncio e não mexe no menu", async () => {
   resetAnimeSessions();
   await abrirMenu(LID, [LID, PN]);
 
@@ -101,8 +101,12 @@ test("outro membro continua a ser negado", async () => {
     sendReply: async (text) => replies.push(String(text)),
   });
 
-  assert.equal(consumiu, true);
-  assert.match(replies[0], /Só quem pediu/i);
+  assert.equal(consumiu, false, "a mensagem de terceiros segue o fluxo normal");
+  assert.deepEqual(
+    replies,
+    [],
+    "avisar aqui fazia o bot responder a qualquer mensagem do grupo",
+  );
 });
 
 test("outro membro não cancela o menu do autor", async () => {
@@ -110,7 +114,7 @@ test("outro membro não cancela o menu do autor", async () => {
   await abrirMenu(LID, [LID, PN]);
 
   const replies = [];
-  await handleAnimeReply({
+  const consumiu = await handleAnimeReply({
     socket: makeSocket(),
     chatId: CHAT,
     senderLid: "555555555555555@lid",
@@ -119,7 +123,36 @@ test("outro membro não cancela o menu do autor", async () => {
     sendReply: async (text) => replies.push(String(text)),
   });
 
-  assert.match(replies[0], /Só quem pediu pode cancelar/i);
+  assert.equal(consumiu, false);
+  assert.deepEqual(replies, [], "o menu do autor tem de continuar de pé, sem resposta");
+});
+
+test("texto de outro membro à espera do nome fica em silêncio", async () => {
+  resetAnimeSessions();
+  await abrirMenu(LID, [LID, PN]);
+
+  const replies = [];
+  const consumiu = await handleAnimeReply({
+    socket: makeSocket(),
+    chatId: CHAT,
+    senderLid: "555555555555555@lid",
+    senderLids: ["555555555555555@lid"],
+    senderName: "Outra Pessoa",
+    text: "bom dia pessoal",
+    sendReply: async (text) => replies.push(String(text)),
+  });
+
+  assert.equal(consumiu, false, "o texto não é nome de anime do dono");
+  assert.deepEqual(
+    replies,
+    [],
+    "a conversa do grupo não pode virar \"não foste tu que pediste o menu\"",
+  );
+  assert.equal(
+    getAnimeSession(CHAT, LID).stage,
+    "aguardando_nome",
+    "a sessão continua à espera do nome, agora dado pelo dono",
+  );
 });
 
 test("token de anime sem sessão avisa que o menu expirou", async () => {

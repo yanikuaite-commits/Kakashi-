@@ -304,17 +304,18 @@ The Baileys path encrypts chunk by chunk, so a 350 MB episode costs ~65 MB of
 RSS as a stream against ~351 MB as a buffer. The Render `starter` plan has
 512 MB, so buffering a large episode gets the process killed by OOM.
 
-### Animes (animegg + anitube + animeheaven + anikoto + providers via @consumet/extensions)
+### Animes (animegg + anitube + animeheaven + animesonlinehd + anikoto + providers via @consumet/extensions)
 
 `src/services/anime.js` searches a live provider, lists episodes and returns
 streaming sources; `src/services/animegg.js`, `src/services/anitube.js`,
-`src/services/anikoto.js` and `src/services/animeheaven.js` are the in-house
+`src/services/anikoto.js`, `src/services/animeheaven.js` and
+`src/services/animesonlinehd.js` are the in-house
 providers; `src/utils/animeMenu.js` runs the interactive flow
 (nome → temporadas → episódios → qualidade → download) and
 `src/utils/animeFormat.js` holds the pure helpers.
 
-- **`animegg`, `anitube`, `anikoto` and `animeheaven` are the providers that work
-  from a datacenter IP (Render).** All are scraped by the bot itself, not by the
+- **`animegg`, `anitube`, `anikoto`, `animeheaven` and `animesonlinehd` are the
+  providers that work from a datacenter IP (Render).** All are scraped by the bot itself, not by the
   library, because every `@consumet/extensions` anime provider sits behind
   Cloudflare and/or is dead. The anikoto chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
   `/ajax/server/list?servers=<data-ids>` → `/ajax/server?get=<link>&sv=<sv>` →
@@ -359,12 +360,38 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   episode already fits the 200 MB limit, so forcing 480p would only degrade the
   image for nothing. `ANIME_MAX_HEIGHT` (480) still applies to anikoto, whose
   master.m3u8 carries a single 1080p variant
+- **`animesonlinehd` is the only provider with real PT-BR dubbing.** It is a
+  Next.js frontend over a WordPress backend (`animesonline.blue`), and the
+  `/anime/<slug>` HTML carries the whole catalogue in the RSC payload
+  (`self.__next_f.push`), so one page gives every season and both audio tracks —
+  the WordPress REST API needs auth (401) and is not used. The chain is:
+  `/api/search?q=` → `/anime/<slug>` → `/api/episodio/<id>` (returns `tipo` plus
+  a Blogger `playerUrl`) → the Blogger page → the direct `googlevideo.com`
+  URL. `yt-dlp`'s blogger extractor fails on this format ("Unable to extract
+  JSON data"), so the URL is parsed here and yt-dlp gets it directly
+- **each episode carries separate `leg` and `dub` ids**, which is why the audio
+  step is a real choice here: picking "Dublado" swaps the episode id, not just a
+  label. `getAnimeInfo`/`getSeasonEpisodes`/`episodes` therefore take the
+  `audioVersion`, and `animeMenu.js` reloads the list once the track is chosen.
+  An episode that does not publish the requested track is dropped rather than
+  falling back — serving the wrong audio is the exact bug this provider fixes.
+  With no explicit choice the dubbed id wins (`ANIME_PREFER_DUBBED`), falling back
+  to subtitled only when the episode has no dubbing
+- the Blogger CDN serves itag 18 (360p, ~75 MB for a 24 min episode) and itag 22
+  (720p, ~219 MB). The 720p is above the 200 MB ceiling, so the episode is served
+  at 360p. The CDN requires the Blogger `Referer` **and** a browser
+  `User-Agent`: without the User-Agent it answers 403 even with the right
+  Referer, which is why `animeDownloadArgs` sets both
+- **the real end-to-end download was verified**: Kaiju Girls ep. 1 resolved
+  through `animesonlinehd` and downloaded with yt-dlp to a 14.8 MB MP4, well
+  inside the 200 MB ceiling. The 360p/720p sizes above come from longer episodes
+  (24 min); a short episode is much smaller
 - the library providers remain as fallback; extraction runs **in-process**
   through `@consumet/extensions`, with no Consumet server and no self-hosting.
   The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
   provider (ex-Zoro) shut down for good in March 2026
 - `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `animegg,anitube,animeheaven,anikoto`); each provider is tried
+  (default `animegg,anitube,animeheaven,animesonlinehd,anikoto`); each provider is tried
   until one returns the episode, and the winning provider is carried in the
   session so `getAnimeInfo`/`getEpisodeSources` hit the same source
 - **the fallback happens at the EPISODE level, not only at search time.** The
@@ -375,6 +402,12 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   both back to the session, because the yt-dlp args and the max height depend on
   the provider. If the number does not exist in a provider, it returns null
   instead of risking the wrong episode.
+- **a message from anyone but the menu owner is ignored in SILENCE.** Every
+  non-owner message used to get "não foste tu que pediste o menu" back, so any
+  group chatter while a menu was open turned into a bot reply. Now
+  `handleAnimeReply` returns `false` for a non-owner (the message goes on to the
+  normal flow) and the session keeps waiting for its owner; an expired token is
+  still answered, because that one carries no session to wait for.
 - **AnimeGG (`animegg.org`) is the default first provider: no browser, H.264
   (`avc1`), and it fails on roughly one episode in eight — which is exactly why
   the episode-level fallback exists.** The chain is plain `fetch` + regex, no
@@ -432,7 +465,22 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   - **because the dubbed episode is a DIFFERENT post, the fallback must match the
     track as well as the number.** Looking up only by episode number would
     happily return the subtitled post for a user who asked for dubbed, so
-    `fontesDoProvider` filters the candidates by track.
+    `fontesDoProvider` filters the candidates by track (`escolherEpisodio`).
+  - **the title that comes out of a provider carries that site's own suffix**
+    ("Jujutsu Kaisen (TV)" from AnimeGG, "Naruto Shippuden (Dublado)" from
+    AniTube). Searching it literally in the NEXT provider returns 0 results, so
+    every episode ended up in the last provider (anikoto), even when the earlier
+    ones had it. `tituloDeBusca` (`src/utils/animeFormat.js`) strips the suffix
+    before `searchAnime` and `fontesDoProvider` search, falling back to the
+    original term when the stripped one returns nothing. Measured effect:
+    "Jujutsu Kaisen (TV)" went from anikoto to animeheaven/anitube.
+  - **the first search result is not always the requested title.** AnimeGG
+    answers "One Piece" with "One Piece: Episode of Merry" (a 1-episode special)
+    first; `melhorResultado` prefers the exact title match, so the series wins.
+  - **dubbed is preferred when the user did not choose.** `ANIME_PREFER_DUBBED`
+    (default true) makes `escolherEpisodio` pick the dubbed track among the
+    candidates; an explicit menu choice still wins, and an episode with no
+    dubbing still falls back to subtitled instead of failing.
   - because the playlist carries no `Content-Length`, the size is estimated by
     sampling 5 segments and multiplying by the segment count. Measuring only the
     first segment overestimates ~2.5x (the first carries the header at 4.7 MB,

@@ -330,7 +330,7 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
 // preferência. Cada provider é tentado até um devolver o episódio.
 //
-// A ordem predefinida é `animegg,anitube,animeheaven,anikoto`:
+// A ordem predefinida é `animegg,anitube,animeheaven,animesonlinehd,anikoto`:
 //
 // - `animegg` vem primeiro porque é o mais rápido (HTML estático, sem browser) e
 //   entrega H.264 num MP4 direto; falha em ~1 de cada 8 episódios com
@@ -338,15 +338,19 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // - `anitube` serve HLS H.264, mas só publica 720p (~257 MB num episódio de
 //   24 min), acima do teto de 200 MB: só resolve episódios curtos;
 // - `animeheaven` publica MP4 720p nativo (~95–128 MB), dentro do teto;
+// - `animesonlinehd` é o único com dublagem PT-BR real, mas serve 360p (~75 MB);
+//   fica depois dos que dão melhor imagem e antes do anikoto, que obriga a
+//   baixar 1080p e a reduzir localmente;
 // - `anikoto` fica por último porque só publica 1080p (HLS), o que obriga a
 //   baixar grande e a reduzir localmente.
 //
-// `animegg`, `anitube`, `anikoto` e `animeheaven` são extraídos diretamente pelo
-// bot (`src/services/*.js`) e respondem a IPs de datacenter. Os restantes vêm da
-// biblioteca e servem de alternativa (AnimeUnity funciona de IP residencial e de
-// alguns datacenters).
+// `animegg`, `anitube`, `anikoto`, `animeheaven` e `animesonlinehd` são
+// extraídos diretamente pelo bot (`src/services/*.js`) e respondem a IPs de
+// datacenter. Os restantes vêm da biblioteca e servem de alternativa (AnimeUnity
+// funciona de IP residencial e de alguns datacenters).
 export const ANIME_PROVIDERS = (
-  process.env.ANIME_PROVIDERS || "animegg,anitube,animeheaven,anikoto"
+  process.env.ANIME_PROVIDERS ||
+  "animegg,anitube,animeheaven,animesonlinehd,anikoto"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())
@@ -384,6 +388,16 @@ export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 // mantém o episódio dentro do limite. Se a faixa de 480p não existir, o seletor
 // do yt-dlp cai para a melhor disponível em vez de falhar.
 export const ANIME_MAX_HEIGHT = Number(process.env.ANIME_MAX_HEIGHT) || 480;
+
+// Procurar a faixa DUBLADA primeiro quando o episódio publica as duas.
+//
+// Sem escolha explícita do utilizador, um episódio com dublagem PT-BR é mais
+// útil do que o legendado — é o que a maioria dos pedidos procura. A escolha
+// explícita do menu (`anm:aud:`) tem sempre prioridade sobre isto, e um
+// episódio sem dublagem continua a cair para o legendado em vez de falhar.
+// `ANIME_PREFER_DUBBED=false` repõe o comportamento antigo.
+export const ANIME_PREFER_DUBBED =
+  String(process.env.ANIME_PREFER_DUBBED ?? "true").toLowerCase() !== "false";
 
 // Teto do provider AnimeHeaven, que publica 720p nativo (~112–164 MB): o
 // episódio já cabe no limite de 200 MB, por isso não há razão para o degradar
