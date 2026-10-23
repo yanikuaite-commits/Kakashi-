@@ -330,17 +330,18 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
 // preferência. Cada provider é tentado até um devolver o episódio.
 //
-// A ordem predefinida é `animegg,anitube,animeheaven,animesonlinehd,anikoto`:
+// A ordem predefinida é `animesonlinehd,animegg,anitube,animeheaven,anikoto`:
 //
-// - `animegg` vem primeiro porque é o mais rápido (HTML estático, sem browser) e
+// - `animesonlinehd` vem primeiro por ser o único com DUBLAGEM PT-BR real e o
+//   mais estável: responde a IPs de datacenter sem Cloudflare e serve 360p
+//   (~75 MB num episódio de 24 min), bem dentro do teto de 200 MB. A imagem é
+//   menor do que a dos outros, mas é o provider que o pedido comum procura;
+// - `animegg` vem a seguir porque é o mais rápido (HTML estático, sem browser) e
 //   entrega H.264 num MP4 direto; falha em ~1 de cada 8 episódios com
 //   `videoSources = []`, e nesse caso o fallback passa ao seguinte;
 // - `anitube` serve HLS H.264, mas só publica 720p (~257 MB num episódio de
 //   24 min), acima do teto de 200 MB: só resolve episódios curtos;
 // - `animeheaven` publica MP4 720p nativo (~95–128 MB), dentro do teto;
-// - `animesonlinehd` é o único com dublagem PT-BR real, mas serve 360p (~75 MB);
-//   fica depois dos que dão melhor imagem e antes do anikoto, que obriga a
-//   baixar 1080p e a reduzir localmente;
 // - `anikoto` fica por último porque só publica 1080p (HLS), o que obriga a
 //   baixar grande e a reduzir localmente.
 //
@@ -350,7 +351,7 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // funciona de IP residencial e de alguns datacenters).
 export const ANIME_PROVIDERS = (
   process.env.ANIME_PROVIDERS ||
-  "animegg,anitube,animeheaven,animesonlinehd,anikoto"
+  "animesonlinehd,animegg,anitube,animeheaven,anikoto"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())

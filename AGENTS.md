@@ -391,7 +391,8 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
   provider (ex-Zoro) shut down for good in March 2026
 - `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `animegg,anitube,animeheaven,animesonlinehd,anikoto`); each provider is tried
+  (default `animesonlinehd,animegg,anitube,animeheaven,anikoto`); each provider
+  is tried
   until one returns the episode, and the winning provider is carried in the
   session so `getAnimeInfo`/`getEpisodeSources` hit the same source
 - **the fallback happens at the EPISODE level, not only at search time.** The
@@ -408,9 +409,9 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   `handleAnimeReply` returns `false` for a non-owner (the message goes on to the
   normal flow) and the session keeps waiting for its owner; an expired token is
   still answered, because that one carries no session to wait for.
-- **AnimeGG (`animegg.org`) is the default first provider: no browser, H.264
-  (`avc1`), and it fails on roughly one episode in eight — which is exactly why
-  the episode-level fallback exists.** The chain is plain `fetch` + regex, no
+- **AnimeGG (`animegg.org`) is the first fallback after `animesonlinehd`: no
+  browser, H.264 (`avc1`), and it fails on roughly one episode in eight — which is
+  exactly why the episode-level fallback exists.** The chain is plain `fetch` + regex, no
   Playwright:
   `/search/?q=` → `href="/series/<slug>"` → `/<slug>-episode-<n>` →
   `/embed/<id>` → the inline
