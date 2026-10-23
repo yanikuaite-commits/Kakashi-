@@ -171,9 +171,10 @@ No restauro a regra é a mesma: `.restore` recupera os dados e ignora a sessão
 que venha dentro do arquivo, para não substituir as chaves do bot em execução.
 Use `.restore sessao` apenas quando quiser mesmo trocar a sessão.
 
-O repositório de destino tem de ser privado. O bot recusa o envio se detetar um
-repositório público, porque o arquivo leva o `.env`. Para apagar o arquivo
-remoto, use `.delete-backup`.
+Mantenha o repositório de destino privado: o arquivo leva o `.env`, e um
+repositório público publica esses segredos. O bot não bloqueia o envio — a
+escolha do repositório é sua. Para apagar o arquivo remoto, use
+`.delete-backup`.
 
 Os downloads por link usam a API do GenDownload via `axios`. Configure
 `GENDOWNLOAD_API_URL` com o endpoint POST `/api/extract` para usar uma instância

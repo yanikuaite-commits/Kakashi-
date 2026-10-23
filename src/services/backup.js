@@ -40,25 +40,6 @@ async function githubRequest(config, endpoint, options = {}) {
 }
 
 /**
- * Recusa enviar o backup para um repositório público.
- *
- * O arquivo leva o `.env` e pode levar a sessão do WhatsApp. Num repositório
- * público isso é uma fuga de segredos, e o GitHub guarda o ficheiro no histórico
- * de commits mesmo depois de ele ser apagado — a exposição é permanente. Por
- * isso o envio falha em vez de avisar: um aviso perdido num log é uma fuga.
- */
-async function assertPrivateRepository(config) {
-  const repo = await githubRequest(config, `/repos/${config.repository}`);
-  if (repo.private !== true) {
-    throw new Error(
-      `O repositório ${config.repository} é PÚBLICO. O backup contém o .env ` +
-        "(segredos) e seria publicado. Torne o repositório privado ou aponte " +
-        "GITHUB_REPOSITORY para um repositório privado.",
-    );
-  }
-}
-
-/**
  * Candidatos a backup, com o que exigem.
  *
  * `database/` é o estado do bot (créditos, pagamentos pendentes, avisos,
@@ -118,7 +99,6 @@ export async function createBackup({ includeAuth = false } = {}) {
   try {
     const config = githubConfig();
     if (!config) return { archivePath, github: false, includesSession };
-    await assertPrivateRepository(config);
     const content = (await fs.readFile(archivePath)).toString("base64");
     const endpoint = `/repos/${config.repository}/contents/${config.path}`;
     let sha;

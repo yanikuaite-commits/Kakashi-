@@ -272,16 +272,15 @@ Destination: with `GITHUB_TOKEN` set it uploads to
 `main`, all fixed in `src/config.js`); without it the archive stays local in
 `/tmp`. There is no scheduler — only the owner command triggers it.
 
-`assertPrivateRepository` refuses the upload when the target repository is not
-private, because the archive carries the `.env` and a public repo would publish
-it. The check fails the command instead of warning: the file would stay in the
-GitHub commit history even after deletion, so the leak is permanent. This repo
-was public at the time of writing, so the upload is blocked until it is made
-private.
+The upload does not check whether the destination repository is private, by
+explicit owner decision. The archive carries the `.env` (and the session when
+`.backup sessao` is used), so a public destination publishes secrets, and the
+GitHub commit history keeps the blob after deletion. Keep `GITHUB_REPOSITORY`
+pointing at a private repository.
 
 `.delete-backup` (`deleteRemoteBackup`) removes the remote file on request.
-Deleting only helps while the repository was never public; the commit history
-keeps the blob, so secrets from an already-public archive must be rotated.
+Deleting does not undo a publication: the commit history keeps the blob, so
+secrets from an already-public archive must be rotated.
 
 ## ANTI_PAYMENT
 
