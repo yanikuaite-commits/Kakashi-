@@ -324,21 +324,23 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
 // preferência. Cada provider é tentado até um devolver o episódio.
 //
-// `anikoto` e `animeheaven` são extraídos diretamente pelo bot
-// (`src/services/anikoto.js`, `src/services/animeheaven.js`) e respondem a IPs
-// de datacenter — por isso vêm primeiro. O `animeheaven` vem à frente porque
-// serve MP4 direto em 720p nativo (sem downscale): o episódio já cabe no teto de
-// 200 MB e sai bom de origem. O `anikoto` só publica 1080p (HLS), o que obriga a
-// baixar grande e a reduzir localmente.
+// A ordem predefinida é `animegg,anitube,animeheaven,anikoto`:
 //
-// Nota: o `animeheaven` lista cada temporada como um título próprio, pelo que o
-// passo de escolha de temporada (que depende do agrupamento do `anikoto`) só
-// aparece quando a pesquisa cai no `anikoto` — ou seja, quando o título não
-// existe no `animeheaven` ou quando `ANIME_PROVIDERS` o põe à frente. Os
-// restantes vêm da biblioteca e servem de alternativa (AnimeUnity funciona de IP
-// residencial e de alguns datacenters).
+// - `animegg` vem primeiro porque é o mais rápido (HTML estático, sem browser) e
+//   entrega H.264 num MP4 direto; falha em ~1 de cada 8 episódios com
+//   `videoSources = []`, e nesse caso o fallback passa ao seguinte;
+// - `anitube` serve HLS H.264, mas só publica 720p (~257 MB num episódio de
+//   24 min), acima do teto de 200 MB: só resolve episódios curtos;
+// - `animeheaven` publica MP4 720p nativo (~95–128 MB), dentro do teto;
+// - `anikoto` fica por último porque só publica 1080p (HLS), o que obriga a
+//   baixar grande e a reduzir localmente.
+//
+// `animegg`, `anitube`, `anikoto` e `animeheaven` são extraídos diretamente pelo
+// bot (`src/services/*.js`) e respondem a IPs de datacenter. Os restantes vêm da
+// biblioteca e servem de alternativa (AnimeUnity funciona de IP residencial e de
+// alguns datacenters).
 export const ANIME_PROVIDERS = (
-  process.env.ANIME_PROVIDERS || "animeheaven,anikoto,animeunity,animepahe"
+  process.env.ANIME_PROVIDERS || "animegg,anitube,animeheaven,anikoto"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())
@@ -382,6 +384,14 @@ export const ANIME_MAX_HEIGHT = Number(process.env.ANIME_MAX_HEIGHT) || 480;
 // para 480p. Mantém-se configurável para o caso de episódios mais pesados.
 export const ANIME_HEAVEN_MAX_HEIGHT =
   Number(process.env.ANIME_HEAVEN_MAX_HEIGHT) || 720;
+
+// Resolução preferida no provider AnimeGG, que publica 360p/480p/720p.
+//
+// 480p por padrão: o mesmo episódio mede 31 MB em 360p, 80 MB em 480p e 201 MB
+// em 720p, ou seja o 720p passa o teto de 200 MB e o 360p degrada sem
+// necessidade. O provider mede cada degrau por `Content-Length` e só desce/sobe
+// se o preferido não couber — ver `escolherDegrau` em `src/services/animegg.js`.
+export const ANIME_GG_MAX_HEIGHT = Number(process.env.ANIME_GG_MAX_HEIGHT) || 480;
 
 export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 export const AI_TIMEOUT_MS = 30 * 1000;

@@ -66,6 +66,8 @@ const PROVIDER_FACTORIES = {
 const PROVIDERS_PROPIOS = {
   anikoto: () => import("./anikoto.js"),
   animeheaven: () => import("./animeheaven.js"),
+  animegg: () => import("./animegg.js"),
+  anitube: () => import("./anitube.js"),
 };
 
 let consumetAnime = null;
@@ -484,4 +486,171 @@ async function resolveProvider(provider) {
   }
 
   return encontrado;
+}
+
+/**
+ * Resolve as fontes de um episódio num provider específico, por título + número.
+ *
+ * É o passo que o fallback repete em cada provider: o provider de origem não
+ * conhece o id do episódio no provider seguinte (os ids são internos de cada
+ * site), pelo que o episódio é reencontrado pela pesquisa do título e pelo
+ * NÚMERO. Se o número não existir nessa fonte, devolve null em vez de arriscar
+ * entregar o episódio errado.
+ *
+ * @param {{nome: string, tipo: string, instance: object}} entrada
+ * @param {string} titulo
+ * @param {number} numero
+ * @returns {Promise<{sources: Array<object>, episodeId: string}|null>}
+ */
+async function fontesDoProvider(entrada, titulo, numero) {
+  const { nome, tipo, instance } = entrada;
+
+  if (tipo === "proprio") {
+    const resultados = await withTimeout(
+      instance.search(titulo),
+      ANIME_API_TIMEOUT_MS,
+      `${nome}.search`,
+    );
+
+    for (const resultado of resultados || []) {
+      if (!resultado?.id) continue;
+
+      const lista = await withTimeout(
+        instance.episodes(resultado.id, resultado.slug),
+        ANIME_API_TIMEOUT_MS,
+        `${nome}.episodes`,
+      ).catch(() => null);
+
+      const episodio = lista?.find((ep) => Number(ep.number) === Number(numero));
+      if (!episodio) continue;
+
+      const resolvido = await withTimeout(
+        instance.sources({ id: episodio.id, ids: episodio.ids }, resultado.slug),
+        ANIME_API_TIMEOUT_MS,
+        `${nome}.sources`,
+      );
+
+      const url = typeof resolvido === "string" ? resolvido : resolvido?.url;
+      if (!url) continue;
+
+      const sources = normalizeSources([
+        {
+          url,
+          quality: typeof resolvido === "object" ? resolvido?.quality : undefined,
+          resolution: typeof resolvido === "object" ? resolvido?.resolution : undefined,
+          isM3U8: typeof resolvido === "object" ? Boolean(resolvido?.isM3U8) : true,
+        },
+      ]);
+
+      if (!sources.length) continue;
+
+      return {
+        sources,
+        episodeId: `${resultado.slug}::${episodio.id}::${episodio.ids}`,
+      };
+    }
+
+    return null;
+  }
+
+  const resultados = await withTimeout(
+    instance.search(titulo),
+    ANIME_API_TIMEOUT_MS,
+    `${nome}.search`,
+  );
+
+  for (const resultado of resultados?.results || []) {
+    if (!resultado?.id) continue;
+
+    const info = await withTimeout(
+      instance.fetchAnimeInfo(String(resultado.id)),
+      ANIME_API_TIMEOUT_MS,
+      `${nome}.fetchAnimeInfo`,
+    ).catch(() => null);
+
+    const episodio = (info?.episodes || []).find(
+      (ep) => Number(ep.number) === Number(numero),
+    );
+    if (!episodio?.id) continue;
+
+    const data = await withTimeout(
+      instance.fetchEpisodeSources(episodio.id),
+      ANIME_API_TIMEOUT_MS,
+      `${nome}.fetchEpisodeSources`,
+    );
+
+    const brutas = Array.isArray(data?.sources) ? data.sources : [];
+    const hls = brutas.filter((source) => source?.isM3U8);
+    const sources = normalizeSources(hls.length ? hls : brutas);
+
+    if (!sources.length) continue;
+
+    return { sources, episodeId: String(episodio.id) };
+  }
+
+  return null;
+}
+
+/**
+ * Fontes de um episódio, com fallback pelos restantes providers.
+ *
+ * O AnimeGG falha ~1 em cada 8 episódios (`videoSources = []`) e essa falha é
+ * persistente — repetir não resolve. Como o id do episódio só existe dentro do
+ * provider que o listou, o fallback reencontra o mesmo episódio nos providers
+ * seguintes pela pesquisa do título + número, na ordem de `ANIME_PROVIDERS`.
+ *
+ * Devolve também o provider que venceu e o novo id, para o menu atualizar a
+ * sessão: os argumentos do yt-dlp e a resolução máxima dependem do provider.
+ *
+ * @param {string} episodeId
+ * @param {string} provider
+ * @param {{titulo?: string, numero?: number}} [contexto]
+ * @returns {Promise<{sources: Array<object>, provider: string, episodeId: string}>}
+ */
+export async function getEpisodeSourcesWithFallback(episodeId, provider, contexto = {}) {
+  const titulo = String(contexto.titulo || "").trim();
+  const numero = Number(contexto.numero) || 0;
+
+  let erroOriginal;
+
+  try {
+    const sources = await getEpisodeSources(episodeId, provider);
+    return { sources, provider, episodeId };
+  } catch (error) {
+    erroOriginal = error;
+  }
+
+  if (!titulo || !numero) throw erroOriginal;
+
+  const entradaAtual = await resolveProvider(provider);
+  const providers = await activeProviders();
+  const restantes = providers.filter((p) => p.nome !== entradaAtual.nome);
+
+  for (const entrada of restantes) {
+    try {
+      const resolvido = await fontesDoProvider(entrada, titulo, numero);
+
+      if (!resolvido) {
+        infoLog(`[anime] fallback ${entrada.nome}: episódio ${numero} não existe`);
+        continue;
+      }
+
+      infoLog(
+        `[anime] fallback: episódio ${numero} de "${titulo}" resolvido em ${entrada.nome}`,
+      );
+
+      return {
+        sources: resolvido.sources,
+        provider: entrada.nome,
+        episodeId: resolvido.episodeId,
+      };
+    } catch (error) {
+      errorLog(`[anime] fallback ${entrada.nome} falhou: ${error.message}`);
+    }
+  }
+
+  throw new AnimeApiError(
+    "Nenhuma das fontes disponíveis tem este episódio. Tente outro episódio.",
+    { cause: erroOriginal },
+  );
 }

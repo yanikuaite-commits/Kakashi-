@@ -23,6 +23,8 @@ export const ANIME_TOKEN_PREFIXES = ["anm:sea:", "anm:ep:", "anm:src:", "anm:pg:
 const PROVIDER_LABELS = {
   anikoto: "Anikoto",
   animeheaven: "AnimeHeaven",
+  animegg: "AnimeGG",
+  anitube: "AniTube",
   animeunity: "AnimeUnity",
   animepahe: "AnimePahe",
   hianime: "HiAnime",
