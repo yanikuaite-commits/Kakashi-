@@ -6,6 +6,7 @@ import {
   extrairPayloadRsc,
   parseTemporadas,
   parseVideoUrl,
+  payloadDasTemporadas,
   variantesDeBusca,
 } from "../services/animesonlinehd.js";
 
@@ -65,6 +66,25 @@ test("parseTemporadas ignora o que vem depois do array de temporadas", () => {
   const payload = `${extrairPayloadRsc(PUSH_RSC)},"resto":{"a":[1,2,3]}`;
 
   assert.equal(parseTemporadas(payload).length, 2);
+});
+
+// O site só devolve o payload com temporadas quando o pedido leva `RSC: 1`; sem
+// ele responde o HTML da shell, que traz `"episodes":[]` e mais nada. Sem esta
+// escolha o dublado desaparecia (os ids das faixas só existem no payload).
+test("payloadDasTemporadas lê o payload cru devolvido com o cabeçalho RSC", () => {
+  const payload = payloadDasTemporadas(extrairPayloadRsc(PUSH_RSC));
+
+  assert.match(payload, /"temporadas":\[/);
+  assert.equal(parseTemporadas(payload).length, 2);
+});
+
+test("payloadDasTemporadas prefere o payload ao HTML da shell sem temporadas", () => {
+  const shell =
+    '<script>self.__next_f.push([1,"x"][1,"y"])</script>{"episodes":[]}';
+  const payload = payloadDasTemporadas(shell);
+
+  assert.equal(payload.includes('"temporadas":'), false);
+  assert.deepEqual(parseTemporadas(payload), []);
 });
 
 test("episodiosDaTemporada usa o id da faixa pedida", () => {
