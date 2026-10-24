@@ -563,8 +563,13 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   through `@consumet/extensions`, with no Consumet server and no self-hosting.
   The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
   provider (ex-Zoro) shut down for good in March 2026
-- `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `meusanimes,animesonlinehd,animegg,anitube,animeheaven,anikoto`); each
+- `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list.
+  **The default is `meusanimes` only** — every other provider is implemented and
+  registered but deliberately DISABLED for now, so the flow depends on a single
+  source and failures are attributable. Re-enabling is just adding names to the
+  list (or to the `ANIME_PROVIDERS` env var); no code changes are needed. The
+  in-house names are `meusanimes`, `animesonlinehd`, `animegg`, `anitube`,
+  `animeheaven`, `anikoto`; each
   provider
   is tried
   until one returns the episode, and the winning provider is carried in the
@@ -742,8 +747,8 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   so it is checked like AnimeGG
 - **with "Dublado", the PT-BR providers are searched FIRST**
   (`ordenarProvidersParaFaixa` in `src/utils/animeFormat.js`). The configured
-  order (`ANIME_PROVIDERS`) puts the non-PT-BR sites ahead, so asking for a dub
-  could land on a site that only dubs in English while the PT-BR dub sat on
+  order (`ANIME_PROVIDERS`) used to put the non-PT-BR sites ahead, so asking for
+  a dub could land on a site that only dubs in English while the PT-BR dub sat on
   another site. The reorder happens in `searchAnime(nome, audioVersion)` and in
   `getEpisodeSourcesWithFallback`, so both the first search and the per-episode
   fallback look for PT-BR first; the non-PT-BR sites stay behind as a safety net
@@ -752,7 +757,9 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   choice. When the dubbed track ends up coming from a non-PT-BR site,
   `avisoIdiomaDublagem` says so instead of letting the user find out by ear, and
   the card label is `Dublado (PT-BR)` only for the sites that really dub in
-  Portuguese (`audioTrackLabel`)
+  Portuguese (`audioTrackLabel`). With the current default (only the PT-BR
+  `meusanimes`) the reorder has nothing to move; it matters again once the other
+  sites are re-enabled
 - the track rule is a UNION, not an intersection: requiring every episode to have
   both tracks looks safer but hides the choice almost always, because the series
   page fragment only covers part of the list (One Piece has 583 episodes with

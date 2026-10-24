@@ -399,33 +399,36 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
 // preferência. Cada provider é tentado até um devolver o episódio.
 //
-// A ordem predefinida é `meusanimes,animesonlinehd,animegg,anitube,animeheaven,anikoto`:
+// A lista predefinida é `meusanimes` APENAS: os restantes providers estão
+// DESATIVADOS por agora, para o fluxo depender de uma só fonte e os erros serem
+// atribuíveis. Os providers continuam implementados e registados — reativar é
+// só acrescentar nomes a esta lista (ou à variável de ambiente ANIME_PROVIDERS),
+// sem tocar em código.
 //
-// - `meusanimes` vem primeiro por ser o mais completo: responde a IPs de
-//   datacenter sem qualquer desafio Cloudflare, agrupa temporadas na própria
-//   página e serve o episódio pelo player do Blogger (que o projeto já lê).
-//   Publica 360p (~89 MB num episódio de 23 min) e 720p (~285 MB) como degraus
-//   separados, pelo que o menu de qualidades deixa o utilizador escolher;
-// - `animesonlinehd` vem a seguir por ter DUBLAGEM PT-BR real e ser estável:
-//   responde a IPs de datacenter sem Cloudflare e serve 360p (~75 MB num
-//   episódio de 24 min), bem dentro do teto. A imagem é menor do que a dos
-//   outros, mas é o provider que o pedido comum procura;
-// - `animegg` vem a seguir porque é o mais rápido (HTML estático, sem browser) e
-//   entrega H.264 num MP4 direto; falha em ~1 de cada 8 episódios com
-//   `videoSources = []`, e nesse caso o fallback passa ao seguinte;
+// Os nomes conhecidos e a razão de cada um:
+//
+// - `meusanimes` (ATIVO) responde a IPs de datacenter sem qualquer desafio
+//   Cloudflare, agrupa temporadas na própria página e serve o episódio pelo
+//   player do Blogger (que o projeto já lê). Publica 360p (~89 MB num episódio
+//   de 23 min) e 720p (~285 MB) como degraus separados, pelo que o menu de
+//   qualidades deixa o utilizador escolher;
+// - `animesonlinehd` tem DUBLAGEM PT-BR real e é estável: responde a IPs de
+//   datacenter sem Cloudflare e serve 360p (~75 MB num episódio de 24 min). A
+//   imagem é menor do que a dos outros;
+// - `animegg` é o mais rápido (HTML estático, sem browser) e entrega H.264 num
+//   MP4 direto; falha em ~1 de cada 8 episódios com `videoSources = []`;
 // - `anitube` serve HLS H.264, mas só publica 720p (~257 MB num episódio de
-//   24 min), acima do teto de 200 MB: só resolve episódios curtos;
-// - `animeheaven` publica MP4 720p nativo (~95–128 MB), dentro do teto;
-// - `anikoto` fica por último porque só publica 1080p (HLS), o que obriga a
-//   baixar grande e a reduzir localmente.
+//   24 min): só resolve episódios curtos;
+// - `animeheaven` publica MP4 720p nativo (~95–128 MB);
+// - `anikoto` só publica 1080p (HLS), o que obriga a baixar grande e a reduzir
+//   localmente.
 //
 // `animegg`, `anitube`, `anikoto`, `animeheaven`, `animesonlinehd` e
 // `meusanimes` são extraídos diretamente pelo bot (`src/services/*.js`) e
 // respondem a IPs de datacenter. Os restantes vêm da biblioteca e servem de
 // alternativa (AnimeUnity funciona de IP residencial e de alguns datacenters).
 export const ANIME_PROVIDERS = (
-  process.env.ANIME_PROVIDERS ||
-  "meusanimes,animesonlinehd,animegg,anitube,animeheaven,anikoto"
+  process.env.ANIME_PROVIDERS || "meusanimes"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())
