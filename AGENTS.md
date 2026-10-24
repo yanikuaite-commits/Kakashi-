@@ -493,9 +493,12 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   the distinction, asking for "Dublado" could hand back English audio with a
   Portuguese label. `animesonlinehd` is a
   Next.js frontend over a WordPress backend (`animesonline.blue`), and the
-  `/anime/<slug>` HTML carries the whole catalogue in the RSC payload
+  `/anime/<slug>` page carries the whole catalogue in the RSC payload
   (`self.__next_f.push`), so one page gives every season and both audio tracks —
-  the WordPress REST API needs auth (401) and is not used. The chain is:
+  the WordPress REST API needs auth (401) and is not used. **The RSC payload only
+  comes back when the request carries the `RSC: 1` header**; without it the
+  server answers the shell HTML with `"episodes":[]` and no season, so the
+  provider reports "no episodes" and the `dub`/`leg` ids never appear. The chain is:
   `/api/search?q=` → `/anime/<slug>` → `/api/episodio/<id>` (returns `tipo` plus
   a Blogger `playerUrl`) → the Blogger page → the direct `googlevideo.com`
   URL. `yt-dlp`'s blogger extractor fails on this format ("Unable to extract
