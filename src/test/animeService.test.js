@@ -354,3 +354,134 @@ test("anikoto: seasonEpisodes lê o data-anime-id e devolve os episódios", asyn
     delete globalThis.fetch;
   }
 });
+
+/**
+ * `searchAnimeCandidates` — a desambiguação. Corre num processo filho porque
+ * `ANIME_PROVIDERS` é lido no import do `config.js`, e a rede é substituída:
+ * nenhum site é tocado.
+ *
+ * O defeito que isto corrige: pesquisar "Meu Hero Academia" (português) devolvia
+ * "Eiyuu Kyoushitsu" (outro anime) sem aviso, porque a pesquisa caía no primeiro
+ * resultado quando não havia correspondência exata.
+ */
+test("sem correspondência exata, devolve candidatos e traduz o termo", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+
+  const script = `
+import assert from "node:assert/strict";
+
+const pedidos = [];
+
+// O site devolve sempre resultados que NÃO correspondem exatamente ao pedido
+// ("Eiyuu Kyoushitsu" é o que o meusanimes devolvia para "Meu Hero Academia").
+globalThis.fetch = async (url) => {
+  const alvo = String(url);
+
+  if (alvo.includes("translate.googleapis.com")) {
+    pedidos.push("traducao");
+    return {
+      ok: true,
+      status: 200,
+      json: async () => [[["My Hero Academia", "Meu Hero Academia", null, null]], null, "pt"],
+    };
+  }
+
+  if (alvo.includes("/?s=")) {
+    pedidos.push(decodeURIComponent(alvo.split("/?s=")[1] || ""));
+    return {
+      ok: true,
+      status: 200,
+      text: async () => \`
+        <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Eiyuu Kyoushitsu" /> <span class="tvshows"> TV </span> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/">Eiyuu Kyoushitsu</a></div><div class="meta"> <span class="year">2023</span></div><div class="contenido"><p>Assistir Eiyuu Kyoushitsu...</p></div></div></article></div>\`,
+    };
+  }
+
+  throw new Error("pedido inesperado: " + alvo);
+};
+
+const { searchAnimeCandidates } = await import("./services/anime.js");
+const resultado = await searchAnimeCandidates("Meu Hero Academia");
+
+assert.equal(resultado.anime, null, "sem correspondência exata NÃO pode escolher sozinho");
+assert.ok(resultado.candidatos.length > 0, "tem de devolver a lista");
+assert.equal(resultado.candidatos[0].title, "Eiyuu Kyoushitsu");
+assert.equal(resultado.termoTraduzido, "My Hero Academia", "o termo foi traduzido");
+assert.equal(resultado.traduzidoDe, "Meu Hero Academia");
+assert.ok(
+  pedidos.includes("My Hero Academia"),
+  "o termo TRADUZIDO também tem de ser pesquisado",
+);
+console.log("OK");
+`;
+
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ["--input-type=module", "-e", script],
+    {
+      cwd: new URL("..", import.meta.url).pathname,
+      env: {
+        ...process.env,
+        ANIME_PROVIDERS: "meusanimes",
+        TRANSLATE_ENABLED: "true",
+      },
+    },
+  );
+
+  assert.match(stdout, /OK/);
+});
+
+test("com correspondência exata, nem lista nem tradução", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+
+  const script = `
+import assert from "node:assert/strict";
+
+let traduziu = false;
+
+globalThis.fetch = async (url) => {
+  const alvo = String(url);
+
+  if (alvo.includes("translate.googleapis.com")) {
+    traduziu = true;
+    return { ok: true, status: 200, json: async () => [[["X", "Y", null, null]], null, "pt"] };
+  }
+
+  if (alvo.includes("/?s=")) {
+    return {
+      ok: true,
+      status: 200,
+      text: async () => \`
+        <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/naruto/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Naruto" /> <span class="tvshows"> TV </span> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/naruto/">Naruto</a></div><div class="meta"> <span class="year">2002</span></div><div class="contenido"><p>Assistir Naruto...</p></div></div></article></div>\`,
+    };
+  }
+
+  throw new Error("pedido inesperado: " + alvo);
+};
+
+const { searchAnimeCandidates } = await import("./services/anime.js");
+const resultado = await searchAnimeCandidates("naruto");
+
+assert.ok(resultado.anime, "com correspondência exata segue direto");
+assert.equal(resultado.anime.title, "Naruto");
+assert.deepEqual(resultado.candidatos, [], "sem ambiguidade não há lista");
+assert.equal(traduziu, false, "não se traduz quando o site já reconheceu o termo");
+console.log("OK");
+`;
+
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ["--input-type=module", "-e", script],
+    {
+      cwd: new URL("..", import.meta.url).pathname,
+      env: {
+        ...process.env,
+        ANIME_PROVIDERS: "meusanimes",
+        TRANSLATE_ENABLED: "true",
+      },
+    },
+  );
+
+  assert.match(stdout, /OK/);
+});

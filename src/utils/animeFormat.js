@@ -23,6 +23,7 @@ export const AUDIO_VERSIONS = [AUDIO_SUBBED, AUDIO_DUBBED];
 
 /** Prefixos de token do menu de animes. */
 export const ANIME_TOKEN_PREFIXES = [
+  "anm:an:",
   "anm:sea:",
   "anm:ep:",
   "anm:aud:",
@@ -83,6 +84,65 @@ export function melhorResultado(resultados = [], termo = "") {
   return (
     lista.find((r) => tituloDeBusca(r?.title).toLowerCase() === alvo) || lista[0]
   );
+}
+
+/**
+ * Correspondência EXATA entre o termo e o título de um resultado.
+ *
+ * Diferente de `melhorResultado`, que cai no primeiro resultado quando não há
+ * correspondência exata: aqui `null` é uma resposta legítima e importante. É
+ * essa distinção que separa "o site reconheceu o que pedi" de "o site devolveu
+ * o que calhou" — pesquisar "Meu Hero Academia" no meusanimes devolvia
+ * "Eiyuu Kyoushitsu" (outro anime) e o fluxo seguia como se estivesse certo.
+ *
+ * @param {Array<{title?: string}>} resultados
+ * @param {string} termo
+ * @returns {object|null}
+ */
+export function correspondenciaExata(resultados = [], termo = "") {
+  const lista = Array.isArray(resultados) ? resultados : [];
+  const alvo = tituloDeBusca(termo).toLowerCase();
+  if (!alvo) return null;
+
+  return lista.find((r) => tituloDeBusca(r?.title).toLowerCase() === alvo) || null;
+}
+
+/**
+ * Capa do resultado em tamanho grande.
+ *
+ * O `meusanimes` (WordPress) publica as capas na busca como miniaturas
+ * `-150x150.jpg`. A imagem original existe no mesmo caminho, sem o sufixo, e é
+ * a única apresentável num card — a miniatura de 150px fica desfocada. Quando o
+ * URL não tem o sufixo, é devolvido como está (os outros providers já dão a
+ * imagem final).
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function capaEmTamanhoGrande(url) {
+  return String(url || "").replace(/-\d+x\d+(\.(?:jpe?g|png|webp|gif))$/i, "$1");
+}
+
+/**
+ * Monta as linhas da lista de candidatos.
+ *
+ * O `id` usa o índice (`anm:an:<i>`) e o objeto real fica na sessão: os slugs
+ * são longos e o WhatsApp descarta `rowId`s grandes.
+ *
+ * @param {Array<{title?: string, year?: string|null}>} candidatos
+ * @returns {Array<{id: string, title: string, description: string}>}
+ */
+export function buildCandidateRows(candidatos = []) {
+  return candidatos.map((item, index) => {
+    const titulo = String(item?.title || `Opção ${index + 1}`).slice(0, 60);
+    const ano = String(item?.year || "").trim();
+
+    return {
+      id: `anm:an:${index}`,
+      title: titulo,
+      description: ano ? `Ano ${ano}` : "Escolher este título",
+    };
+  });
 }
 
 /**
