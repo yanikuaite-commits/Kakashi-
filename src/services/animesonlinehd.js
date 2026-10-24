@@ -14,9 +14,14 @@
  * sem passar pela API REST do WordPress, que exige autenticação (401). A cadeia:
  *
  *   GET /api/search?q=<termo>              → {results:[{slug, title, audios:["dub","leg"]}]}
- *   GET /anime/<slug>                      → payload RSC: temporadas[].eps[] com leg/dub
+ *   GET /anime/<slug> (cabeçalho RSC: 1)   → payload RSC: temporadas[].eps[] com leg/dub
  *   GET /api/episodio/<id>                 → {tipo:"Dublado", playerUrl:"https://www.blogger.com/..."}
  *   GET <playerUrl>                        → URL googlevideo do MP4
+ *
+ * O cabeçalho `RSC: 1` é obrigatório em `/anime/<slug>`: sem ele o site devolve
+ * o HTML da shell (`"episodes":[]`) e nenhuma temporada; com ele o corpo É o
+ * payload. Sem o cabeçalho o dublado nunca aparecia, porque o id de cada faixa
+ * (`dub`/`leg`) só existe no payload.
  *
  * O `playerUrl` é um link do Blogger cuja página traz o `videoplayback` do
  * Google Video no HTML. O extractor `blogger` do yt-dlp falha neste formato
@@ -45,7 +50,7 @@ import { DEGRAUS_BLOGGER, extrairDegraus, parseVideoUrl as parseVideoUrlPartilha
 const BASE = "https://animesonlinehd.vip";
 const REQUEST_TIMEOUT_MS = Math.min(ANIME_API_TIMEOUT_MS, 20 * 1000);
 
-async function fetchText(url, { referer, json = false } = {}) {
+async function fetchText(url, { referer, json = false, rsc = false } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   timer.unref?.();
@@ -61,6 +66,7 @@ async function fetchText(url, { referer, json = false } = {}) {
           : "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
         ...(referer ? { Referer: referer } : {}),
+        ...(rsc ? { RSC: "1" } : {}),
       },
     });
 
@@ -251,6 +257,28 @@ export function episodiosDaTemporada(temporada, audioVersion = "") {
 }
 
 /**
+ * Escolhe o payload onde procurar as temporadas.
+ *
+ * Com o cabeçalho `RSC: 1` o corpo da resposta É o payload (sem
+ * `self.__next_f`); sem ele o site devolve o HTML da shell, que traz
+ * `"episodes":[]` e nenhuma temporada. Aceita os dois formatos para não
+ * depender de o site manter o cabeçalho.
+ *
+ * Puro (sem rede) para poder ser testado com as duas respostas reais.
+ *
+ * @param {string} html
+ * @returns {string}
+ */
+export function payloadDasTemporadas(html) {
+  const viaNext = extrairPayloadRsc(html);
+
+  if (viaNext.includes('"temporadas":')) return viaNext;
+
+  const cru = String(html ?? "");
+  return cru.includes('"temporadas":') ? cru : viaNext;
+}
+
+/**
  * Busca as temporadas de um slug (payload RSC da página do anime).
  *
  * @param {string} slug
@@ -259,9 +287,10 @@ export function episodiosDaTemporada(temporada, audioVersion = "") {
 async function temporadasDe(slug) {
   const html = await fetchText(`${BASE}/anime/${encodeURIComponent(slug)}`, {
     referer: `${BASE}/`,
+    rsc: true,
   });
 
-  const temporadas = parseTemporadas(extrairPayloadRsc(html));
+  const temporadas = parseTemporadas(payloadDasTemporadas(html));
 
   if (!temporadas.length) {
     throw new AnimeApiError("Este anime não tem episódios disponíveis na fonte.");
