@@ -459,6 +459,15 @@ export const ANIME_ACCEPT_LANGUAGE = process.env.ANIME_ACCEPT_LANGUAGE || "en-US
 export const ANIME_PROXY_URL = process.env.ANIME_PROXY_URL || "";
 
 export const ANIME_API_TIMEOUT_MS = 30 * 1000;
+
+// Tradução de títulos PT → língua do catálogo (ver `src/services/translate.js`).
+//
+// É um extra: serve só para desempatar quando a pesquisa pelo termo original não
+// encontra correspondência exata. `TRANSLATE_ENABLED=false` desliga-a, e o teto
+// curto evita que um tradutor lento atrase a pesquisa — sem tradução o fluxo
+// segue com o termo original.
+export const TRANSLATE_ENABLED = process.env.TRANSLATE_ENABLED !== "false";
+export const TRANSLATE_TIMEOUT_MS = 8 * 1000;
 // Limite do WhatsApp: acima de 100 MB só como documento (a mesma regra do
 // YouTube, aplicada pelo `decideAnimeSend`); acima deste teto o envio é
 // cancelado e o utilizador é convidado a escolher uma qualidade menor.

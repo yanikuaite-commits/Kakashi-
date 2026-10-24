@@ -38,7 +38,7 @@
  */
 import fs from "node:fs";
 import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, ANIME_PT_DUB_PROVIDERS, OWNER_LID } from "../config.js";
-import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnime } from "../services/anime.js";
+import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnimeCandidates } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withDownloadSlot } from "../services/downloadQueue.js";
 import {
@@ -60,11 +60,13 @@ import {
   audioTrackLabel,
   audioVersionLabel,
   buildAudioRows,
+  buildCandidateRows,
   buildEpisodeRows,
   buildNextPageRow,
   buildQualityRows,
   buildSeasonRows,
   availableAudioVersions,
+  capaEmTamanhoGrande,
   episodePageCount,
   identitiesOverlap,
   avisoIdiomaDublagem,
@@ -218,6 +220,7 @@ function ensureSession({
       stage: "idle",
       provider: "",
       anime: null,
+      candidates: [],
       seasons: [],
       seasonTitle: "",
       seasonSlug: "",
@@ -256,7 +259,15 @@ function cancelRow() {
   };
 }
 
-async function sendCard({ socket, session, text, title, rows, fallbackPrompt }) {
+async function sendCard({
+  socket,
+  session,
+  text,
+  title,
+  rows,
+  fallbackPrompt,
+  image = null,
+}) {
   const sections = [{ title: title || "Animes", rows }];
   const options = rows.map((row, index) => ({
     number: String(index + 1),
@@ -276,7 +287,12 @@ async function sendCard({ socket, session, text, title, rows, fallbackPrompt }) 
     socket,
     chatId: session.chatId,
     content: {
-      text,
+      // Com capa, o corpo tem de ir em `caption`: o baileys só anexa a imagem ao
+      // cabeçalho do card interativo quando o texto vem por `caption` (com
+      // `text` o corpo é construído como mensagem de texto e a imagem é
+      // descartada). O corpo final é `text || caption`, por isso o conteúdo é o
+      // mesmo — verificado contra `generateWAMessageContent`.
+      ...(image ? { caption: text, image: { url: image } } : { text }),
       footer: RODAPE,
       interactiveButtons: buttons,
       viewOnce: true,
@@ -334,6 +350,7 @@ export async function startAnimeFlow({
 
   session.stage = "aguardando_nome";
   session.anime = null;
+  session.candidates = [];
   session.seasons = [];
   session.seasonTitle = "";
   session.seasonSlug = "";
@@ -376,43 +393,156 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
     // A faixa escolhida vai já para a pesquisa: com "dublado", os providers de
     // dublagem PT-BR são procurados primeiro, para o título não cair num site
     // que só dubla em inglês com o PT-BR disponível noutro.
-    const anime = await searchAnime(nome, session.audioVersion || "");
-    const seasons = await getAnimeSeasons(
-      anime.id,
-      anime.provider,
-      session.audioVersion || "",
-    );
+    //
+    // `searchAnimeCandidates` (e não `searchAnime`) porque um título em
+    // português pode não ter correspondência exata no catálogo do site:
+    // "Meu Hero Academia" devolvia "Eiyuu Kyoushitsu" (outro anime) sem aviso.
+    // Aqui, ou há correspondência exata, ou o utilizador escolhe da lista —
+    // nunca um palpite silencioso.
+    const busca = await searchAnimeCandidates(nome, session.audioVersion || "");
 
-    session.anime = { ...anime };
-    session.provider = anime.provider;
-    session.seasons = seasons;
-    session.seasonTitle = "";
-    session.seasonSlug = "";
-    session.episodes = [];
-    session.episode = null;
-    session.sources = [];
-    session.audioVersions = [];
-
-    // `session.audioVersion` NÃO é limpa aqui: a faixa escolhida antes da
-    // pesquisa é a que seleciona os ids dos episódios e tem de sobreviver.
-
-    // Só há passo de temporada quando a fonte agrupa 2+ títulos: um grupo de
-    // um é o próprio anime e a escolha seria ruído.
-    if (seasons.length > 1) {
-      session.stage = "temporadas";
-      infoLog(
-        `[anime] "${anime.title}" (id ${anime.id}) tem ${seasons.length} temporadas`,
-      );
-      return sendSeasonList({ socket, session });
+    if (busca.anime) {
+      if (busca.traduzidoDe) {
+        infoLog(
+          `[anime] "${busca.traduzidoDe}" → "${busca.termoTraduzido}" → "${busca.anime.title}"`,
+        );
+      }
+      return followWithAnime({ socket, session, anime: busca.anime });
     }
 
-    return loadEpisodesAndSend({ socket, session, id: anime.id });
+    session.candidates = busca.candidatos;
+    session.provider = busca.provider || session.provider;
+    session.stage = "candidatos";
+    touch(session);
+
+    return sendCandidateList({ socket, session, busca });
   } catch (error) {
     dropSession(session);
     errorLog(`[anime] falha ao buscar "${nome}": ${error.message}`);
     await session.sendReply(`❌ ${error.message}`).catch(() => {});
     return false;
   }
+}
+
+/**
+ * Continua o fluxo a partir de um anime já identificado: temporadas, ou os
+ * episódios diretamente quando a fonte não agrupa temporadas.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function followWithAnime({ socket, session, anime }) {
+  const seasons = await getAnimeSeasons(
+    anime.id,
+    anime.provider,
+    session.audioVersion || "",
+  );
+
+  session.anime = { ...anime };
+  session.candidates = [];
+  session.provider = anime.provider;
+  session.seasons = seasons;
+  session.seasonTitle = "";
+  session.seasonSlug = "";
+  session.episodes = [];
+  session.episode = null;
+  session.sources = [];
+  session.audioVersions = [];
+
+  // `session.audioVersion` NÃO é limpa aqui: a faixa escolhida antes da
+  // pesquisa é a que seleciona os ids dos episódios e tem de sobreviver.
+
+  // Só há passo de temporada quando a fonte agrupa 2+ títulos: um grupo de
+  // um é o próprio anime e a escolha seria ruído.
+  if (seasons.length > 1) {
+    session.stage = "temporadas";
+    infoLog(
+      `[anime] "${anime.title}" (id ${anime.id}) tem ${seasons.length} temporadas`,
+    );
+    return sendSeasonList({ socket, session });
+  }
+
+  return loadEpisodesAndSend({ socket, session, id: anime.id });
+}
+
+/**
+ * Envia a lista de candidatos quando a pesquisa não deu correspondência exata.
+ *
+ * A lista leva a CAPA de cada título (`capaEmTamanhoGrande`), porque é a única
+ * forma de o utilizador distinguir remakes e temporadas homónimas — foi um
+ * título parecido que fez o fluxo antigo servir o anime errado.
+ *
+ * A capa vai no cabeçalho do card (`image` + `interactiveButtons`), o formato
+ * que o patch da Baileys renderiza: o carrossel (`cards`) NÃO pode ser usado
+ * aqui porque ele substitui o `interactiveButtons` (ver `scripts/patch-baileys.mjs`),
+ * e sem a lista o utilizador não conseguia escolher.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function sendCandidateList({ socket, session, busca }) {
+  const candidatos = session.candidates || [];
+  const rows = [...buildCandidateRows(candidatos), cancelRow()];
+
+  const traduzido = busca?.termoTraduzido
+    ? `\n🔤 Traduzi *${busca.traduzidoDe}* → *${busca.termoTraduzido}* para procurar.`
+    : "";
+
+  const extra =
+    candidatos.length === 1
+      ? `Não encontrei um título exatamente igual. Será este?${traduzido}`
+      : `Encontrei ${candidatos.length} títulos parecidos. Qual é o teu?${traduzido}`;
+
+  const capa = capaEmTamanhoGrande(candidatos[0]?.image);
+
+  return sendCard({
+    socket,
+    session,
+    text: mediaCaption({
+      titulo: candidatos[0]?.title || "Anime",
+      canal: animeProviderLabel(session.provider),
+      duracao: candidatos.length > 1 ? `${candidatos.length} opções` : "1 opção",
+      qualidade: "—",
+      extra,
+      rodape: null,
+    }),
+    title: "Qual destes?",
+    rows,
+    image: capa || null,
+    fallbackPrompt: "Responde com o número do anime 👇",
+  });
+}
+
+/**
+ * O utilizador escolheu um candidato da lista: continua o fluxo a partir dele.
+ *
+ * Guarda contra índice fora da lista (o menu pode ter expirado e o token chegar
+ * depois): nesse caso a sessão é largada com um aviso, em vez de rebentar.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function chooseCandidate({ socket, session, index }) {
+  const escolhido = session.candidates?.[index];
+
+  if (!escolhido) {
+    dropSession(session);
+    await session
+      .sendReply("❌ Essa lista não está mais disponível. Envia .menu para recomeçar.")
+      .catch(() => {});
+    return true;
+  }
+
+  infoLog(`[anime] candidato escolhido: "${escolhido.title}"`);
+
+  return followWithAnime({
+    socket,
+    session,
+    anime: {
+      id: escolhido.id,
+      provider: session.provider,
+      title: escolhido.title,
+      image: escolhido.image || null,
+      releaseDate: escolhido.year || null,
+    },
+  });
 }
 
 /**
@@ -1197,6 +1327,11 @@ export async function handleAnimeReply({
 
   if (isAnimeToken) {
     if (sendReply) sessao.sendReply = sendReply;
+
+    const candIndex = animeTokenIndex(value, "anm:an:");
+    if (candIndex >= 0) {
+      return chooseCandidate({ socket, session: sessao, index: candIndex });
+    }
 
     const seaIndex = animeTokenIndex(value, "anm:sea:");
     if (seaIndex >= 0) {

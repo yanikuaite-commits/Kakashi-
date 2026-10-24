@@ -723,6 +723,28 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
 - list rows carry only indices (`anm:ep:<i>` / `anm:src:<i>`); the real
   (long, signed) stream URLs stay in the session, because WhatsApp drops
   oversized `rowId`s
+- **a search with no exact match asks the user instead of guessing.** The flow
+  used to fall back to the provider's FIRST result, so "Meu Hero Academia" served
+  "Eiyuu Kyoushitsu" — a different anime — with no warning. `searchAnimeCandidates`
+  now returns `{anime: null, candidatos}` when nothing matches exactly, and the
+  menu shows a candidate list (`anm:an:<i>`). `searchAnime` keeps the old
+  first-result behaviour for any other caller. The comparison is
+  `correspondenciaExata`, which ignores the suffixes only the site uses
+  ("Black Clover" matches "Black Clover Dublado")
+- **translation is the last resort, never the first step** (`TRANSLATE_ENABLED`,
+  `src/services/translate.js`). The original term is searched first, because
+  `meusanimes` already indexes many PT aliases ("Ataque dos Titãs" → "Shingeki No
+  Kyojin"); only when that has no exact match is the term translated and searched
+  again. A translation that returns the same text is discarded, and any failure
+  (no network, HTTP error) returns `null` so the download proceeds with the
+  original term — translation can never block a download
+- **a candidate list carries the cover in the interactive header** (`image` +
+  `interactiveButtons`). The carousel (`cards`) cannot be used here: it OVERWRITES
+  `interactiveButtons` in `generateWAMessageContent`, and without the list the user
+  cannot pick. Covers come from `capaEmTamanhoGrande`, which strips the WordPress
+  `-150x150` suffix (the thumbnail is unreadable in a card). Two Baileys details
+  matter: the body must be sent as `caption` (with `text` the header image is
+  dropped) and the carousel accepts a `buttons` field per slide
 - **the audio track is asked BEFORE the search, not before the episode list**
   (`anm:aud:subbed` / `anm:aud:dubbed`). The user picks the track as soon as the
   name is known, and the search then runs with it. Asking after the list meant a

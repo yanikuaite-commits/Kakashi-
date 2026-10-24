@@ -26,10 +26,13 @@ import {
   ANIME_PROXY_URL,
   ANIME_PT_DUB_PROVIDERS,
   ANIME_USER_AGENT,
+  TRANSLATE_ENABLED,
 } from "../config.js";
 import { errorLog, infoLog } from "../utils/logger.js";
+import { translateToEnglish } from "./translate.js";
 import {
   escolherEpisodio,
+  correspondenciaExata,
   melhorResultado,
   normalizeSources,
   ordenarProvidersParaFaixa,
@@ -207,13 +210,73 @@ function withTimeout(promise, ms, label) {
 }
 
 /**
- * Pesquisa um anime e devolve o primeiro resultado de um provider que responda.
+ * Consulta os providers por um termo e devolve o primeiro que respondeu.
+ *
+ * Devolve `null` (e não lança) quando nenhum provider respondeu: quem chama
+ * decide se continua para o termo seguinte.
+ *
+ * @param {string} termo
+ * @param {Array<{nome: string, tipo: string, instance: object}>} providers
+ * @param {string[]} falhas acumulador de motivos, para o log final
+ * @returns {Promise<{provider: string, resultados: Array<object>}|null>}
+ */
+async function coletarResultados(termo, providers, falhas) {
+  for (const { nome: provider, tipo, instance } of providers) {
+    try {
+      const bruto =
+        tipo === "proprio"
+          ? await withTimeout(
+              instance.search(termo),
+              ANIME_API_TIMEOUT_MS,
+              `${provider}.search`,
+            )
+          : (
+              await withTimeout(
+                instance.search(termo),
+                ANIME_API_TIMEOUT_MS,
+                `${provider}.search`,
+              )
+            )?.results;
+
+      const resultados = (Array.isArray(bruto) ? bruto : [])
+        .map((item) => ({
+          id:
+            tipo === "proprio"
+              ? `${item.id}:${item.slug}`
+              : String(item?.id ?? ""),
+          title: item?.title || "",
+          image: item?.image || null,
+          year: item?.year || item?.releaseDate || null,
+        }))
+        .filter((item) => item.id);
+
+      if (!resultados.length) {
+        falhas.push(`${provider}: sem resultados`);
+        continue;
+      }
+
+      return { provider, resultados };
+    } catch (error) {
+      falhas.push(`${provider}: ${error.message}`);
+      errorLog(`[anime] ${provider} falhou na pesquisa: ${error.message}`);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Pesquisa um anime pelo nome.
  *
  * O termo é pesquisado sem os sufixos que só um site usa: "Attack on Titan
  * Dublado" vira "Attack on Titan". Sem isso, só o anikoto (cujo motor de busca
  * separa as palavras) respondia a esses pedidos, e o anime caía sempre lá. Se a
  * pesquisa normalizada não der nada, o termo original é tentado como recurso,
  * para nunca perder um título que o site só indexe com o sufixo.
+ *
+ * Quando há correspondência exata, ela ganha ao primeiro resultado. Sem
+ * correspondência exata, mantém-se o primeiro resultado (compatibilidade com o
+ * comportamento histórico): quem quer desambiguar usa `searchAnimeCandidates`.
  *
  * @param {string} nome
  * @param {string} [audioVersion] faixa pedida; "dubbed" faz os providers de
@@ -249,62 +312,147 @@ export async function searchAnime(nome, audioVersion = "") {
       infoLog(`[anime] pesquisa normalizada: "${original}" → "${termo}"`);
     }
 
-    for (const { nome: provider, tipo, instance } of providers) {
-      try {
-        if (tipo === "proprio") {
-          const resultados = await withTimeout(
-            instance.search(termo),
-            ANIME_API_TIMEOUT_MS,
-            `${provider}.search`,
-          );
-          const primeiro = melhorResultado(resultados, termo);
+    const achado = await coletarResultados(termo, providers, falhas);
+    if (!achado) continue;
 
-          if (!primeiro?.id) {
-            falhas.push(`${provider}: sem resultados`);
-            continue;
-          }
+    const escolhido =
+      correspondenciaExata(achado.resultados, termo) || achado.resultados[0];
 
-          infoLog(`[anime] "${primeiro.title}" encontrado em ${provider}`);
+    infoLog(`[anime] "${escolhido.title}" encontrado em ${achado.provider}`);
 
-          return {
-            id: `${primeiro.id}:${primeiro.slug}`,
-            provider,
-            title: primeiro.title || termo,
-            image: primeiro.image || null,
-            releaseDate: null,
-          };
-        }
-
-        const res = await withTimeout(
-          instance.search(termo),
-          ANIME_API_TIMEOUT_MS,
-          `${provider}.search`,
-        );
-        const primeiro = melhorResultado(res?.results, termo);
-
-        if (!primeiro?.id) {
-          falhas.push(`${provider}: sem resultados`);
-          continue;
-        }
-
-        infoLog(`[anime] "${primeiro.title}" encontrado em ${provider}`);
-
-        return {
-          id: String(primeiro.id),
-          provider,
-          title: primeiro.title || termo,
-          image: primeiro.image || null,
-          releaseDate: primeiro.releaseDate || null,
-        };
-      } catch (error) {
-        falhas.push(`${provider}: ${error.message}`);
-        errorLog(`[anime] ${provider} falhou na pesquisa: ${error.message}`);
-      }
-    }
+    return {
+      id: escolhido.id,
+      provider: achado.provider,
+      title: escolhido.title || termo,
+      image: escolhido.image || null,
+      releaseDate: escolhido.year || null,
+    };
   }
 
   errorLog(`[anime] nenhum provider respondeu: ${falhas.join(" | ")}`);
   throw new AnimeApiError(NO_PROVIDER_HINT);
+}
+
+/**
+ * Pesquisa com DESAMBIGUAÇÃO: devolve o título quando a correspondência é
+ * exata e, quando não é, a lista de candidatos para o utilizador escolher.
+ *
+ * Existe porque `searchAnime` cai no primeiro resultado quando não há
+ * correspondência exata, o que entrega um anime errado em silêncio: pesquisar
+ * "Meu Hero Academia" no meusanimes devolvia "Eiyuu Kyoushitsu" (outro anime) e
+ * o fluxo seguia como se fosse o pedido. Aqui essa ambiguidade é resolvida com
+ * uma escolha explícita em vez de um palpite.
+ *
+ * A tradução entra como ÚLTIMO RECURSO, depois de a pesquisa pelo termo
+ * original falhar a correspondência exata: o catálogo dos sites está indexado
+ * em inglês/romaji, e "Meu Hero Academia" só encontra "Boku no Hero Academia"
+ * depois de traduzido. Tentar a tradução PRIMEIRO estragaria o que já funciona
+ * — o `meusanimes` indexa aliases PT ("Ataque dos Titãs" → "Shingeki No
+ * Kyojin") e a tradução desse termo ("Attack on Titan") até devolve resultados
+ * piores.
+ *
+ * @param {string} nome
+ * @param {string} [audioVersion]
+ * @returns {Promise<{anime: object|null, candidatos: Array<object>, traduzidoDe: string|null, termoTraduzido: string|null}>}
+ */
+export async function searchAnimeCandidates(nome, audioVersion = "") {
+  const original = String(nome || "").trim();
+  if (!original) throw new AnimeApiError("Envie o nome do anime.");
+
+  const providers = ordenarProvidersParaFaixa(
+    await activeProviders(),
+    audioVersion,
+    ANIME_PT_DUB_PROVIDERS,
+  );
+  const falhas = [];
+
+  const tentar = async (termo) => {
+    const termos = [...new Set([tituloDeBusca(termo), termo].filter(Boolean))];
+
+    for (const t of termos) {
+      const achado = await coletarResultados(t, providers, falhas);
+      if (!achado) continue;
+
+      return { achado, exato: correspondenciaExata(achado.resultados, t) };
+    }
+
+    return null;
+  };
+
+  const comoAnime = (item, provider) => ({
+    id: item.id,
+    provider,
+    title: item.title,
+    image: item.image || null,
+    releaseDate: item.year || null,
+  });
+
+  const primeiro = await tentar(original);
+
+  if (primeiro?.exato) {
+    infoLog(
+      `[anime] "${primeiro.exato.title}" encontrado em ${primeiro.achado.provider} (exato)`,
+    );
+    return {
+      anime: comoAnime(primeiro.exato, primeiro.achado.provider),
+      candidatos: [],
+      traduzidoDe: null,
+      termoTraduzido: null,
+    };
+  }
+
+  // Sem correspondência exata: o termo pode estar em português e o catálogo em
+  // inglês. Traduzir e tentar de novo antes de mostrar a lista.
+  let segundo = null;
+  let termoTraduzido = null;
+
+  if (TRANSLATE_ENABLED) {
+    termoTraduzido = await translateToEnglish(original);
+    if (termoTraduzido) segundo = await tentar(termoTraduzido);
+  }
+
+  if (segundo?.exato) {
+    infoLog(
+      `[anime] "${segundo.exato.title}" encontrado em ${segundo.achado.provider} (exato após tradução)`,
+    );
+    return {
+      anime: comoAnime(segundo.exato, segundo.achado.provider),
+      candidatos: [],
+      traduzidoDe: original,
+      termoTraduzido,
+    };
+  }
+
+  // A lista junta os dois conjuntos: o termo traduzido primeiro (foi a
+  // tentativa mais provável para o catálogo) e o original a seguir, para não
+  // perder resultados que o site já indexava em português.
+  const candidatos = [];
+  const vistos = new Set();
+
+  for (const item of [...(segundo?.achado?.resultados || []), ...(primeiro?.achado?.resultados || [])]) {
+    if (vistos.has(item.id)) continue;
+    vistos.add(item.id);
+    candidatos.push(item);
+  }
+
+  if (!candidatos.length) {
+    errorLog(`[anime] nenhum provider respondeu: ${falhas.join(" | ")}`);
+    throw new AnimeApiError(NO_PROVIDER_HINT);
+  }
+
+  infoLog(
+    `[anime] "${original}" sem correspondência exata: ${candidatos.length} candidato(s)${
+      termoTraduzido ? ` (traduzido para "${termoTraduzido}")` : ""
+    }`,
+  );
+
+  return {
+    anime: null,
+    candidatos,
+    provider: segundo?.achado?.provider || primeiro?.achado?.provider || "",
+    traduzidoDe: termoTraduzido ? original : null,
+    termoTraduzido,
+  };
 }
 
 /**

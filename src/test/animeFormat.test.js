@@ -11,10 +11,13 @@ import {
   availableAudioVersions,
   avisoIdiomaDublagem,
   buildAudioRows,
+  buildCandidateRows,
   buildEpisodeRows,
   buildNextPageRow,
   buildQualityRows,
   buildSeasonRows,
+  capaEmTamanhoGrande,
+  correspondenciaExata,
   episodePageCount,
   escolherEpisodio,
   identitiesOverlap,
@@ -146,8 +149,9 @@ test("animeTokenIndex lê o índice do token", () => {
   assert.equal(animeTokenIndex("", "anm:ep:"), -1);
 });
 
-test("os prefixos de token cobrem episódio, faixa, qualidade e página", () => {
+test("os prefixos de token cobrem candidato, episódio, faixa, qualidade e página", () => {
   assert.deepEqual(ANIME_TOKEN_PREFIXES, [
+    "anm:an:",
     "anm:sea:",
     "anm:ep:",
     "anm:aud:",
@@ -475,3 +479,79 @@ test("avisoIdiomaDublagem avisa só quando a dublagem não é PT-BR", () => {
   assert.equal(avisoIdiomaDublagem("", "animegg", PT), "");
 });
 
+
+test("correspondenciaExata distingue 'o site reconheceu' de 'calhou'", () => {
+  const resultados = [
+    { title: "Eiyuu Kyoushitsu" },
+    { title: "Boku no Hero Academia" },
+  ];
+
+  assert.equal(
+    correspondenciaExata(resultados, "Boku no Hero Academia").title,
+    "Boku no Hero Academia",
+    "o título pedido tem de ganhar, mesmo não sendo o primeiro",
+  );
+  assert.equal(
+    correspondenciaExata(resultados, "Meu Hero Academia"),
+    null,
+    "sem correspondência exata devolve null (e NÃO o primeiro resultado)",
+  );
+  assert.equal(correspondenciaExata([], "naruto"), null);
+  assert.equal(correspondenciaExata(resultados, "   "), null);
+});
+
+test("correspondenciaExata ignora os sufixos que só o site usa", () => {
+  const resultados = [{ title: "Black Clover Dublado" }];
+
+  assert.ok(
+    correspondenciaExata(resultados, "Black Clover"),
+    "'Black Clover' corresponde a 'Black Clover Dublado'",
+  );
+});
+
+test("capaEmTamanhoGrande tira o sufixo de miniatura do WordPress", () => {
+  assert.equal(
+    capaEmTamanhoGrande(
+      "https://meusanimes.blog/wp-content/uploads/2025/04/capa-150x150.jpg",
+    ),
+    "https://meusanimes.blog/wp-content/uploads/2025/04/capa.jpg",
+  );
+  assert.equal(
+    capaEmTamanhoGrande("https://cdn.exemplo/capa-300x450.png"),
+    "https://cdn.exemplo/capa.png",
+  );
+  assert.equal(
+    capaEmTamanhoGrande("https://cdn.exemplo/capa.jpg"),
+    "https://cdn.exemplo/capa.jpg",
+    "um URL já em tamanho grande não é alterado",
+  );
+  assert.equal(capaEmTamanhoGrande(""), "");
+  assert.equal(capaEmTamanhoGrande(null), "");
+});
+
+test("buildCandidateRows usa índices e mostra o ano", () => {
+  const rows = buildCandidateRows([
+    { title: "Boku no Hero Academia", year: "2016" },
+    { title: "Boku no Hero Academia 2", year: null },
+  ]);
+
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    ["anm:an:0", "anm:an:1"],
+    "o rowId guarda só o índice (o slug fica na sessão)",
+  );
+  assert.equal(rows[0].title, "Boku no Hero Academia");
+  assert.match(rows[0].description, /2016/);
+  assert.equal(
+    rows[1].description,
+    "Escolher este título",
+    "sem ano não inventa um",
+  );
+  assert.deepEqual(buildCandidateRows([]), []);
+});
+
+test("buildCandidateRows não deixa um título enorme rebentar a linha", () => {
+  const rows = buildCandidateRows([{ title: "x".repeat(200) }]);
+
+  assert.equal(rows[0].title.length, 60, "o título é cortado a 60 caracteres");
+});

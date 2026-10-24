@@ -975,3 +975,268 @@ test("com saldo, o episódio passa do portão e cobra 20 créditos", async () =>
     }
   }
 });
+
+/**
+ * Fixa o provider destes testes em `meusanimes` (HTML de busca no formato do
+ * WordPress) e restaura a lista no fim. O ficheiro usa anikoto/animegg por
+ * predefinição, e a ordem dos providers é significativa.
+ */
+function soMeusanimes() {
+  const guardados = [...ANIME_PROVIDERS];
+  ANIME_PROVIDERS.length = 0;
+  ANIME_PROVIDERS.push("meusanimes");
+  return () => {
+    ANIME_PROVIDERS.length = 0;
+    ANIME_PROVIDERS.push(...guardados);
+  };
+}
+
+const BUSCA_EIYUU = `
+  <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Eiyuu Kyoushitsu" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/">Eiyuu Kyoushitsu</a></div><div class="meta"> <span class="year">2023</span></div></div></article></div>
+`;
+
+const BUSCA_DOIS = `
+  <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/boku-no-hero-academia/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/bnha-150x150.jpg" alt="Boku no Hero Academia" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/boku-no-hero-academia/">Boku no Hero Academia</a></div><div class="meta"> <span class="year">2016</span></div></div></article></div>
+`;
+
+
+/**
+ * Desambiguação no fluxo: quando a pesquisa não tem correspondência exata, o
+ * bot mostra a lista de candidatos (com capa) em vez de escolher sozinho.
+ *
+ * Prova o defeito que isto corrige: "Meu Hero Academia" no meusanimes devolvia
+ * "Eiyuu Kyoushitsu" (outro anime) sem o utilizador perceber. Aqui a resposta
+ * tem de trazer a lista e NENHUM episódio.
+ */
+test("sem correspondência exata, o card mostra a lista e não os episódios", async () => {
+  resetAnimeSessions();
+  const restaurar = soMeusanimes();
+
+  const respostas = {
+    "translate.googleapis.com": JSON.stringify([
+      [["My Hero Academia", "Meu Hero Academia", null, null]],
+      null,
+      "pt",
+    ]),
+    "/?s=meu%20hero%20academia": BUSCA_EIYUU,
+    "/?s=my%20hero%20academia": BUSCA_EIYUU,
+  };
+
+  globalThis.fetch = async (url) => {
+    const alvo = String(url);
+    const chave = Object.keys(respostas).find((k) =>
+      alvo.toLowerCase().includes(k.toLowerCase()),
+    );
+    const corpo = respostas[chave] ?? "";
+    return {
+      ok: true,
+      status: 200,
+      text: async () => corpo,
+      json: async () => JSON.parse(corpo || "null"),
+    };
+  };
+
+  try {
+    const enviados = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "Meu Hero Academia",
+    });
+
+    await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: "anm:aud:subbed",
+      sendReply: async () => {},
+    });
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.stage, "candidatos", "para na escolha do candidato");
+    assert.equal(sessao.candidates.length, 1);
+    assert.equal(
+      sessao.episodes.length,
+      0,
+      "NÃO pode ter carregado episódios do anime errado",
+    );
+
+    const card = enviados[enviados.length - 1];
+    assert.ok(card.image?.url, "o card leva a capa do candidato");
+    assert.match(
+      card.image.url,
+      /^https:\/\/meusanimes\.blog\/wp-content\/uploads\/.*\/yLZS\.jpg$/,
+      "a capa vai em tamanho grande (sem o sufixo -150x150)",
+    );
+    assert.match(card.caption, /My Hero Academia/, "mostra o título encontrado");
+    assert.match(card.caption, /Traduzi/, "explica que traduziu o termo");
+
+    const ids = card.interactiveButtons
+      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+      .find((p) => p.sections)?.sections?.[0]?.rows?.map((r) => r.id);
+    assert.ok(ids.includes("anm:an:0"), "a lista tem o candidato");
+    assert.ok(
+      !ids.some((id) => id.startsWith("anm:ep:")),
+      "a lista de candidatos não mostra episódios",
+    );
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
+/**
+ * Com correspondência exata, o fluxo NÃO mostra lista nenhuma: o comportamento
+ * histórico (seguir direto para os episódios) tem de ficar intacto. Sem esta
+ * prova, a desambiguação podia introduzir um passo extra em todos os pedidos.
+ */
+test("com correspondência exata, segue direto sem lista de candidatos", async () => {
+  resetAnimeSessions();
+  const restaurar = soMeusanimes();
+
+  const respostas = {
+    "/?s=naruto": `
+      <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/naruto/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Naruto" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/naruto/">Naruto</a></div><div class="meta"> <span class="year">2002</span></div></div></article></div>`,
+    "/a/naruto/": `
+      <div id='seasons'><div class='se-c'><div class='se-q'><span class='title'>Temporada 1</span></div><div class='se-a' style="display:block"><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-1/'>Episódio 1</a></div></li></ul></div></div></div>`,
+    "/e/naruto-1-episodio-1/": `<div id="option-2" class="play-box-iframe"><iframe src="https://serv01.exemplo.club/#/video/1/1/1/"></iframe></div>`,
+  };
+
+  globalThis.fetch = async (url) => {
+    const alvo = String(url);
+    const chave = Object.keys(respostas).find((k) =>
+      alvo.toLowerCase().includes(k.toLowerCase()),
+    );
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const enviados = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "naruto",
+    });
+
+    await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: "anm:aud:subbed",
+      sendReply: async () => {},
+    });
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.notEqual(sessao.stage, "candidatos", "não há passo de candidato");
+    assert.deepEqual(sessao.candidates, []);
+    assert.ok(sessao.episodes.length > 0, "os episódios foram carregados");
+
+    const card = enviados[enviados.length - 1];
+    assert.equal(card.image, undefined, "sem ambiguidade o card não leva capa");
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
+/**
+ * Escolher um candidato continua o fluxo a partir DELE (e não do primeiro
+ * resultado): é a garantia de que a escolha do utilizador é respeitada.
+ */
+test("escolher um candidato carrega os episódios do candidato escolhido", async () => {
+  resetAnimeSessions();
+  const restaurar = soMeusanimes();
+
+  const respostas = {
+    "translate.googleapis.com": JSON.stringify([
+      [["My Hero Academia", "Meu Hero Academia", null, null]],
+      null,
+      "pt",
+    ]),
+    "/?s=meu%20hero%20academia": BUSCA_EIYUU,
+    "/?s=my%20hero%20academia": BUSCA_DOIS,
+    "/a/boku-no-hero-academia/": `
+      <div id='seasons'><div class='se-c'><div class='se-q'><span class='title'>Temporada 1</span></div><div class='se-a' style="display:block"><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/bnha-1-episodio-1/'>Episódio 1</a></div></li></ul></div></div></div>`,
+  };
+
+  globalThis.fetch = async (url) => {
+    const alvo = String(url);
+    const chave = Object.keys(respostas).find((k) =>
+      alvo.toLowerCase().includes(k.toLowerCase()),
+    );
+    const corpo = respostas[chave] ?? "";
+    return {
+      ok: true,
+      status: 200,
+      text: async () => corpo,
+      json: async () => JSON.parse(corpo || "null"),
+    };
+  };
+
+  try {
+    const socket = { sendMessage: async () => ({ key: { id: "m" } }) };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "Meu Hero Academia",
+    });
+
+    await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: "anm:aud:subbed",
+      sendReply: async () => {},
+    });
+
+    const antes = getAnimeSession(CHAT, LID);
+    assert.equal(antes.stage, "candidatos");
+    // "Boku no Hero Academia" é o candidato 1 (o termo traduzido vem primeiro).
+    const alvo = antes.candidates.findIndex(
+      (c) => c.title === "Boku no Hero Academia",
+    );
+    assert.ok(alvo >= 0, "o candidato traduzido está na lista");
+
+    await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: `anm:an:${alvo}`,
+      sendReply: async () => {},
+    });
+
+    const depois = getAnimeSession(CHAT, LID);
+    assert.equal(depois.anime.title, "Boku no Hero Academia");
+    assert.equal(depois.provider, "meusanimes");
+    assert.deepEqual(depois.candidates, [], "a lista é limpa depois da escolha");
+  } finally {
+    delete globalThis.fetch;
+    restaurar();
+  }
+});
