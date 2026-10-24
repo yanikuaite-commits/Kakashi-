@@ -86,7 +86,7 @@ test("o autor cancela o próprio menu mesmo com forma de JID diferente", async (
   assert.match(replies[0], /cancelado/i);
 });
 
-test("outro membro continua a ser negado", async () => {
+test("outro membro é ignorado em silêncio e não mexe no menu", async () => {
   resetAnimeSessions();
   await abrirMenu(LID, [LID, PN]);
 
@@ -101,8 +101,12 @@ test("outro membro continua a ser negado", async () => {
     sendReply: async (text) => replies.push(String(text)),
   });
 
-  assert.equal(consumiu, true);
-  assert.match(replies[0], /Só quem pediu/i);
+  assert.equal(consumiu, false, "a mensagem de terceiros segue o fluxo normal");
+  assert.deepEqual(
+    replies,
+    [],
+    "avisar aqui fazia o bot responder a qualquer mensagem do grupo",
+  );
 });
 
 test("outro membro não cancela o menu do autor", async () => {
@@ -110,7 +114,7 @@ test("outro membro não cancela o menu do autor", async () => {
   await abrirMenu(LID, [LID, PN]);
 
   const replies = [];
-  await handleAnimeReply({
+  const consumiu = await handleAnimeReply({
     socket: makeSocket(),
     chatId: CHAT,
     senderLid: "555555555555555@lid",
@@ -119,7 +123,36 @@ test("outro membro não cancela o menu do autor", async () => {
     sendReply: async (text) => replies.push(String(text)),
   });
 
-  assert.match(replies[0], /Só quem pediu pode cancelar/i);
+  assert.equal(consumiu, false);
+  assert.deepEqual(replies, [], "o menu do autor tem de continuar de pé, sem resposta");
+});
+
+test("texto de outro membro à espera do nome fica em silêncio", async () => {
+  resetAnimeSessions();
+  await abrirMenu(LID, [LID, PN]);
+
+  const replies = [];
+  const consumiu = await handleAnimeReply({
+    socket: makeSocket(),
+    chatId: CHAT,
+    senderLid: "555555555555555@lid",
+    senderLids: ["555555555555555@lid"],
+    senderName: "Outra Pessoa",
+    text: "bom dia pessoal",
+    sendReply: async (text) => replies.push(String(text)),
+  });
+
+  assert.equal(consumiu, false, "o texto não é nome de anime do dono");
+  assert.deepEqual(
+    replies,
+    [],
+    "a conversa do grupo não pode virar \"não foste tu que pediste o menu\"",
+  );
+  assert.equal(
+    getAnimeSession(CHAT, LID).stage,
+    "aguardando_nome",
+    "a sessão continua à espera do nome, agora dado pelo dono",
+  );
 });
 
 test("token de anime sem sessão avisa que o menu expirou", async () => {
@@ -428,6 +461,60 @@ test("com as duas faixas, o menu pergunta Legendado/Dublado antes dos episódios
       .find((p) => p.sections)?.sections?.[0]?.rows
       ?.map((r) => r.id);
     assert.ok(idsEp.includes("anm:ep:0"), "agora sim mostra os episódios");
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
+test("lista MISTA (parte só legendada) ainda pergunta a faixa", async () => {
+  resetAnimeSessions();
+
+  // Regressão: a lista real do Naruto tem 218 episódios com as duas faixas e 2
+  // só legendados. Com a regra de intersecção o menu concluía "subbed" e nunca
+  // perguntava, pelo que o dublado era inalcançável em quase todas as séries.
+  const respostas = {
+    "/search/?q=naruto": `
+      <div class="media searchre">
+        <a href="/series/naruto" class="mse"><div class="media-body"><div class="first"><h2>Naruto</h2></div></div></a>
+      </div>`,
+    "/series/naruto": `
+      <a href="/naruto-episode-1" class="anm_det_pop"><strong>Naruto 1</strong></a><a href="/naruto-episode-1#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-1#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
+      <a href="/naruto-episode-2" class="anm_det_pop"><strong>Naruto 2</strong></a><a href="/naruto-episode-2#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-2#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
+      <a href="/naruto-episode-3" class="anm_det_pop"><strong>Naruto 3</strong></a><a href="/naruto-episode-3#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a>`,
+  };
+
+  globalThis.fetch = async (url) => {
+    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const enviados = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "naruto",
+    });
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.stage, "faixas", "o ep 3 não ter dublado não pode esconder a escolha");
+    assert.deepEqual(sessao.audioVersions, ["subbed", "dubbed"]);
+
+    const ids = enviados[0].interactiveButtons
+      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+      .find((p) => p.sections)?.sections?.[0]?.rows
+      ?.map((r) => r.id);
+    assert.ok(ids.includes("anm:aud:dubbed"), "Dublado tem de ser alcançável");
   } finally {
     delete globalThis.fetch;
   }

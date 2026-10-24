@@ -365,6 +365,9 @@ export async function searchWithEpisodes(termo) {
       id: ep.id,
       number: ep.number,
       ids: ep.id,
+      // Sem isto o fallback perde a faixa e o dublado é inalcançável quando a
+      // primeira série da lista é a legendada.
+      versions: ep.versions || [],
     })),
   };
 }

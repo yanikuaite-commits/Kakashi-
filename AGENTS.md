@@ -148,6 +148,8 @@ Important files:
 | `muted.json` | muted users by group |
 | `inactive-groups.json` | groups where the bot is disabled |
 | `group-restrictions.json` | restrictions by message type |
+| `credits.json` | per-user credit accounts (daily + recharged) |
+| `rate-limit.json` | per-user anti-flood counters (`day`, `count`, `lastCommandAt`) |
 
 Mandatory rule:
 
@@ -235,10 +237,98 @@ Every member command checks the balance before running, not only at the end:
 - `dynamicCommand` calls `hasSufficientCredits` and then `chargeCredits`; with no
   balance the command never starts and the member gets `creditsExhaustedMessage`
 - `ANIME_EPISODE_CREDITS` (20) is charged per downloaded episode in
-  `downloadAndSend`, after the same pre-check; the search and menus cost the
-  normal `anime` command price. A failed download is refunded with
-  `refundCredits`, because nobody pays for an episode that never arrived
+  `downloadAndSend`, after the same pre-check. The search and the menus cost the
+  `anime` command price (`COMMAND_CREDITS.anime`, 2) — cheap because searching
+  spends no bandwidth; the real cost is the episode that gets downloaded. A
+  failed download is refunded with `refundCredits`, because nobody pays for an
+  episode that never arrived
 - the owner (`OWNER_LID`) never pays, in commands or in the anime flow
+
+## RATE_LIMIT_AND_DOWNLOAD_QUEUE
+
+Two guards sit in front of the expensive work, both added to protect bandwidth
+and to keep the bot from being banned for spam.
+
+**Anti-flood** (`src/services/rateLimit.js`, state in
+`database/rate-limit.json`):
+
+- two independent brakes per user: a cooldown between commands
+  (`COMMAND_COOLDOWN_SECONDS`, default 5) and a daily ceiling
+  (`MAX_COMMANDS_PER_DAY`, default 200) that renews at 00h00 Maputo time, the
+  same clock as the credits (`mozambiqueClock`)
+- only `RATE_LIMITED_COMMANDS` are limited: the ones that spend bandwidth, CPU
+  or paid APIs. Navigation (`conta`, `menu`) and moderation (`warn`, `ban`,
+  `mute`) stay out, so the brake never blocks a moderator
+- `checkRateLimit` and `registerCommandUse` are separate on purpose: the
+  dispatcher checks first and registers only after the credits are charged, so
+  a command refused for lack of balance does not consume the daily ceiling
+- `dynamicCommand` runs the check before charging credits: a throttled user is
+  never charged
+- the owner is never limited; a throttled user gets `rateLimitMessage`, which
+  says whether it is the cooldown or the daily ceiling
+
+**Download queue** (`src/services/downloadQueue.js`):
+
+- at most `DOWNLOAD_CONCURRENCY` downloads (default 2) run at once; the rest
+  wait, so two users no longer split the bandwidth and slow each other down
+- every download goes through `withDownloadSlot`. The queue is entered inside
+  `downloader.js` (`downloadMedia` / `downloadYouTubeVideo`) and in the anime
+  flow (`animeMenu.js`), so the limit applies to the download itself and not to
+  the link resolution, which is fast
+- the waiting user is told the position (`queuedMessage`) and warned when their
+  turn arrives (`downloadTurnMessage`), instead of waiting in silence
+- a request that waits longer than `DOWNLOAD_QUEUE_TIMEOUT_MS` leaves the queue
+  with `QueueTimeoutError`. The timeout counts only the wait, never the
+  running download
+- the owner's downloads are queued with priority, so an urgent action does not
+  sit behind member downloads
+- the user notice uses the `withDownloadNotifier` context (same idea as
+  `withCreditsContext`) because `sendReply` is not passed down through the
+  download layers. **The notice is captured when the request is made, not when
+  the download starts**: the `pump` that frees a slot runs inside the context of
+  the request that just finished, so reading the context there would send
+  someone else's "your turn" to the wrong chat. `downloadQueue.test.js` guards
+  this with a test that fails if the capture moves back into `pump`
+
+## BACKUP
+
+`src/services/backup.js` builds the archive, `src/commands/owner/backup.js` is
+the owner command, and `src/commands/owner/restore.js` pulls it back.
+
+What goes into the archive, and what does not:
+
+- `database/` — always. This is where the credits live
+  (`database/credits.json`, `readCreditsAccounts`), plus the pending payment
+  confirmations (`database/pending-recharges.json`), warns, prefixes, muted
+  users and restrictions. **Anything the credits feature writes is backed up,
+  because the whole folder travels.**
+- `.env` — always. It carries the secrets.
+- `assets/auth/baileys/` — **only with explicit authorisation**, via
+  `.backup sessao`. These are the pairing private keys: whoever holds the
+  archive can talk as the bot's number. `backupEntries({ includeAuth })` is the
+  single place that decides this, and the default is `false`.
+
+- on restore, the archive's session is **discarded** unless
+  `.restore sessao` asks for it. `applyArchive` extracts to a temp directory
+  first, drops `assets/auth/`, then copies into the project: a stale archive can
+  no longer overwrite the pairing keys of a running bot, and an existing local
+  session is left untouched. Restoring the session of an old or foreign archive
+  is how a bot ends up unable to talk.
+
+Destination: with `GITHUB_TOKEN` set it uploads to
+`GITHUB_REPOSITORY`/`GITHUB_BACKUP_PATH` (`backups/kakashi-database.tar.gz` on
+`main`, all fixed in `src/config.js`); without it the archive stays local in
+`/tmp`. There is no scheduler — only the owner command triggers it.
+
+The upload does not check whether the destination repository is private, by
+explicit owner decision. The archive carries the `.env` (and the session when
+`.backup sessao` is used), so a public destination publishes secrets, and the
+GitHub commit history keeps the blob after deletion. Keep `GITHUB_REPOSITORY`
+pointing at a private repository.
+
+`.delete-backup` (`deleteRemoteBackup`) removes the remote file on request.
+Deleting does not undo a publication: the commit history keeps the blob, so
+secrets from an already-public archive must be rotated.
 
 ## ANTI_PAYMENT
 
@@ -304,17 +394,18 @@ The Baileys path encrypts chunk by chunk, so a 350 MB episode costs ~65 MB of
 RSS as a stream against ~351 MB as a buffer. The Render `starter` plan has
 512 MB, so buffering a large episode gets the process killed by OOM.
 
-### Animes (animegg + anitube + animeheaven + anikoto + providers via @consumet/extensions)
+### Animes (animegg + anitube + animeheaven + animesonlinehd + anikoto + providers via @consumet/extensions)
 
 `src/services/anime.js` searches a live provider, lists episodes and returns
 streaming sources; `src/services/animegg.js`, `src/services/anitube.js`,
-`src/services/anikoto.js` and `src/services/animeheaven.js` are the in-house
+`src/services/anikoto.js`, `src/services/animeheaven.js` and
+`src/services/animesonlinehd.js` are the in-house
 providers; `src/utils/animeMenu.js` runs the interactive flow
 (nome → temporadas → episódios → qualidade → download) and
 `src/utils/animeFormat.js` holds the pure helpers.
 
-- **`animegg`, `anitube`, `anikoto` and `animeheaven` are the providers that work
-  from a datacenter IP (Render).** All are scraped by the bot itself, not by the
+- **`animegg`, `anitube`, `anikoto`, `animeheaven` and `animesonlinehd` are the
+  providers that work from a datacenter IP (Render).** All are scraped by the bot itself, not by the
   library, because every `@consumet/extensions` anime provider sits behind
   Cloudflare and/or is dead. The anikoto chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
   `/ajax/server/list?servers=<data-ids>` → `/ajax/server?get=<link>&sv=<sv>` →
@@ -359,12 +450,39 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   episode already fits the 200 MB limit, so forcing 480p would only degrade the
   image for nothing. `ANIME_MAX_HEIGHT` (480) still applies to anikoto, whose
   master.m3u8 carries a single 1080p variant
+- **`animesonlinehd` is the only provider with real PT-BR dubbing.** It is a
+  Next.js frontend over a WordPress backend (`animesonline.blue`), and the
+  `/anime/<slug>` HTML carries the whole catalogue in the RSC payload
+  (`self.__next_f.push`), so one page gives every season and both audio tracks —
+  the WordPress REST API needs auth (401) and is not used. The chain is:
+  `/api/search?q=` → `/anime/<slug>` → `/api/episodio/<id>` (returns `tipo` plus
+  a Blogger `playerUrl`) → the Blogger page → the direct `googlevideo.com`
+  URL. `yt-dlp`'s blogger extractor fails on this format ("Unable to extract
+  JSON data"), so the URL is parsed here and yt-dlp gets it directly
+- **each episode carries separate `leg` and `dub` ids**, which is why the audio
+  step is a real choice here: picking "Dublado" swaps the episode id, not just a
+  label. `getAnimeInfo`/`getSeasonEpisodes`/`episodes` therefore take the
+  `audioVersion`, and `animeMenu.js` reloads the list once the track is chosen.
+  An episode that does not publish the requested track is dropped rather than
+  falling back — serving the wrong audio is the exact bug this provider fixes.
+  With no explicit choice the dubbed id wins (`ANIME_PREFER_DUBBED`), falling back
+  to subtitled only when the episode has no dubbing
+- the Blogger CDN serves itag 18 (360p, ~75 MB for a 24 min episode) and itag 22
+  (720p, ~219 MB). The 720p is above the 200 MB ceiling, so the episode is served
+  at 360p. The CDN requires the Blogger `Referer` **and** a browser
+  `User-Agent`: without the User-Agent it answers 403 even with the right
+  Referer, which is why `animeDownloadArgs` sets both
+- **the real end-to-end download was verified**: Kaiju Girls ep. 1 resolved
+  through `animesonlinehd` and downloaded with yt-dlp to a 14.8 MB MP4, well
+  inside the 200 MB ceiling. The 360p/720p sizes above come from longer episodes
+  (24 min); a short episode is much smaller
 - the library providers remain as fallback; extraction runs **in-process**
   through `@consumet/extensions`, with no Consumet server and no self-hosting.
   The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
   provider (ex-Zoro) shut down for good in March 2026
 - `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `animegg,anitube,animeheaven,anikoto`); each provider is tried
+  (default `animesonlinehd,animegg,anitube,animeheaven,anikoto`); each provider
+  is tried
   until one returns the episode, and the winning provider is carried in the
   session so `getAnimeInfo`/`getEpisodeSources` hit the same source
 - **the fallback happens at the EPISODE level, not only at search time.** The
@@ -375,9 +493,15 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   both back to the session, because the yt-dlp args and the max height depend on
   the provider. If the number does not exist in a provider, it returns null
   instead of risking the wrong episode.
-- **AnimeGG (`animegg.org`) is the default first provider: no browser, H.264
-  (`avc1`), and it fails on roughly one episode in eight — which is exactly why
-  the episode-level fallback exists.** The chain is plain `fetch` + regex, no
+- **a message from anyone but the menu owner is ignored in SILENCE.** Every
+  non-owner message used to get "não foste tu que pediste o menu" back, so any
+  group chatter while a menu was open turned into a bot reply. Now
+  `handleAnimeReply` returns `false` for a non-owner (the message goes on to the
+  normal flow) and the session keeps waiting for its owner; an expired token is
+  still answered, because that one carries no session to wait for.
+- **AnimeGG (`animegg.org`) is the first fallback after `animesonlinehd`: no
+  browser, H.264 (`avc1`), and it fails on roughly one episode in eight — which is
+  exactly why the episode-level fallback exists.** The chain is plain `fetch` + regex, no
   Playwright:
   `/search/?q=` → `href="/series/<slug>"` → `/<slug>-episode-<n>` →
   `/embed/<id>` → the inline
@@ -432,7 +556,22 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   - **because the dubbed episode is a DIFFERENT post, the fallback must match the
     track as well as the number.** Looking up only by episode number would
     happily return the subtitled post for a user who asked for dubbed, so
-    `fontesDoProvider` filters the candidates by track.
+    `fontesDoProvider` filters the candidates by track (`escolherEpisodio`).
+  - **the title that comes out of a provider carries that site's own suffix**
+    ("Jujutsu Kaisen (TV)" from AnimeGG, "Naruto Shippuden (Dublado)" from
+    AniTube). Searching it literally in the NEXT provider returns 0 results, so
+    every episode ended up in the last provider (anikoto), even when the earlier
+    ones had it. `tituloDeBusca` (`src/utils/animeFormat.js`) strips the suffix
+    before `searchAnime` and `fontesDoProvider` search, falling back to the
+    original term when the stripped one returns nothing. Measured effect:
+    "Jujutsu Kaisen (TV)" went from anikoto to animeheaven/anitube.
+  - **the first search result is not always the requested title.** AnimeGG
+    answers "One Piece" with "One Piece: Episode of Merry" (a 1-episode special)
+    first; `melhorResultado` prefers the exact title match, so the series wins.
+  - **dubbed is preferred when the user did not choose.** `ANIME_PREFER_DUBBED`
+    (default true) makes `escolherEpisodio` pick the dubbed track among the
+    candidates; an explicit menu choice still wins, and an episode with no
+    dubbing still falls back to subtitled instead of failing.
   - because the playlist carries no `Content-Length`, the size is estimated by
     sampling 5 segments and multiplying by the segment count. Measuring only the
     first segment overestimates ~2.5x (the first carries the header at 4.7 MB,
@@ -472,13 +611,24 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   (long, signed) stream URLs stay in the session, because WhatsApp drops
   oversized `rowId`s
 - **the audio track is a step of its own (`anm:aud:subbed` / `anm:aud:dubbed`),
-  asked BEFORE the episode list and only when the whole list has both tracks.**
+  asked BEFORE the episode list and only when the list publishes more than one.**
   The episode list comes from `getAnimeInfo`/`getSeasonEpisodes`, which carry
-  `versions` per episode; `commonAudioVersions` intersects them and
+  `versions` per episode; `availableAudioVersions` UNIONS them and
   `routeAfterEpisodes` decides: 2+ → ask, exactly 1 → fix it silently (no false
   choice), none → ask nothing and behave as before. Asking per episode instead
   would let the user pick "Dublado" and then hit an episode that has no dub, so
   the choice is made once, for the list
+- **the track rule is a UNION, not an intersection, and this is the difference
+  between the feature working and not existing.** Requiring every episode to have
+  both tracks looks safer but hides the choice almost always, because the series
+  page fragment only covers part of the list: One Piece has 583 episodes with
+  both, 577 subbed-only and 2 dubbed-only, so the intersection was EMPTY and the
+  menu asked nothing. Naruto (218 both, 2 subbed-only) collapsed to `subbed` and
+  never asked. Measured across series, only titles whose list is uniformly both
+  (e.g. Jujutsu Kaisen, 24/24) reached the question. With the union, One Piece
+  and Naruto ask; series with a single track (Kaijuu Girls, Attack on Titan)
+  silently fix it. An episode that lacks the chosen track fails with a clear
+  message, which beats never offering the choice
 - the chosen track is stored in `session.audioVersion` and travels as the third
   argument of `getEpisodeSources(episodeId, provider, audioVersion)` down to
   `provider.sources(episode, slug, audioVersion)`; providers that do not
@@ -486,7 +636,13 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   the user can confirm what was sent
 - the fallback keeps the track: `fontesDoProvider` filters candidates by
   `versions`, because in AniTube the dubbed episode is a different post and
-  matching on the number alone would silently hand back the subtitled one
+  matching on the number alone would silently hand back the subtitled one.
+  `searchWithEpisodes` (the AniTube fallback entry point) must also forward
+  `versions`, or the choice is lost on that path
+- the series-page fragment is trustworthy where it exists: sampled against the
+  real episode tabs on Naruto, One Piece, Bleach and Death Note, `#subbed`/
+  `#dubbed` always matched the tabs actually present. Where it is absent the
+  episode list has no track information and the flow behaves as before
 - episodes are listed 10 at a time (`anm:ep:<i>` uses the ABSOLUTE index) with a
   single `anm:pg:<p>` "ver mais" row at the bottom for the rest, so the list
   stays short and every episode is still reachable — WhatsApp drops oversized

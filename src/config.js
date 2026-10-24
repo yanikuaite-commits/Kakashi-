@@ -229,7 +229,7 @@ export const COMMAND_CREDITS = {
   "play-video": 8,
   "play-audio": 7,
   "baixar": 7,
-  "anime": 7,
+  "anime": 2,
   "yt-search": 5,
   // Inteligência artificial
   "deepseek": 6,
@@ -256,10 +256,79 @@ export const COMMAND_CREDITS = {
 // Custo de qualquer outro comando de membro não listado acima.
 export const DEFAULT_COMMAND_CREDITS = 5;
 
-// Custo por episódio de anime baixado. O comando `anime` gasta o custo normal
-// (a pesquisa e o menu), mas cada episódio efetivamente baixado custa isto:
-// o gasto real é o download, não a navegação.
+// Custo por episódio de anime baixado. A pesquisa e o menu custam
+// `COMMAND_CREDITS.anime` (2 créditos, barato porque só pesquisar não gasta
+// banda), mas cada episódio efetivamente baixado custa isto: o gasto real é o
+// download, não a navegação.
 export const ANIME_EPISODE_CREDITS = 20;
+
+// ==========================================================================
+// ANTI-FLOOD
+// ==========================================================================
+
+// Intervalo mínimo entre comandos do mesmo usuário (segundos). Um usuário pode
+// disparar um comando a cada N segundos; abaixo disso é flood. 0 desliga.
+export const COMMAND_COOLDOWN_SECONDS = Number(
+  process.env.COMMAND_COOLDOWN_SECONDS || 5,
+);
+
+// Teto de comandos por usuário por dia (00h00 de Moçambique). O dono não conta.
+// 0 desliga o teto.
+export const MAX_COMMANDS_PER_DAY = Number(
+  process.env.MAX_COMMANDS_PER_DAY || 200,
+);
+
+// O cooldown e o teto valem só para estes comandos: os que gastam recursos
+// caros (banda, CPU, APIs pagas). Comandos de navegação (`conta`, `menu`) e de
+// grupo (`warn`, `mute`) não entram, para não atrapalhar a moderação.
+export const RATE_LIMITED_COMMANDS = new Set([
+  "anime",
+  "attp",
+  "baixar",
+  "brat",
+  "bratvid",
+  "deepseek",
+  "facebook",
+  "flux",
+  "gemini",
+  "gerar-link",
+  "gpt-5-mini",
+  "ia-sticker",
+  "instagram",
+  "pinterest",
+  "play-audio",
+  "play-video",
+  "removebg",
+  "rename",
+  "sticker",
+  "tik-tok",
+  "tik-tok-audio",
+  "to-gif",
+  "to-image",
+  "to-mp3",
+  "transcrever",
+  "ttp",
+  "tts",
+  "x-twitter",
+  "yt-search",
+]);
+
+// ==========================================================================
+// FILA DE DOWNLOADS
+// ==========================================================================
+
+// Quantos downloads correm ao mesmo tempo. O excedente espera na fila em vez de
+// dividir a banda com os outros. 1 serializa tudo.
+export const DOWNLOAD_CONCURRENCY = Number(
+  process.env.DOWNLOAD_CONCURRENCY || 2,
+);
+
+// Tempo máximo na fila antes de desistir (ms). Evita esperas sem fim quando o
+// downloader à frente encrava.
+export const DOWNLOAD_QUEUE_TIMEOUT_MS = Number(
+  process.env.DOWNLOAD_QUEUE_TIMEOUT_MS || 5 * 60 * 1000,
+);
+
 
 // ==========================================================================
 // PAGAMENTOS E RECARGAS (e-mola / m-pesa)
@@ -330,9 +399,13 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
 // preferência. Cada provider é tentado até um devolver o episódio.
 //
-// A ordem predefinida é `animegg,anitube,animeheaven,anikoto`:
+// A ordem predefinida é `animesonlinehd,animegg,anitube,animeheaven,anikoto`:
 //
-// - `animegg` vem primeiro porque é o mais rápido (HTML estático, sem browser) e
+// - `animesonlinehd` vem primeiro por ser o único com DUBLAGEM PT-BR real e o
+//   mais estável: responde a IPs de datacenter sem Cloudflare e serve 360p
+//   (~75 MB num episódio de 24 min), bem dentro do teto de 200 MB. A imagem é
+//   menor do que a dos outros, mas é o provider que o pedido comum procura;
+// - `animegg` vem a seguir porque é o mais rápido (HTML estático, sem browser) e
 //   entrega H.264 num MP4 direto; falha em ~1 de cada 8 episódios com
 //   `videoSources = []`, e nesse caso o fallback passa ao seguinte;
 // - `anitube` serve HLS H.264, mas só publica 720p (~257 MB num episódio de
@@ -341,12 +414,13 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // - `anikoto` fica por último porque só publica 1080p (HLS), o que obriga a
 //   baixar grande e a reduzir localmente.
 //
-// `animegg`, `anitube`, `anikoto` e `animeheaven` são extraídos diretamente pelo
-// bot (`src/services/*.js`) e respondem a IPs de datacenter. Os restantes vêm da
-// biblioteca e servem de alternativa (AnimeUnity funciona de IP residencial e de
-// alguns datacenters).
+// `animegg`, `anitube`, `anikoto`, `animeheaven` e `animesonlinehd` são
+// extraídos diretamente pelo bot (`src/services/*.js`) e respondem a IPs de
+// datacenter. Os restantes vêm da biblioteca e servem de alternativa (AnimeUnity
+// funciona de IP residencial e de alguns datacenters).
 export const ANIME_PROVIDERS = (
-  process.env.ANIME_PROVIDERS || "animegg,anitube,animeheaven,anikoto"
+  process.env.ANIME_PROVIDERS ||
+  "animesonlinehd,animegg,anitube,animeheaven,anikoto"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())
@@ -369,13 +443,16 @@ export const ANIME_PROXY_URL = process.env.ANIME_PROXY_URL || "";
 
 export const ANIME_API_TIMEOUT_MS = 30 * 1000;
 // Limite do WhatsApp: acima de 100 MB só como documento (a mesma regra do
-// YouTube, aplicada pelo `decideAnimeSend`); acima de 200 MB o envio é
+// YouTube, aplicada pelo `decideAnimeSend`); acima deste teto o envio é
 // cancelado e o utilizador é convidado a escolher uma qualidade menor.
 //
-// 200 MB e não 350: o envio mantém em disco o download e a cópia encriptada do
-// Baileys, ou seja ~2x o tamanho (350 MB -> ~700 MB). O Render Starter tem disco
-// efémero pequeno e downloads em paralelo esgotam-no.
-export const ANIME_DOCUMENT_LIMIT_MB = 200;
+// 300 MB: o envio mantém em disco o download e a cópia encriptada do Baileys,
+// ou seja ~2x o tamanho (300 MB -> ~600 MB). O plano gratuito do Cloady dá 1 GB
+// de RAM e 5 GB de disco, o que aguenta o dobro do que o Render Starter (512 MB)
+// aguentava. O valor continua configurável para hosts mais apertados.
+export const ANIME_DOCUMENT_LIMIT_MB = Number(
+  process.env.ANIME_DOCUMENT_LIMIT_MB || 300,
+);
 export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 
 // Resolução máxima do download de animes. O provider entrega um m3u8 com várias
@@ -384,6 +461,16 @@ export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 // mantém o episódio dentro do limite. Se a faixa de 480p não existir, o seletor
 // do yt-dlp cai para a melhor disponível em vez de falhar.
 export const ANIME_MAX_HEIGHT = Number(process.env.ANIME_MAX_HEIGHT) || 480;
+
+// Procurar a faixa DUBLADA primeiro quando o episódio publica as duas.
+//
+// Sem escolha explícita do utilizador, um episódio com dublagem PT-BR é mais
+// útil do que o legendado — é o que a maioria dos pedidos procura. A escolha
+// explícita do menu (`anm:aud:`) tem sempre prioridade sobre isto, e um
+// episódio sem dublagem continua a cair para o legendado em vez de falhar.
+// `ANIME_PREFER_DUBBED=false` repõe o comportamento antigo.
+export const ANIME_PREFER_DUBBED =
+  String(process.env.ANIME_PREFER_DUBBED ?? "true").toLowerCase() !== "false";
 
 // Teto do provider AnimeHeaven, que publica 720p nativo (~112–164 MB): o
 // episódio já cabe no limite de 200 MB, por isso não há razão para o degradar

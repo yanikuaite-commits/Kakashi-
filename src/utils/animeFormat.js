@@ -31,6 +31,97 @@ export const ANIME_TOKEN_PREFIXES = [
 ];
 
 /**
+ * Título utilizável numa pesquisa, sem os sufixos que só um site usa.
+ *
+ * O AnimeGG devolve títulos como "Jujutsu Kaisen (TV)" e o AniTube como
+ * "Naruto Shippuden (Dublado)". Esses sufixos são metadados daquele site e não
+ * fazem parte do nome: pesquisá-los literalmente nos OUTROS providers (o
+ * fallback de episódio faz isso) devolve 0 resultados e o episódio acaba sempre
+ * no último da lista (o anikoto), mesmo quando os anteriores o tinham.
+ *
+ * "Jujutsu Kaisen (TV)" passa assim a ser encontrado no AnimeHeaven e no
+ * AnimesOnlineHD, e "One Piece" deixa de trazer "One Piece: Episode of Merry"
+ * por o título original ter qualificado a pesquisa.
+ *
+ * Puro (sem rede) para poder ser testado.
+ *
+ * @param {string} titulo
+ * @returns {string}
+ */
+export function tituloDeBusca(titulo) {
+  return String(titulo || "")
+    .replace(/\s*[([{]\s*(?:tv|dub|dublado|legendado|sub|subbed|ova|ona|filme|movie)\s*[)\]}]/gi, " ")
+    .replace(/\s+[-–—]\s*(?:dublado|legendado)\s*$/i, "")
+    .replace(/\s+(?:dublado|legendado)\s*$/i, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s*[-–—:]\s*$/, "")
+    .trim();
+}
+
+/**
+ * Escolhe o resultado que corresponde melhor ao termo pesquisado.
+ *
+ * O primeiro resultado de um provider não é necessariamente o título pedido: no
+ * AnimeGG, pesquisar "One Piece" devolve primeiro "One Piece: Episode of Merry",
+ * um especial de 1 episódio, e não a série. A correspondência EXATA (sem os
+ * sufixos de site) resolve isso e não muda nada quando o primeiro resultado já
+ * é o exato.
+ *
+ * Puro (sem rede) para poder ser testado.
+ *
+ * @param {Array<{title?: string}>} resultados
+ * @param {string} termo
+ * @returns {object|null}
+ */
+export function melhorResultado(resultados = [], termo = "") {
+  const lista = Array.isArray(resultados) ? resultados : [];
+  if (!lista.length) return null;
+
+  const alvo = tituloDeBusca(termo).toLowerCase();
+  if (!alvo) return lista[0];
+
+  return (
+    lista.find((r) => tituloDeBusca(r?.title).toLowerCase() === alvo) || lista[0]
+  );
+}
+
+/**
+ * Escolhe, entre os episódios candidatos, o que serve o número pedido.
+ *
+ * Três regras, por ordem:
+ *
+ * 1. a faixa pedida explicitamente (o utilizador tocou em "Dublado") é
+ *    REQUERIDA: um episódio sem ela não serve, porque servir outra faixa é o
+ *    defeito que este fluxo existe para corrigir;
+ * 2. sem escolha explícita, prefere-se o DUBLADO (`preferirDublado`): é o que a
+ *    maioria dos pedidos procura, e o site que o publica é o que interessa;
+ * 3. sem dublado, cai para o primeiro candidato (o legendado), para o episódio
+ *    não desaparecer só por não ter dublagem.
+ *
+ * Puro (sem rede) para poder ser testado.
+ *
+ * @param {Array<{versions?: string[]}>} candidatos
+ * @param {string} [audioVersion] faixa pedida, "" quando não houve escolha
+ * @param {boolean} [preferirDublado]
+ * @returns {object|null}
+ */
+export function escolherEpisodio(candidatos = [], audioVersion = "", preferirDublado = true) {
+  const lista = Array.isArray(candidatos) ? candidatos : [];
+  const faixa = String(audioVersion || "").trim().toLowerCase();
+
+  if (faixa) {
+    return lista.find((ep) => (ep?.versions || []).includes(faixa)) || null;
+  }
+
+  if (preferirDublado) {
+    const dublado = lista.find((ep) => (ep?.versions || []).includes(AUDIO_DUBBED));
+    if (dublado) return dublado;
+  }
+
+  return lista[0] || null;
+}
+
+/**
  * Nome próprio de uma faixa, para o card ("subbed" → "Legendado").
  *
  * O AnimeGG e o AniTube publicam as duas faixas em inglês; o utilizador do bot
@@ -48,37 +139,33 @@ export function audioVersionLabel(versao) {
 }
 
 /**
- * Faixas comuns a todos os episódios de uma lista.
+ * Faixas publicadas em PELO MENOS um episódio da lista (união, não intersecção).
  *
- * A escolha da faixa é feita UMA vez, antes da lista de episódios, e não em cada
- * episódio: só se oferece a escolha quando a lista inteira tem as duas, senão um
- * episódio sem dublagem falharia depois de o utilizador já a ter escolhido. Uma
- * lista sem informação de faixa devolve `[]` e o fluxo segue como antes.
+ * A escolha é feita UMA vez, antes da lista, e não em cada episódio. Exigir que
+ * TODOS os episódios tivessem as duas faixas parecia mais seguro, mas escondia a
+ * escolha quase sempre: o fragmento da faixa só cobre parte da lista (o One Piece
+ * tem 583 episódios com as duas, 577 só legendado e 2 só dublado) e há séries
+ * inteiras que não o trazem em nenhum. A união é o que o utilizador vê no site:
+ * se algum episódio tem dublado, ele pode escolher dublado. Num episódio sem
+ * dublagem o download falha com uma mensagem clara, o que é melhor do que o menu
+ * nunca chegar a perguntar.
+ *
+ * Uma lista sem informação de faixa devolve `[]` e o fluxo segue como antes.
  *
  * @param {Array<{versions?: string[]}>} episodes
  * @returns {string[]} por ordem de `AUDIO_VERSIONS`
  */
-export function commonAudioVersions(episodes = []) {
+export function availableAudioVersions(episodes = []) {
   const lista = Array.isArray(episodes) ? episodes : [];
-  if (!lista.length) return [];
+  const presentes = new Set();
 
-  const primeira = lista[0]?.versions;
-  if (!Array.isArray(primeira) || !primeira.length) return [];
+  for (const episode of lista) {
+    const versoes = Array.isArray(episode?.versions) ? episode.versions : [];
 
-  const presentes = new Set(primeira.map((v) => String(v).toLowerCase()));
-
-  for (const episode of lista.slice(1)) {
-    const versoes = new Set(
-      (Array.isArray(episode?.versions) ? episode.versions : []).map((v) =>
-        String(v).toLowerCase(),
-      ),
-    );
-
-    for (const versao of [...presentes]) {
-      if (!versoes.has(versao)) presentes.delete(versao);
+    for (const versao of versoes) {
+      const valor = String(versao || "").trim().toLowerCase();
+      if (valor) presentes.add(valor);
     }
-
-    if (!presentes.size) break;
   }
 
   return AUDIO_VERSIONS.filter((versao) => presentes.has(versao));

@@ -21,12 +21,18 @@
 import {
   ANIME_ACCEPT_LANGUAGE,
   ANIME_API_TIMEOUT_MS,
+  ANIME_PREFER_DUBBED,
   ANIME_PROVIDERS,
   ANIME_PROXY_URL,
   ANIME_USER_AGENT,
 } from "../config.js";
 import { errorLog, infoLog } from "../utils/logger.js";
-import { normalizeSources } from "../utils/animeFormat.js";
+import {
+  escolherEpisodio,
+  melhorResultado,
+  normalizeSources,
+  tituloDeBusca,
+} from "../utils/animeFormat.js";
 
 /** Erro de configuração/indisponibilidade da fonte (não do anime escolhido). */
 export class AnimeApiError extends Error {
@@ -68,6 +74,7 @@ const PROVIDERS_PROPIOS = {
   animeheaven: () => import("./animeheaven.js"),
   animegg: () => import("./animegg.js"),
   anitube: () => import("./anitube.js"),
+  animesonlinehd: () => import("./animesonlinehd.js"),
 };
 
 let consumetAnime = null;
@@ -199,25 +206,62 @@ function withTimeout(promise, ms, label) {
 /**
  * Pesquisa um anime e devolve o primeiro resultado de um provider que responda.
  *
+ * O termo é pesquisado sem os sufixos que só um site usa: "Attack on Titan
+ * Dublado" vira "Attack on Titan". Sem isso, só o anikoto (cujo motor de busca
+ * separa as palavras) respondia a esses pedidos, e o anime caía sempre lá. Se a
+ * pesquisa normalizada não der nada, o termo original é tentado como recurso,
+ * para nunca perder um título que o site só indexe com o sufixo.
+ *
  * @param {string} nome
  * @returns {Promise<{id: string, provider: string, title: string, image: string|null, releaseDate: string|null}>}
  */
 export async function searchAnime(nome) {
-  const termo = String(nome || "").trim();
-  if (!termo) throw new AnimeApiError("Envie o nome do anime.");
+  const original = String(nome || "").trim();
+  if (!original) throw new AnimeApiError("Envie o nome do anime.");
+
+  const normalizado = tituloDeBusca(original);
+  const termos = [...new Set([normalizado, original].filter(Boolean))];
 
   const providers = await activeProviders();
   const falhas = [];
 
-  for (const { nome: provider, tipo, instance } of providers) {
-    try {
-      if (tipo === "proprio") {
-        const resultados = await withTimeout(
+  for (const termo of termos) {
+    if (termo !== original) {
+      infoLog(`[anime] pesquisa normalizada: "${original}" → "${termo}"`);
+    }
+
+    for (const { nome: provider, tipo, instance } of providers) {
+      try {
+        if (tipo === "proprio") {
+          const resultados = await withTimeout(
+            instance.search(termo),
+            ANIME_API_TIMEOUT_MS,
+            `${provider}.search`,
+          );
+          const primeiro = melhorResultado(resultados, termo);
+
+          if (!primeiro?.id) {
+            falhas.push(`${provider}: sem resultados`);
+            continue;
+          }
+
+          infoLog(`[anime] "${primeiro.title}" encontrado em ${provider}`);
+
+          return {
+            id: `${primeiro.id}:${primeiro.slug}`,
+            provider,
+            title: primeiro.title || termo,
+            image: primeiro.image || null,
+            releaseDate: null,
+          };
+        }
+
+        const res = await withTimeout(
           instance.search(termo),
           ANIME_API_TIMEOUT_MS,
           `${provider}.search`,
         );
-        const primeiro = resultados?.[0];
+        const primeiro = melhorResultado(res?.results, termo);
 
         if (!primeiro?.id) {
           falhas.push(`${provider}: sem resultados`);
@@ -227,38 +271,16 @@ export async function searchAnime(nome) {
         infoLog(`[anime] "${primeiro.title}" encontrado em ${provider}`);
 
         return {
-          id: `${primeiro.id}:${primeiro.slug}`,
+          id: String(primeiro.id),
           provider,
           title: primeiro.title || termo,
           image: primeiro.image || null,
-          releaseDate: null,
+          releaseDate: primeiro.releaseDate || null,
         };
+      } catch (error) {
+        falhas.push(`${provider}: ${error.message}`);
+        errorLog(`[anime] ${provider} falhou na pesquisa: ${error.message}`);
       }
-
-      const res = await withTimeout(
-        instance.search(termo),
-        ANIME_API_TIMEOUT_MS,
-        `${provider}.search`,
-      );
-      const primeiro = res?.results?.[0];
-
-      if (!primeiro?.id) {
-        falhas.push(`${provider}: sem resultados`);
-        continue;
-      }
-
-      infoLog(`[anime] "${primeiro.title}" encontrado em ${provider}`);
-
-      return {
-        id: String(primeiro.id),
-        provider,
-        title: primeiro.title || termo,
-        image: primeiro.image || null,
-        releaseDate: primeiro.releaseDate || null,
-      };
-    } catch (error) {
-      falhas.push(`${provider}: ${error.message}`);
-      errorLog(`[anime] ${provider} falhou na pesquisa: ${error.message}`);
     }
   }
 
@@ -275,15 +297,17 @@ export async function searchAnime(nome) {
  *
  * @param {string} id
  * @param {string} provider
+ * @param {string} [audioVersion] "subbed"/"dubbed" — só os providers com ids por
+ *   faixa (animesonlinehd) o usam; os restantes ignoram-no
  * @returns {Promise<{id: string, provider: string, title: string, episodes: Array<object>}>}
  */
-export async function getAnimeInfo(id, provider) {
+export async function getAnimeInfo(id, provider, audioVersion = "") {
   const { tipo, instance } = await resolveProvider(provider);
 
   if (tipo === "proprio") {
     const [animeId, slug] = String(id).split(":");
     const lista = await withTimeout(
-      instance.episodes(animeId, slug),
+      instance.episodes(animeId, slug, audioVersion),
       ANIME_API_TIMEOUT_MS,
       `${provider}.episodes`,
     ).catch((error) => {
@@ -374,16 +398,18 @@ export async function getAnimeSeasons(id, provider) {
  *
  * @param {string} slug
  * @param {string} provider
+ * @param {string} [audioVersion] "subbed"/"dubbed" — escolhe o id da faixa nos
+ *   providers que publicam ids distintos por faixa (animesonlinehd)
  * @returns {Promise<Array<object>>}
  */
-export async function getSeasonEpisodes(slug, provider) {
+export async function getSeasonEpisodes(slug, provider, audioVersion = "") {
   const { tipo, instance } = await resolveProvider(provider);
   if (tipo !== "proprio" || typeof instance.seasonEpisodes !== "function") {
     throw new AnimeApiError("Esta fonte não suporta escolha de temporada.");
   }
 
   const lista = await withTimeout(
-    instance.seasonEpisodes(slug),
+    instance.seasonEpisodes(slug, audioVersion),
     ANIME_API_TIMEOUT_MS,
     `${provider}.seasonEpisodes`,
   ).catch((error) => {
@@ -435,25 +461,18 @@ export async function getEpisodeSources(episodeId, provider, audioVersion = "") 
       );
     });
 
-    // O provider pode devolver só o URL (HLS, caso do anikoto) ou um objeto com
-    // o tipo de media (o animeheaven serve MP4 direto). Assumir sempre HLS
-    // marcava o MP4 como stream e o rótulo de qualidade saía errado.
-    const url = typeof resolvido === "string" ? resolvido : resolvido?.url;
+    // O provider pode devolver só o URL (HLS, caso do anikoto), um objeto com o
+    // tipo de media (o animeheaven serve MP4 direto) ou uma lista de degraus (o
+    // animesonlinehd publica 360p e 720p no mesmo player).
+    const sources = normalizarFontesDoProvider(resolvido);
 
-    if (!url) {
+    if (!sources.length) {
       throw new AnimeApiError(
         "Nenhum link de streaming foi encontrado para este episódio.",
       );
     }
 
-    return normalizeSources([
-      {
-        url,
-        quality: typeof resolvido === "object" ? resolvido?.quality : undefined,
-        resolution: typeof resolvido === "object" ? resolvido?.resolution : undefined,
-        isM3U8: typeof resolvido === "object" ? Boolean(resolvido?.isM3U8) : true,
-      },
-    ]);
+    return sources;
   }
 
   const data = await withTimeout(
@@ -481,6 +500,36 @@ export async function getEpisodeSources(episodeId, provider, audioVersion = "") 
   }
 
   return sources;
+}
+
+/**
+ * Normaliza o retorno de `sources()` de um provider próprio em fontes de menu.
+ *
+ * O contrato é permissivo de propósito, porque cada provider publica o vídeo de
+ * uma forma: o anikoto devolve só o URL (HLS), o animeheaven um objeto (MP4
+ * direto) e o animesonlinehd uma lista de degraus (360p e 720p no mesmo player).
+ * Tratar só o caso do objeto descartava a lista e deixava o menu sem qualidades.
+ *
+ * @param {string|object|Array<string|object>} resolvido
+ * @returns {Array<{url: string, label: string, isM3U8: boolean}>}
+ */
+function normalizarFontesDoProvider(resolvido) {
+  const brutas = Array.isArray(resolvido) ? resolvido : [resolvido];
+
+  const validas = brutas
+    .map((item) => (typeof item === "string" ? { url: item } : item))
+    .filter((item) => Boolean(item?.url));
+
+  return normalizeSources(
+    validas.map((item) => ({
+      url: item.url,
+      quality: item.quality,
+      resolution: item.resolution,
+      // Sem indicação explícita assume HLS: era o comportamento anterior para o
+      // anikoto, cujo retorno é só o URL.
+      isM3U8: item.isM3U8 === undefined ? true : Boolean(item.isM3U8),
+    })),
+  );
 }
 
 async function resolveProvider(provider) {
@@ -514,10 +563,14 @@ async function resolveProvider(provider) {
  */
 async function fontesDoProvider(entrada, titulo, numero, audioVersion = "") {
   const { nome, tipo, instance } = entrada;
+  // O título vem do provider onde o episódio foi listado e pode trazer um
+  // sufixo que só esse site usa ("Jujutsu Kaisen (TV)"). Pesquisá-lo literalmente
+  // aqui devolve 0 resultados e o episódio cai sempre no último provider.
+  const termo = tituloDeBusca(titulo) || titulo;
 
   if (tipo === "proprio") {
     const resultados = await withTimeout(
-      instance.search(titulo),
+      instance.search(termo),
       ANIME_API_TIMEOUT_MS,
       `${nome}.search`,
     );
@@ -526,7 +579,7 @@ async function fontesDoProvider(entrada, titulo, numero, audioVersion = "") {
       if (!resultado?.id) continue;
 
       const lista = await withTimeout(
-        instance.episodes(resultado.id, resultado.slug),
+        instance.episodes(resultado.id, resultado.slug, audioVersion),
         ANIME_API_TIMEOUT_MS,
         `${nome}.episodes`,
       ).catch(() => null);
@@ -536,9 +589,7 @@ async function fontesDoProvider(entrada, titulo, numero, audioVersion = "") {
       const candidatos = (lista || []).filter(
         (ep) => Number(ep.number) === Number(numero),
       );
-      const episodio =
-        candidatos.find((ep) => (ep.versions || []).includes(audioVersion)) ||
-        (audioVersion ? null : candidatos[0]);
+      const episodio = escolherEpisodio(candidatos, audioVersion, ANIME_PREFER_DUBBED);
 
       if (!episodio) continue;
 
@@ -548,17 +599,7 @@ async function fontesDoProvider(entrada, titulo, numero, audioVersion = "") {
         `${nome}.sources`,
       );
 
-      const url = typeof resolvido === "string" ? resolvido : resolvido?.url;
-      if (!url) continue;
-
-      const sources = normalizeSources([
-        {
-          url,
-          quality: typeof resolvido === "object" ? resolvido?.quality : undefined,
-          resolution: typeof resolvido === "object" ? resolvido?.resolution : undefined,
-          isM3U8: typeof resolvido === "object" ? Boolean(resolvido?.isM3U8) : true,
-        },
-      ]);
+      const sources = normalizarFontesDoProvider(resolvido);
 
       if (!sources.length) continue;
 
@@ -572,7 +613,7 @@ async function fontesDoProvider(entrada, titulo, numero, audioVersion = "") {
   }
 
   const resultados = await withTimeout(
-    instance.search(titulo),
+    instance.search(termo),
     ANIME_API_TIMEOUT_MS,
     `${nome}.search`,
   );

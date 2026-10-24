@@ -110,6 +110,11 @@ test("custo por comando: tabela, isentos e padrão", () => {
   assert.equal(commandCost({ name: "tik-tok", commands: ["tik-tok", "ttk", "tik"] }), 7);
   assert.equal(commandCost({ name: "play-video", commands: ["play-video", "pv"] }), 8);
   assert.equal(commandCost({ name: "deepseek", commands: ["deepseek"] }), 6);
+  assert.equal(
+    commandCost({ name: "anime", commands: ["anime", "animes"] }),
+    2,
+    "a pesquisa de anime é barata; o gasto real é o episódio baixado",
+  );
   assert.equal(commandCost({ name: "dado", commands: ["dado", "dice"] }), 5);
   assert.equal(commandCost({ name: "conta", commands: ["conta", "creditos"] }), 0);
   assert.equal(commandCost({ name: "menu", commands: ["menu", "help"] }), 0);

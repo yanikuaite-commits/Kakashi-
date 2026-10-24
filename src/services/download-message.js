@@ -26,3 +26,31 @@ export function downloadingMessage({
 
   return formatMessage({ icone: "⏳", titulo: "Carregando", campos });
 }
+
+/**
+ * Aviso de espera na fila de downloads.
+ *
+ * Sem isto o usuário fica em silêncio enquanto outro download corre e volta a
+ * pedir, o que só agrava a fila. Dizer a posição torna a espera previsível.
+ */
+export function queuedMessage({ position } = {}) {
+  const lugar = Number(position) > 0 ? Number(position) : 1;
+
+  return formatMessage({
+    icone: "🕒",
+    titulo: "Na fila",
+    campos: [
+      `🕒 Há downloads a correr agora. Você é o *${lugar}.º* da fila.`,
+      "Assim que chegar a sua vez, eu aviso e começo a baixar.",
+    ],
+  });
+}
+
+/** Aviso de que a vez do usuário chegou e o download arrancou. */
+export function downloadTurnMessage() {
+  return formatMessage({
+    icone: "▶️",
+    titulo: "É a sua vez",
+    campos: ["▶️ Chegou a sua vez! Comecei a baixar agora."],
+  });
+}

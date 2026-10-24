@@ -17,15 +17,17 @@
  *      lista, e não episódio a episódio;
  *   4. ao escolher o episódio, busca as `sources` (na faixa escolhida) e lista
  *      as qualidades (rowId `anm:src:<índice>`);
- *   5. ao escolher a qualidade, baixa com o yt-dlp limitado a `ANIME_MAX_HEIGHT`
- *      (480p) e aplica a regra de tamanho (a mesma do YouTube, com teto maior):
- *        > 200 MB   → cancela e pede qualidade menor;
- *        100–200 MB → envia como DOCUMENTO;
+ *   5. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
+ *      (a mesma do YouTube, com teto maior):
+ *        > 300 MB   → cancela e pede qualidade menor;
+ *        100–300 MB → envia como DOCUMENTO;
  *        ≤ 100 MB   → envia como VÍDEO.
  *
- * A resolução é fixa em 480p: o m3u8 do provider traz 240p–1080p e sem limite o
- * yt-dlp escolhia 1080p, estourando o teto de 200 MB. A lista de qualidades
- * escolhe a *fonte* (URL), não a resolução final.
+ * A resolução do download depende do tipo de fonte. Um m3u8 traz vários degraus
+ * no mesmo URL, por isso o yt-dlp é limitado a `ANIME_MAX_HEIGHT` (480p) — sem
+ * limite escolhia 1080p e estourava o teto. Uma fonte MP4 direta já É o degrau
+ * escolhido no menu (o animesonlinehd publica 360p e 720p como URLs distintos),
+ * por isso não leva filtro de altura: o teto de MB é que decide.
  *
  * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
  * tem limite de tamanho e os links de stream são longos/assinados; o array real
@@ -34,9 +36,10 @@
  * @author Dev Gui
  */
 import fs from "node:fs";
-import { ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
+import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
 import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
+import { withDownloadSlot } from "../services/downloadQueue.js";
 import {
   chargeCredits,
   creditsExhaustedMessage,
@@ -58,7 +61,7 @@ import {
   buildNextPageRow,
   buildQualityRows,
   buildSeasonRows,
-  commonAudioVersions,
+  availableAudioVersions,
   episodePageCount,
   identitiesOverlap,
   jidIdentities,
@@ -200,6 +203,7 @@ function ensureSession({
       anime: null,
       seasons: [],
       seasonTitle: "",
+      seasonSlug: "",
       episodes: [],
       page: 0,
       episode: null,
@@ -313,6 +317,7 @@ export async function startAnimeFlow({
   session.anime = null;
   session.seasons = [];
   session.seasonTitle = "";
+  session.seasonSlug = "";
   session.episodes = [];
   session.episode = null;
   session.sources = [];
@@ -351,6 +356,7 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
     session.provider = anime.provider;
     session.seasons = seasons;
     session.seasonTitle = "";
+    session.seasonSlug = "";
     session.episodes = [];
     session.episode = null;
     session.sources = [];
@@ -421,6 +427,7 @@ async function loadEpisodesAndSend({ socket, session, id }) {
     session.episode = null;
     session.sources = [];
     session.seasonTitle = "";
+    session.seasonSlug = "";
 
     infoLog(
       `[anime] "${session.anime.title}" (id ${id}) com ${info.episodes.length} episódios`,
@@ -446,7 +453,7 @@ async function loadEpisodesAndSend({ socket, session, id }) {
  * @returns {Promise<boolean>}
  */
 async function routeAfterEpisodes({ socket, session }) {
-  const versoes = commonAudioVersions(session.episodes);
+  const versoes = availableAudioVersions(session.episodes);
 
   session.audioVersions = versoes;
   session.audioVersion = versoes.length === 1 ? versoes[0] : "";
@@ -513,6 +520,44 @@ async function chooseAudioVersion({ socket, session, version }) {
   session.audioVersion = version;
   infoLog(`[anime] faixa escolhida: ${version}`);
 
+  // A faixa escolhe o ID do episódio: no animesonlinehd o dublado e o legendado
+  // são registos distintos, com ids próprios. Sem recarregar, a lista continuava
+  // com os ids da faixa predefinida e a escolha não tinha efeito no download.
+  return reloadEpisodesForAudio({ socket, session });
+}
+
+/**
+ * Recarrega os episódios com a faixa já fixada.
+ *
+ * Só os providers que publicam ids por faixa (animesonlinehd) ganham com isto;
+ * os restantes devolvem a mesma lista, pelo que o custo é uma chamada extra.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function reloadEpisodesForAudio({ socket, session }) {
+  try {
+    const lista = session.seasonSlug
+      ? await getSeasonEpisodes(
+          session.seasonSlug,
+          session.provider,
+          session.audioVersion,
+        )
+      : await getAnimeInfo(
+          session.anime?.id,
+          session.provider,
+          session.audioVersion,
+        ).then((info) => info.episodes);
+
+    if (lista?.length) session.episodes = lista;
+  } catch (error) {
+    // A lista antiga continua válida para os providers que não distinguem ids
+    // por faixa; só os que distinguem precisam mesmo desta recarga.
+    errorLog(`[anime] recarga da faixa "${session.audioVersion}" falhou: ${error.message}`);
+  }
+
+  session.episode = null;
+  session.sources = [];
+
   return sendEpisodePage({ socket, session, page: 0 });
 }
 
@@ -541,6 +586,7 @@ async function chooseSeasonAndSendEpisodes({ socket, session, seasonIndex }) {
     session.episode = null;
     session.sources = [];
     session.seasonTitle = temporada.title;
+    session.seasonSlug = temporada.slug;
 
     infoLog(
       `[anime] temporada "${temporada.title}" com ${episodes.length} episódios`,
@@ -666,7 +712,9 @@ async function sendQualityList({ socket, session, episodeIndex }) {
         qualidade: session.audioVersion
           ? `${audioVersionLabel(session.audioVersion)} · Escolhe a qualidade`
           : "Escolha a qualidade",
-        extra: `⬇️ O episódio sai em até ${animeMaxHeight(session.provider)}p para caber no limite de envio.`,
+        extra:
+          `⬇️ Escolhe a qualidade: as mais altas pesam mais. ` +
+          `Acima de ${ANIME_DOCUMENT_LIMIT_MB} MB o envio é cancelado.`,
         rodape: null,
       }),
       title: "Qualidade",
@@ -717,6 +765,18 @@ function animeDownloadArgs(provider) {
 
   if (nome === "anitube") {
     return ["--referer", "https://www.anitube.zip/"];
+  }
+
+  if (nome === "animesonlinehd") {
+    // O CDN do Google Video (Blogger) exige o Referer do Blogger e um
+    // User-Agent de browser: com o UA predefinido do yt-dlp responde 403.
+    return [
+      "--referer",
+      "https://www.blogger.com/",
+      "--user-agent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    ];
   }
 
   return [];
@@ -820,12 +880,20 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
     }
 
     result = await withCreditsContext(session.ownerId, () =>
-      downloadWithYtDlp(source.url, {
-        height: alturaMaxima,
-        maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
-        extraArgs: animeDownloadArgs(session.provider),
-        concurrentFragments: animeConcurrentFragments(session.provider),
-      }),
+      withDownloadSlot(
+        () =>
+          downloadWithYtDlp(source.url, {
+            // A fonte HLS traz vários degraus no mesmo URL, por isso o limite de
+            // altura escolhe o degrau. Uma fonte MP4 direta (animesonlinehd,
+            // animeheaven) já É o degrau escolhido no menu: filtrar por altura
+            // não teria efeito e podia descartar o formato único disponível.
+            height: source.isM3U8 ? alturaMaxima : "best",
+            maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
+            extraArgs: animeDownloadArgs(session.provider),
+            concurrentFragments: animeConcurrentFragments(session.provider),
+          }),
+        { priority: session.ownerId === OWNER_LID },
+      ),
     );
 
     const tamanhoMB = result.fileSize / (1024 * 1024);
@@ -940,12 +1008,11 @@ export async function handleAnimeReply({
   if (isCancel) {
     if (!doChat) return false;
     // Só o dono da sessão a pode cancelar; outros não a destroem.
-    if (!isSessionOwner(doChat, ...senderJids)) {
-      await sendReply(
-        `🚫 Este menu de animes é de @${doChat.ownerName}. Só quem pediu pode cancelar.`,
-      ).catch(() => {});
-      return true;
-    }
+    // Quem não é o dono fica em silêncio: o aviso "não foste tu que pediste"
+    // transformava qualquer mensagem no grupo numa resposta do bot. A mensagem
+    // segue o fluxo normal (um comando continua a funcionar), mas sem resposta
+    // o menu fica à espera do dono.
+    if (!isSessionOwner(doChat, ...senderJids)) return false;
     dropSession(doChat);
     await sendReply("❌ Menu de animes cancelado.").catch(() => {});
     return true;
@@ -955,15 +1022,10 @@ export async function handleAnimeReply({
   // resto do fluxo, alargando as formas de JID conhecidas do autor.
   const sessao = own || (doChat && isSessionOwner(doChat, ...senderJids) ? doChat : null);
 
-  if (!sessao) {
-    if (doChat) {
-      await sendReply(
-        `🚫 Este menu de animes é de @${doChat.ownerName}. Só quem pediu pode escolher.`,
-      ).catch(() => {});
-      return true;
-    }
-    return false;
-  }
+  // Sem sessão nossa, não há nada para tratar aqui: a mensagem segue o fluxo
+  // normal em silêncio (antes respondia-se "este menu é de @X", o que fazia o
+  // bot responder a qualquer mensagem do grupo).
+  if (!sessao) return false;
 
   if (own && senderJids.length) {
     for (const jid of senderJids) {
@@ -1025,12 +1087,10 @@ export async function handleAnimeReply({
 
   // Estado `aguardando_nome`: o texto é o nome do anime.
   if (sessao.stage === "aguardando_nome") {
-    if (!isSessionOwner(sessao, ...senderJids)) {
-      await sendReply(
-        `🚫 O menu de animes é de @${sessao.ownerName}. Só quem pediu pode escolher.`,
-      ).catch(() => {});
-      return true;
-    }
+    // Outro membro escreveu enquanto o dono ainda não disse o nome: fica em
+    // silêncio e a sessão continua à espera do dono. Avisar aqui respondia a
+    // cada mensagem do grupo.
+    if (!isSessionOwner(sessao, ...senderJids)) return false;
 
     // Comandos com prefixo não são nomes de anime: larga a sessão e segue.
     if (prefix && (value.startsWith(prefix) || value.startsWith("!"))) {

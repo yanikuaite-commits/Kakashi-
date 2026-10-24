@@ -7,6 +7,7 @@ import {
 import { downloadWithGenDownload } from "../utils/genDownloader.js";
 import { errorLog } from "../utils/logger.js";
 import { chargeMediaCredits } from "./credits.js";
+import { withDownloadSlot } from "./downloadQueue.js";
 import { searchYouTube } from "./youtube-search.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "./ytdlp.js";
 
@@ -101,8 +102,17 @@ async function settleMediaCredits(command, result) {
 /**
  * Escolhe o downloader: yt-dlp (local, recomendado no Render/Docker) quando
  * disponível, com fallback automático para a API GenDownload.
+ *
+ * A chamada passa pela fila (`withDownloadSlot`): o limite de concorrência é
+ * aplicado ao download em si, não à resolução do link, para que a pesquisa
+ * (que é rápida) não ocupe uma vaga.
  */
-async function downloadMedia(source, options) {
+async function downloadMedia(source, options, queueOptions) {
+  return withDownloadSlot(() => runDownloader(source, options), queueOptions);
+}
+
+/** O downloader em si: yt-dlp quando disponível, senão a API GenDownload. */
+async function runDownloader(source, options) {
   if (await isYtDlpAvailable()) {
     try {
       return await downloadWithYtDlp(source, options);
@@ -131,13 +141,18 @@ export async function downloadVideo(source, height = DEFAULT_VIDEO_HEIGHT) {
  * `decideYouTubeSend`.
  */
 export async function downloadYouTubeVideo(source, height = DEFAULT_VIDEO_HEIGHT) {
+  const result = await withDownloadSlot(() => runYouTubeDownloader(source, height));
+
+  return settleMediaCredits("vídeo", result);
+}
+
+async function runYouTubeDownloader(source, height) {
   if (await isYtDlpAvailable()) {
     try {
-      const result = await downloadWithYtDlp(source, {
+      return await downloadWithYtDlp(source, {
         height,
         maxBytes: MAX_FILE_SIZE_BYTES * 2,
       });
-      return settleMediaCredits("vídeo", result);
     } catch (error) {
       errorLog(
         `Falha no yt-dlp (${error.message}). Tentando a API GenDownload...`,
@@ -145,8 +160,7 @@ export async function downloadYouTubeVideo(source, height = DEFAULT_VIDEO_HEIGHT
     }
   }
 
-  const result = await downloadWithGenDownload(source, { height });
-  return settleMediaCredits("vídeo", result);
+  return downloadWithGenDownload(source, { height });
 }
 
 export async function downloadAudio(source) {

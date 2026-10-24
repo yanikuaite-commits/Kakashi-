@@ -8,17 +8,20 @@ import {
   animeSessionKey,
   animeTokenIndex,
   audioVersionLabel,
+  availableAudioVersions,
   buildAudioRows,
   buildEpisodeRows,
   buildNextPageRow,
   buildQualityRows,
   buildSeasonRows,
-  commonAudioVersions,
   episodePageCount,
+  escolherEpisodio,
   identitiesOverlap,
   jidDigits,
   jidIdentities,
+  melhorResultado,
   normalizeSources,
+  tituloDeBusca,
 } from "../utils/animeFormat.js";
 
 test("animeSessionKey junta chat e autor", () => {
@@ -149,29 +152,42 @@ test("os prefixos de token cobrem episódio, faixa, qualidade e página", () => 
   ]);
 });
 
-test("commonAudioVersions só devolve o que TODOS os episódios publicam", () => {
-  // A lista inteira tem as duas faixas → pode oferecer a escolha.
+test("availableAudioVersions devolve a UNIÃO das faixas da lista", () => {
+  // Lista inteira com as duas → pergunta as duas.
   assert.deepEqual(
-    commonAudioVersions([
+    availableAudioVersions([
       { versions: ["subbed", "dubbed"] },
       { versions: ["dubbed", "subbed"] },
     ]),
     ["subbed", "dubbed"],
   );
 
-  // Um episódio só legendado: oferecer "Dublado" falharia nesse episódio.
+  // Caso REAL do Naruto (218 eps com as duas, 2 só legendado): exigir a
+  // intersecção dava só "subbed" e o menu nunca perguntava.
   assert.deepEqual(
-    commonAudioVersions([
+    availableAudioVersions([
       { versions: ["subbed", "dubbed"] },
       { versions: ["subbed"] },
     ]),
-    ["subbed"],
+    ["subbed", "dubbed"],
+  );
+
+  // Caso REAL do One Piece (583 com as duas, 577 só legendado, 2 só dublado):
+  // a intersecção era VAZIA e o menu não perguntava nada.
+  assert.deepEqual(
+    availableAudioVersions([
+      { versions: ["subbed", "dubbed"] },
+      { versions: ["subbed"] },
+      { versions: ["dubbed"] },
+    ]),
+    ["subbed", "dubbed"],
   );
 
   // Sem informação de faixa (anikoto/animeheaven): o menu não pergunta nada.
-  assert.deepEqual(commonAudioVersions([{ number: 1 }, { number: 2 }]), []);
-  assert.deepEqual(commonAudioVersions([]), []);
-  assert.deepEqual(commonAudioVersions([{ versions: [] }]), []);
+  assert.deepEqual(availableAudioVersions([{ number: 1 }, { number: 2 }]), []);
+  assert.deepEqual(availableAudioVersions([]), []);
+  assert.deepEqual(availableAudioVersions([{ versions: [] }]), []);
+  assert.deepEqual(availableAudioVersions([{ versions: ["subbed"] }]), ["subbed"]);
 });
 
 test("audioVersionLabel traduz as faixas e não inventa as desconhecidas", () => {
@@ -250,4 +266,106 @@ test("identitiesOverlap compara sem depender da ordem", () => {
   assert.equal(identitiesOverlap(autor, outro), false);
   assert.equal(identitiesOverlap(autor, new Set()), false);
   assert.equal(identitiesOverlap(null, quem), false);
+});
+
+test("tituloDeBusca tira o sufixo que só um site usa", () => {
+  assert.equal(tituloDeBusca("Jujutsu Kaisen (TV)"), "Jujutsu Kaisen");
+  assert.equal(tituloDeBusca("Naruto Shippuden (Dublado)"), "Naruto Shippuden");
+  assert.equal(tituloDeBusca("One Piece (Legendado)"), "One Piece");
+  assert.equal(tituloDeBusca("Bleach - Dublado"), "Bleach");
+  assert.equal(tituloDeBusca("Naruto Dublado"), "Naruto");
+});
+
+test("tituloDeBusca preserva o que faz parte do nome", () => {
+  assert.equal(
+    tituloDeBusca("Kaguya-sama: Love is War"),
+    "Kaguya-sama: Love is War",
+    "dois pontos no meio é do título, não um sufixo",
+  );
+  assert.equal(tituloDeBusca("Re:Zero"), "Re:Zero");
+  assert.equal(tituloDeBusca("Steins;Gate"), "Steins;Gate");
+  assert.equal(tituloDeBusca("Fate/stay night"), "Fate/stay night");
+});
+
+test("tituloDeBusca lida com entradas vazias", () => {
+  assert.equal(tituloDeBusca(""), "");
+  assert.equal(tituloDeBusca(null), "");
+  assert.equal(tituloDeBusca("   Naruto   "), "Naruto");
+});
+
+test("escolherEpisodio exige a faixa pedida explicitamente", () => {
+  const candidatos = [
+    { id: "a", versions: ["subbed"] },
+    { id: "b", versions: ["subbed", "dubbed"] },
+  ];
+
+  assert.equal(escolherEpisodio(candidatos, "dubbed").id, "b");
+  assert.equal(escolherEpisodio(candidatos, "subbed").id, "a");
+});
+
+test("escolherEpisodio prefere o dublado sem escolha do utilizador", () => {
+  const candidatos = [
+    { id: "leg", versions: ["subbed"] },
+    { id: "dub", versions: ["subbed", "dubbed"] },
+  ];
+
+  assert.equal(escolherEpisodio(candidatos).id, "dub");
+  assert.equal(escolherEpisodio(candidatos, "", false).id, "leg");
+});
+
+test("escolherEpisodio não falha quando não há dublado", () => {
+  const candidatos = [{ id: "leg", versions: ["subbed"] }];
+
+  assert.equal(
+    escolherEpisodio(candidatos).id,
+    "leg",
+    "sem dublagem o episódio não pode desaparecer",
+  );
+});
+
+test("escolherEpisodio devolve null quando a faixa pedida não existe", () => {
+  const candidatos = [{ id: "leg", versions: ["subbed"] }];
+
+  assert.equal(
+    escolherEpisodio(candidatos, "dubbed"),
+    null,
+    "servir outra faixa é o defeito que este fluxo corrige",
+  );
+  assert.equal(escolherEpisodio([], "dubbed"), null);
+  assert.equal(escolherEpisodio(undefined), null);
+});
+
+test("melhorResultado prefere o título exato ao primeiro da lista", () => {
+  const resultados = [
+    { id: "1", title: "One Piece: Episode of Merry" },
+    { id: "2", title: "One Piece" },
+  ];
+
+  assert.equal(
+    melhorResultado(resultados, "one piece").id,
+    "2",
+    "o especial não pode esconder a série",
+  );
+});
+
+test("melhorResultado mantém o primeiro quando nada corresponde", () => {
+  const resultados = [{ id: "1", title: "Kaiju Girls" }];
+
+  assert.equal(melhorResultado(resultados, "kaiju girls").id, "1");
+  assert.equal(melhorResultado(resultados, "outro titulo").id, "1");
+  assert.equal(melhorResultado([], "naruto"), null);
+  assert.equal(melhorResultado(undefined, "naruto"), null);
+});
+
+test("melhorResultado compara ignorando os sufixos de site", () => {
+  const resultados = [
+    { id: "1", title: "Jujutsu Kaisen (TV)" },
+    { id: "2", title: "Jujutsu Kaisen 0" },
+  ];
+
+  assert.equal(
+    melhorResultado(resultados, "Jujutsu Kaisen").id,
+    "1",
+    "(TV) não impede a correspondência",
+  );
 });
