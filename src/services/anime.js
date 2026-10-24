@@ -461,25 +461,18 @@ export async function getEpisodeSources(episodeId, provider, audioVersion = "") 
       );
     });
 
-    // O provider pode devolver só o URL (HLS, caso do anikoto) ou um objeto com
-    // o tipo de media (o animeheaven serve MP4 direto). Assumir sempre HLS
-    // marcava o MP4 como stream e o rótulo de qualidade saía errado.
-    const url = typeof resolvido === "string" ? resolvido : resolvido?.url;
+    // O provider pode devolver só o URL (HLS, caso do anikoto), um objeto com o
+    // tipo de media (o animeheaven serve MP4 direto) ou uma lista de degraus (o
+    // animesonlinehd publica 360p e 720p no mesmo player).
+    const sources = normalizarFontesDoProvider(resolvido);
 
-    if (!url) {
+    if (!sources.length) {
       throw new AnimeApiError(
         "Nenhum link de streaming foi encontrado para este episódio.",
       );
     }
 
-    return normalizeSources([
-      {
-        url,
-        quality: typeof resolvido === "object" ? resolvido?.quality : undefined,
-        resolution: typeof resolvido === "object" ? resolvido?.resolution : undefined,
-        isM3U8: typeof resolvido === "object" ? Boolean(resolvido?.isM3U8) : true,
-      },
-    ]);
+    return sources;
   }
 
   const data = await withTimeout(
@@ -507,6 +500,36 @@ export async function getEpisodeSources(episodeId, provider, audioVersion = "") 
   }
 
   return sources;
+}
+
+/**
+ * Normaliza o retorno de `sources()` de um provider próprio em fontes de menu.
+ *
+ * O contrato é permissivo de propósito, porque cada provider publica o vídeo de
+ * uma forma: o anikoto devolve só o URL (HLS), o animeheaven um objeto (MP4
+ * direto) e o animesonlinehd uma lista de degraus (360p e 720p no mesmo player).
+ * Tratar só o caso do objeto descartava a lista e deixava o menu sem qualidades.
+ *
+ * @param {string|object|Array<string|object>} resolvido
+ * @returns {Array<{url: string, label: string, isM3U8: boolean}>}
+ */
+function normalizarFontesDoProvider(resolvido) {
+  const brutas = Array.isArray(resolvido) ? resolvido : [resolvido];
+
+  const validas = brutas
+    .map((item) => (typeof item === "string" ? { url: item } : item))
+    .filter((item) => Boolean(item?.url));
+
+  return normalizeSources(
+    validas.map((item) => ({
+      url: item.url,
+      quality: item.quality,
+      resolution: item.resolution,
+      // Sem indicação explícita assume HLS: era o comportamento anterior para o
+      // anikoto, cujo retorno é só o URL.
+      isM3U8: item.isM3U8 === undefined ? true : Boolean(item.isM3U8),
+    })),
+  );
 }
 
 async function resolveProvider(provider) {
@@ -576,17 +599,7 @@ async function fontesDoProvider(entrada, titulo, numero, audioVersion = "") {
         `${nome}.sources`,
       );
 
-      const url = typeof resolvido === "string" ? resolvido : resolvido?.url;
-      if (!url) continue;
-
-      const sources = normalizeSources([
-        {
-          url,
-          quality: typeof resolvido === "object" ? resolvido?.quality : undefined,
-          resolution: typeof resolvido === "object" ? resolvido?.resolution : undefined,
-          isM3U8: typeof resolvido === "object" ? Boolean(resolvido?.isM3U8) : true,
-        },
-      ]);
+      const sources = normalizarFontesDoProvider(resolvido);
 
       if (!sources.length) continue;
 

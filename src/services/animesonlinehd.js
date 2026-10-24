@@ -25,9 +25,10 @@
  * browser: sem o User-Agent responde 403 mesmo com o Referer certo.
  *
  * TAMANHO: o Blogger publica dois degraus, itag 18 (360p) e itag 22 (720p). Num
- * episódio de 24 min o 360p mede ~75 MB e o 720p ~219 MB — o 720p passa o teto de
- * 200 MB, pelo que o episódio é servido em 360p. É a única forma de caber sem
- * subir o teto e arriscar o OOM do Render.
+ * episódio de 24 min o 360p mede ~75 MB e o 720p ~219 MB. Os dois degraus são
+ * devolvidos como fontes separadas, para o menu de qualidades os oferecer: quem
+ * quiser o 720p escolhe-o e assume o tempo de download, em vez de o provider
+ * decidir por ele. O teto de envio continua a travar o que não couber.
  *
  * @author Dev Gui
  */
@@ -47,9 +48,15 @@ const UA_BROWSER =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
-/** Degraus do Blogger: 18 = 360p (cabe no teto), 22 = 720p (passa). */
+/** Degraus do Blogger: 18 = 360p, 22 = 720p. */
 const ITAG_360P = "18";
 const ITAG_720P = "22";
+
+/** Rótulo de cada degrau, na ordem em que o menu os apresenta. */
+const DEGRAUS = [
+  { itag: ITAG_360P, quality: "360p" },
+  { itag: ITAG_720P, quality: "720p" },
+];
 
 async function fetchText(url, { referer, json = false } = {}) {
   const controller = new AbortController();
@@ -346,7 +353,7 @@ export async function episodes(animeId, slug, audioVersion = "") {
  *
  * Puro (sem rede). O URL vem com as entidades HTML e os escapes do JSON
  * (`&quot;`, `\u003d`, `\u0026`, `\/`), pelo que é preciso desescapá-lo antes de
- * o ler. O itag é escolhido explicitamente: 18 (360p) por caber no teto de envio.
+ * o ler. O itag é escolhido explicitamente; sem ele vale o 360p.
  *
  * @param {string} html
  * @param {string} [itag]
@@ -373,14 +380,32 @@ export function parseVideoUrl(html, itag = ITAG_360P) {
 }
 
 /**
- * Link do vídeo de um episódio.
+ * Todos os degraus publicados na página do Blogger, prontos para o menu.
+ *
+ * Puro (sem rede). A página traz o 360p e o 720p no mesmo HTML; devolver os dois
+ * deixa o utilizador escolher em vez de o provider decidir. A ordem é a do
+ * `DEGRAUS` (360p primeiro, que é o que cabe no teto sem esperar).
+ *
+ * @param {string} html
+ * @returns {Array<{url: string, quality: string, isM3U8: boolean}>}
+ */
+export function degrausDoVideo(html) {
+  return DEGRAUS.map(({ itag, quality }) => ({
+    url: parseVideoUrl(html, itag),
+    quality,
+    isM3U8: false,
+  })).filter((degrau) => Boolean(degrau.url));
+}
+
+/**
+ * Links de vídeo de um episódio, um por degrau publicado.
  *
  * O id do episódio já é o da faixa correta (o site tem ids distintos para
  * dublado e legendado), por isso o `audioVersion` não é preciso aqui.
  *
  * @param {{id: string, ids: string}} episodio
  * @param {string} slug
- * @returns {Promise<{url: string, quality: string, isM3U8: boolean, referer: string}>}
+ * @returns {Promise<Array<{url: string, quality: string, isM3U8: boolean}>>}
  */
 export async function sources(episodio) {
   const id = String(episodio?.ids || episodio?.id || "").trim();
@@ -403,20 +428,23 @@ export async function sources(episodio) {
   }
 
   const pagina = await fetchText(playerUrl, { referer: `${BASE}/` });
-  const url = parseVideoUrl(pagina, ITAG_360P);
+  const degraus = degrausDoVideo(pagina);
 
-  if (!url) {
+  if (!degraus.length) {
     throw new AnimeApiError(
       "A fonte não devolveu o vídeo deste episódio. Tente outro episódio.",
     );
   }
 
-  infoLog(`[anime] animesonlinehd episódio resolvido (${dados?.tipo || "?"}, 360p)`);
+  infoLog(
+    `[anime] animesonlinehd episódio resolvido (${dados?.tipo || "?"}, ` +
+      `${degraus.map((degrau) => degrau.quality).join("/")})`,
+  );
 
-  // Devolve objeto (e não só o URL) para o fluxo saber que é MP4 direto: o
+  // Devolve objetos (e não só URLs) para o fluxo saber que é MP4 direto: o
   // rótulo de qualidade e o `--max-filesize` comportam-se de forma diferente de
   // um HLS, e o yt-dlp lê os metadados reais do ficheiro.
-  return { url, quality: "360p", isM3U8: false };
+  return degraus;
 }
 
 /**

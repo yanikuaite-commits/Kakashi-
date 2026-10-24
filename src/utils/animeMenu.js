@@ -17,15 +17,17 @@
  *      lista, e não episódio a episódio;
  *   4. ao escolher o episódio, busca as `sources` (na faixa escolhida) e lista
  *      as qualidades (rowId `anm:src:<índice>`);
- *   5. ao escolher a qualidade, baixa com o yt-dlp limitado a `ANIME_MAX_HEIGHT`
- *      (480p) e aplica a regra de tamanho (a mesma do YouTube, com teto maior):
- *        > 200 MB   → cancela e pede qualidade menor;
- *        100–200 MB → envia como DOCUMENTO;
+ *   5. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
+ *      (a mesma do YouTube, com teto maior):
+ *        > 300 MB   → cancela e pede qualidade menor;
+ *        100–300 MB → envia como DOCUMENTO;
  *        ≤ 100 MB   → envia como VÍDEO.
  *
- * A resolução é fixa em 480p: o m3u8 do provider traz 240p–1080p e sem limite o
- * yt-dlp escolhia 1080p, estourando o teto de 200 MB. A lista de qualidades
- * escolhe a *fonte* (URL), não a resolução final.
+ * A resolução do download depende do tipo de fonte. Um m3u8 traz vários degraus
+ * no mesmo URL, por isso o yt-dlp é limitado a `ANIME_MAX_HEIGHT` (480p) — sem
+ * limite escolhia 1080p e estourava o teto. Uma fonte MP4 direta já É o degrau
+ * escolhido no menu (o animesonlinehd publica 360p e 720p como URLs distintos),
+ * por isso não leva filtro de altura: o teto de MB é que decide.
  *
  * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
  * tem limite de tamanho e os links de stream são longos/assinados; o array real
@@ -34,7 +36,7 @@
  * @author Dev Gui
  */
 import fs from "node:fs";
-import { ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
+import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
 import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withDownloadSlot } from "../services/downloadQueue.js";
@@ -710,7 +712,9 @@ async function sendQualityList({ socket, session, episodeIndex }) {
         qualidade: session.audioVersion
           ? `${audioVersionLabel(session.audioVersion)} · Escolhe a qualidade`
           : "Escolha a qualidade",
-        extra: `⬇️ O episódio sai em até ${animeMaxHeight(session.provider)}p para caber no limite de envio.`,
+        extra:
+          `⬇️ Escolhe a qualidade: as mais altas pesam mais. ` +
+          `Acima de ${ANIME_DOCUMENT_LIMIT_MB} MB o envio é cancelado.`,
         rodape: null,
       }),
       title: "Qualidade",
@@ -879,7 +883,11 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
       withDownloadSlot(
         () =>
           downloadWithYtDlp(source.url, {
-            height: alturaMaxima,
+            // A fonte HLS traz vários degraus no mesmo URL, por isso o limite de
+            // altura escolhe o degrau. Uma fonte MP4 direta (animesonlinehd,
+            // animeheaven) já É o degrau escolhido no menu: filtrar por altura
+            // não teria efeito e podia descartar o formato único disponível.
+            height: source.isM3U8 ? alturaMaxima : "best",
             maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
             extraArgs: animeDownloadArgs(session.provider),
             concurrentFragments: animeConcurrentFragments(session.provider),

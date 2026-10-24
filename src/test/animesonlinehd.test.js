@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  degrausDoVideo,
   episodiosDaTemporada,
   extrairPayloadRsc,
   parseTemporadas,
@@ -141,17 +142,50 @@ test("parseVideoUrl desescapa as entidades e os escapes unicode", () => {
   assert.doesNotMatch(url, /&quot;|\\u00/);
 });
 
-test("parseVideoUrl escolhe o degrau 360p e ignora o 720p", () => {
+test("parseVideoUrl escolhe o degrau 360p por omissão", () => {
   assert.equal(
     parseVideoUrl(HTML_BLOGGER_720P),
     null,
-    "o 720p passa o teto de 200 MB e não pode ser servido por omissão",
+    "sem itag explícito, o 720p não é o degrau servido por omissão",
   );
   assert.match(
     parseVideoUrl(HTML_BLOGGER_720P, "22"),
     /itag=22/,
     "o degrau tem de ser pedível quando se quer o 720p",
   );
+});
+
+test("degrausDoVideo devolve o 360p e o 720p quando a página traz os dois", () => {
+  const html = HTML_BLOGGER + HTML_BLOGGER_720P;
+  const degraus = degrausDoVideo(html);
+
+  assert.deepEqual(
+    degraus.map((degrau) => degrau.quality),
+    ["360p", "720p"],
+    "o menu tem de oferecer os dois degraus, não decidir pelo utilizador",
+  );
+  assert.match(degraus[0].url, /itag=18/);
+  assert.match(degraus[1].url, /itag=22/);
+  assert.equal(
+    degraus.every((degrau) => degrau.isM3U8 === false),
+    true,
+    "o Blogger serve MP4 direto, não HLS",
+  );
+});
+
+test("degrausDoVideo devolve só o degrau que a página publica", () => {
+  const degraus = degrausDoVideo(HTML_BLOGGER);
+
+  assert.deepEqual(
+    degraus.map((degrau) => degrau.quality),
+    ["360p"],
+    "sem 720p na página, só o 360p pode ser oferecido",
+  );
+});
+
+test("degrausDoVideo devolve vazio quando não há vídeo na página", () => {
+  assert.deepEqual(degrausDoVideo("<html>sem video</html>"), []);
+  assert.deepEqual(degrausDoVideo(""), []);
 });
 
 test("parseVideoUrl devolve null quando não há vídeo na página", () => {
