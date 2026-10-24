@@ -34,6 +34,13 @@ import {
   withCreditsContext,
 } from "../services/credits.js";
 import { badMacHandler } from "./badMacHandler.js";
+import { withDownloadNotifier } from "../services/downloadQueue.js";
+import {
+  checkRateLimit,
+  isRateLimited,
+  rateLimitMessage,
+  registerCommandUse,
+} from "../services/rateLimit.js";
 import {
   getAutoResponderResponse,
   getPrefix,
@@ -233,6 +240,26 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   const cost = !isOwner && type === "member" ? commandCost(command, resolved.commandName) : 0;
   let chargedCredits = 0;
 
+  // Anti-flood: antes de cobrar, para quem é travado não gastar saldo.
+  // Vale só para os comandos que gastam recursos caros (ver RATE_LIMITED_COMMANDS).
+  if (accountId && isRateLimited(command)) {
+    const travado = checkRateLimit(accountId, { isOwner });
+
+    if (!travado.ok) {
+      await sendReply(
+        rateLimitMessage({
+          commandName: command.name,
+          reason: travado.reason,
+          retryInSeconds: travado.retryInSeconds,
+          count: travado.count,
+          limit: travado.limit,
+        }),
+      );
+
+      return;
+    }
+  }
+
   // Verificação explícita ANTES de executar: sem saldo, o comando nem começa.
   if (cost > 0) {
     const saldo = hasSufficientCredits(accountId, cost);
@@ -271,14 +298,27 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     chargedCredits = charge.charged;
   }
 
+  // Só conta para o anti-flood o que foi efetivamente autorizado: um comando
+  // recusado por falta de saldo (acima) não gasta o teto diário.
+  if (accountId && isRateLimited(command)) {
+    registerCommandUse(accountId);
+  }
+
   try {
     await withCreditsContext(accountId, () =>
-      command.handle({
-        ...invocation,
-        type,
-        startProcess,
-        isOwner,
-      }),
+      withDownloadNotifier(
+        sendReply,
+        () =>
+          command.handle({
+            ...invocation,
+            type,
+            startProcess,
+            isOwner,
+          }),
+        // O dono tem prioridade na fila: um ajuste urgente não fica atrás de
+        // downloads de membros.
+        { priority: isOwner },
+      ),
     );
   } catch (error) {
     if (chargedCredits > 0 && accountId) {

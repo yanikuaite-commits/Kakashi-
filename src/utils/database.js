@@ -33,6 +33,7 @@ const PRIVATE_WHITELIST_FILE = "private-whitelist";
 const BLOCKED_COMMANDS_FILE = "blocked-commands";
 const CREDITS_FILE = "credits";
 const PENDING_RECHARGES_FILE = "pending-recharges";
+const RATE_LIMIT_FILE = "rate-limit";
 
 function createIfNotExists(fullPath, formatIfNotExists = []) {
   if (!fs.existsSync(fullPath)) {
@@ -620,4 +621,16 @@ export function readPendingRecharges() {
 
 export function savePendingRecharges(recharges) {
   writeJSON(PENDING_RECHARGES_FILE, recharges, {});
+}
+
+/**
+ * Registos do anti-flood por usuário (chave = LID/JID).
+ * A regra de negócio fica em src/services/rateLimit.js.
+ */
+export function readRateLimits() {
+  return readJSON(RATE_LIMIT_FILE, {});
+}
+
+export function saveRateLimits(limits) {
+  writeJSON(RATE_LIMIT_FILE, limits, {});
 }

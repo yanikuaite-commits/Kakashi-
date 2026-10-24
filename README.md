@@ -814,6 +814,43 @@ Obtenha sua API Key em: [https://linker.devgui.dev](https://linker.devgui.dev)
 | YT MP4 | Membro | ✅ |
 | YT search | Membro | ✅ |
 
+## Anti-flood e fila de downloads
+
+Duas proteções entram em ação antes do trabalho pesado.
+
+**Anti-flood.** Cada usuário tem dois travões, independentes:
+
+- um intervalo mínimo entre comandos (`COMMAND_COOLDOWN_SECONDS`, 5 s por
+  padrão);
+- um teto de comandos por dia (`MAX_COMMANDS_PER_DAY`, 200 por padrão), que
+  renova às 00h00 no horário de Moçambique, o mesmo relógio dos créditos.
+
+Só valem para os comandos que gastam banda, CPU ou APIs pagas (downloads, IA,
+stickers). Comandos de navegação (`.conta`, `.menu`) e de moderação (`.warn`,
+`.ban`, `.mute`) não entram, para o travão não atrapalhar quem modera o grupo.
+O dono do bot nunca é limitado. Quem é travado não gasta créditos: a verificação
+acontece antes da cobrança.
+
+Os dois valores aceitam ajuste pelo ambiente:
+
+```sh
+COMMAND_COOLDOWN_SECONDS=5    # 0 desliga o cooldown
+MAX_COMMANDS_PER_DAY=200      # 0 desliga o teto diário
+```
+
+**Fila de downloads.** No máximo `DOWNLOAD_CONCURRENCY` downloads correm ao
+mesmo tempo (2 por padrão). Os restantes esperam na fila, em vez de dividir a
+banda e ficar todos lentos. Quem espera recebe a sua posição ("você é o 2.º da
+fila") e é avisado quando chega a vez. Um pedido que espera mais de
+`DOWNLOAD_QUEUE_TIMEOUT_MS` (5 min por padrão) desiste com uma mensagem clara;
+o tempo conta só a espera, nunca um download já em curso. Os downloads do dono
+têm prioridade na fila.
+
+```sh
+DOWNLOAD_CONCURRENCY=2              # 1 serializa todos os downloads
+DOWNLOAD_QUEUE_TIMEOUT_MS=300000    # 5 minutos
+```
+
 ## Auto responder
 
 O Kakashi Bot possui um auto-responder embutido, edite o arquivo em `./database/auto-responder.json`:

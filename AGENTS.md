@@ -148,6 +148,8 @@ Important files:
 | `muted.json` | muted users by group |
 | `inactive-groups.json` | groups where the bot is disabled |
 | `group-restrictions.json` | restrictions by message type |
+| `credits.json` | per-user credit accounts (daily + recharged) |
+| `rate-limit.json` | per-user anti-flood counters (`day`, `count`, `lastCommandAt`) |
 
 Mandatory rule:
 
@@ -241,6 +243,52 @@ Every member command checks the balance before running, not only at the end:
   failed download is refunded with `refundCredits`, because nobody pays for an
   episode that never arrived
 - the owner (`OWNER_LID`) never pays, in commands or in the anime flow
+
+## RATE_LIMIT_AND_DOWNLOAD_QUEUE
+
+Two guards sit in front of the expensive work, both added to protect bandwidth
+and to keep the bot from being banned for spam.
+
+**Anti-flood** (`src/services/rateLimit.js`, state in
+`database/rate-limit.json`):
+
+- two independent brakes per user: a cooldown between commands
+  (`COMMAND_COOLDOWN_SECONDS`, default 5) and a daily ceiling
+  (`MAX_COMMANDS_PER_DAY`, default 200) that renews at 00h00 Maputo time, the
+  same clock as the credits (`mozambiqueClock`)
+- only `RATE_LIMITED_COMMANDS` are limited: the ones that spend bandwidth, CPU
+  or paid APIs. Navigation (`conta`, `menu`) and moderation (`warn`, `ban`,
+  `mute`) stay out, so the brake never blocks a moderator
+- `checkRateLimit` and `registerCommandUse` are separate on purpose: the
+  dispatcher checks first and registers only after the credits are charged, so
+  a command refused for lack of balance does not consume the daily ceiling
+- `dynamicCommand` runs the check before charging credits: a throttled user is
+  never charged
+- the owner is never limited; a throttled user gets `rateLimitMessage`, which
+  says whether it is the cooldown or the daily ceiling
+
+**Download queue** (`src/services/downloadQueue.js`):
+
+- at most `DOWNLOAD_CONCURRENCY` downloads (default 2) run at once; the rest
+  wait, so two users no longer split the bandwidth and slow each other down
+- every download goes through `withDownloadSlot`. The queue is entered inside
+  `downloader.js` (`downloadMedia` / `downloadYouTubeVideo`) and in the anime
+  flow (`animeMenu.js`), so the limit applies to the download itself and not to
+  the link resolution, which is fast
+- the waiting user is told the position (`queuedMessage`) and warned when their
+  turn arrives (`downloadTurnMessage`), instead of waiting in silence
+- a request that waits longer than `DOWNLOAD_QUEUE_TIMEOUT_MS` leaves the queue
+  with `QueueTimeoutError`. The timeout counts only the wait, never the
+  running download
+- the owner's downloads are queued with priority, so an urgent action does not
+  sit behind member downloads
+- the user notice uses the `withDownloadNotifier` context (same idea as
+  `withCreditsContext`) because `sendReply` is not passed down through the
+  download layers. **The notice is captured when the request is made, not when
+  the download starts**: the `pump` that frees a slot runs inside the context of
+  the request that just finished, so reading the context there would send
+  someone else's "your turn" to the wrong chat. `downloadQueue.test.js` guards
+  this with a test that fails if the capture moves back into `pump`
 
 ## BACKUP
 

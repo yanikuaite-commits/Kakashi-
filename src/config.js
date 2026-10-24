@@ -263,6 +263,74 @@ export const DEFAULT_COMMAND_CREDITS = 5;
 export const ANIME_EPISODE_CREDITS = 20;
 
 // ==========================================================================
+// ANTI-FLOOD
+// ==========================================================================
+
+// Intervalo mínimo entre comandos do mesmo usuário (segundos). Um usuário pode
+// disparar um comando a cada N segundos; abaixo disso é flood. 0 desliga.
+export const COMMAND_COOLDOWN_SECONDS = Number(
+  process.env.COMMAND_COOLDOWN_SECONDS || 5,
+);
+
+// Teto de comandos por usuário por dia (00h00 de Moçambique). O dono não conta.
+// 0 desliga o teto.
+export const MAX_COMMANDS_PER_DAY = Number(
+  process.env.MAX_COMMANDS_PER_DAY || 200,
+);
+
+// O cooldown e o teto valem só para estes comandos: os que gastam recursos
+// caros (banda, CPU, APIs pagas). Comandos de navegação (`conta`, `menu`) e de
+// grupo (`warn`, `mute`) não entram, para não atrapalhar a moderação.
+export const RATE_LIMITED_COMMANDS = new Set([
+  "anime",
+  "attp",
+  "baixar",
+  "brat",
+  "bratvid",
+  "deepseek",
+  "facebook",
+  "flux",
+  "gemini",
+  "gerar-link",
+  "gpt-5-mini",
+  "ia-sticker",
+  "instagram",
+  "pinterest",
+  "play-audio",
+  "play-video",
+  "removebg",
+  "rename",
+  "sticker",
+  "tik-tok",
+  "tik-tok-audio",
+  "to-gif",
+  "to-image",
+  "to-mp3",
+  "transcrever",
+  "ttp",
+  "tts",
+  "x-twitter",
+  "yt-search",
+]);
+
+// ==========================================================================
+// FILA DE DOWNLOADS
+// ==========================================================================
+
+// Quantos downloads correm ao mesmo tempo. O excedente espera na fila em vez de
+// dividir a banda com os outros. 1 serializa tudo.
+export const DOWNLOAD_CONCURRENCY = Number(
+  process.env.DOWNLOAD_CONCURRENCY || 2,
+);
+
+// Tempo máximo na fila antes de desistir (ms). Evita esperas sem fim quando o
+// downloader à frente encrava.
+export const DOWNLOAD_QUEUE_TIMEOUT_MS = Number(
+  process.env.DOWNLOAD_QUEUE_TIMEOUT_MS || 5 * 60 * 1000,
+);
+
+
+// ==========================================================================
 // PAGAMENTOS E RECARGAS (e-mola / m-pesa)
 // ==========================================================================
 // Números que recebem os pagamentos. O bot só trata como pagamento as

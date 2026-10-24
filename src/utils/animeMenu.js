@@ -37,6 +37,7 @@ import fs from "node:fs";
 import { ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
 import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
+import { withDownloadSlot } from "../services/downloadQueue.js";
 import {
   chargeCredits,
   creditsExhaustedMessage,
@@ -875,12 +876,16 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
     }
 
     result = await withCreditsContext(session.ownerId, () =>
-      downloadWithYtDlp(source.url, {
-        height: alturaMaxima,
-        maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
-        extraArgs: animeDownloadArgs(session.provider),
-        concurrentFragments: animeConcurrentFragments(session.provider),
-      }),
+      withDownloadSlot(
+        () =>
+          downloadWithYtDlp(source.url, {
+            height: alturaMaxima,
+            maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
+            extraArgs: animeDownloadArgs(session.provider),
+            concurrentFragments: animeConcurrentFragments(session.provider),
+          }),
+        { priority: session.ownerId === OWNER_LID },
+      ),
     );
 
     const tamanhoMB = result.fileSize / (1024 * 1024);
