@@ -20,9 +20,10 @@
  *
  * O `playerUrl` é um link do Blogger cuja página traz o `videoplayback` do
  * Google Video no HTML. O extractor `blogger` do yt-dlp falha neste formato
- * ("Unable to extract JSON data"), por isso o URL é lido AQUI e o yt-dlp recebe
- * o googlevideo direto. Esse CDN exige `Referer` do Blogger E um User-Agent de
- * browser: sem o User-Agent responde 403 mesmo com o Referer certo.
+ * ("Unable to extract JSON data"), por isso o URL é lido AQUI (em
+ * `bloggerVideo.js`, partilhado com o anitube) e o yt-dlp recebe o googlevideo
+ * direto. Esse CDN exige `Referer` do Blogger E um User-Agent de browser: sem o
+ * User-Agent responde 403 mesmo com o Referer certo.
  *
  * TAMANHO: o Blogger publica dois degraus, itag 18 (360p) e itag 22 (720p). Num
  * episódio de 24 min o 360p mede ~75 MB e o 720p ~219 MB. Os dois degraus são
@@ -39,24 +40,10 @@ import {
 } from "../config.js";
 import { errorLog, infoLog } from "../utils/logger.js";
 import { AnimeApiError } from "./anime.js";
+import { DEGRAUS_BLOGGER, extrairDegraus, parseVideoUrl as parseVideoUrlPartilhado } from "./bloggerVideo.js";
 
 const BASE = "https://animesonlinehd.vip";
 const REQUEST_TIMEOUT_MS = Math.min(ANIME_API_TIMEOUT_MS, 20 * 1000);
-
-/** User-Agent de browser, exigido pelo CDN do Google Video (sem ele: 403). */
-const UA_BROWSER =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
-
-/** Degraus do Blogger: 18 = 360p, 22 = 720p. */
-const ITAG_360P = "18";
-const ITAG_720P = "22";
-
-/** Rótulo de cada degrau, na ordem em que o menu os apresenta. */
-const DEGRAUS = [
-  { itag: ITAG_360P, quality: "360p" },
-  { itag: ITAG_720P, quality: "720p" },
-];
 
 async function fetchText(url, { referer, json = false } = {}) {
   const controller = new AbortController();
@@ -351,51 +338,23 @@ export async function episodes(animeId, slug, audioVersion = "") {
 /**
  * Extrai o URL do `videoplayback` do Google Video a partir da página do Blogger.
  *
- * Puro (sem rede). O URL vem com as entidades HTML e os escapes do JSON
- * (`&quot;`, `\u003d`, `\u0026`, `\/`), pelo que é preciso desescapá-lo antes de
- * o ler. O itag é escolhido explicitamente; sem ele vale o 360p.
+ * Reexportado de `bloggerVideo.js`: o anitube serve o episódio pelo mesmo player
+ * e reusa esta leitura. Puro (sem rede); o itag é escolhido explicitamente e sem
+ * ele vale o 360p.
  *
- * @param {string} html
- * @param {string} [itag]
- * @returns {string|null}
+ * @type {(html: string, itag?: string) => string|null}
  */
-export function parseVideoUrl(html, itag = ITAG_360P) {
-  const conteudo = String(html ?? "")
-    .replace(/&quot;/g, '"')
-    .replace(/\\u003d/g, "=")
-    .replace(/\\u0026/g, "&")
-    .replace(/\\\//g, "/");
-
-  const urls = [
-    ...new Set(
-      [
-        ...conteudo.matchAll(
-          /https?:\/\/[^"'\s\\]+googlevideo\.com\/videoplayback[^"'\s\\]*/g,
-        ),
-      ].map(([url]) => url),
-    ),
-  ];
-
-  return urls.find((url) => new RegExp(`[?&]itag=${itag}(?:&|$)`).test(url)) || null;
-}
+export const parseVideoUrl = parseVideoUrlPartilhado;
 
 /**
  * Todos os degraus publicados na página do Blogger, prontos para o menu.
  *
- * Puro (sem rede). A página traz o 360p e o 720p no mesmo HTML; devolver os dois
- * deixa o utilizador escolher em vez de o provider decidir. A ordem é a do
- * `DEGRAUS` (360p primeiro, que é o que cabe no teto sem esperar).
+ * Reexportado de `bloggerVideo.js`. Puro (sem rede).
  *
- * @param {string} html
- * @returns {Array<{url: string, quality: string, isM3U8: boolean}>}
+ * @type {(html: string) => Array<{url: string, quality: string, isM3U8: boolean}>}
  */
-export function degrausDoVideo(html) {
-  return DEGRAUS.map(({ itag, quality }) => ({
-    url: parseVideoUrl(html, itag),
-    quality,
-    isM3U8: false,
-  })).filter((degrau) => Boolean(degrau.url));
-}
+export const degrausDoVideo = (html) =>
+  extrairDegraus(html, DEGRAUS_BLOGGER);
 
 /**
  * Links de vídeo de um episódio, um por degrau publicado.

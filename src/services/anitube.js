@@ -1,25 +1,35 @@
 /**
- * Provider "anitube": extrai o HLS do site, sem API de terceiros.
+ * Provider "anitube": extrai o vídeo do site, sem API de terceiros.
  *
  * PORQUÊ: é o segundo site testado que responde a IPs de datacenter e não precisa
- * de browser. Serve H.264 (NAL tipo 7/8 no MPEG-TS), que o WhatsApp reproduz —
- * ao contrário do anime7, cujo MP4 é AV1.
+ * de browser. Serve H.264, que o WhatsApp reproduz — ao contrário do anime7, cujo
+ * MP4 é AV1.
  *
  * COMO: o site é WordPress, pelo que a pesquisa usa a REST API nativa
  * (`/wp-json/wp/v2/...`), que já devolve JSON e evita parsing de HTML de busca.
- * Cada episódio é um post próprio e a página do episódio traz o m3u8 pronto no
- * HTML, dentro do iframe do player:
+ * Cada episódio é um post próprio:
  *
  *   GET /wp-json/wp/v2/posts?search=<termo>&per_page=100  → posts (título + id)
- *   GET /video/<id>/                                      → <iframe src="...m3u8">
- *   GET <m3u8>                                            → master playlist
+ *   GET /video/<id>/                                      → <iframe src="...">
  *
- * ATENÇÃO ao tamanho: o site publica só UM degrau, em 720p, e um episódio de
- * 24 min mede ~257 MB — acima do teto de 200 MB. Os segmentos são MPEG-TS com
- * extensão `.webp` (disfarce), pelo que o ficheiro descarregado precisa de
- * remux para MP4 antes de ser enviado. Por isso este provider não consegue
- * entregar episódios longos; o fluxo deteta o excesso e cancela o envio, e o
- * fallback para os outros providers é o caminho normal.
+ * O site serve o vídeo de DUAS formas, conforme a idade do episódio, e ambas
+ * têm de ser lidas:
+ *
+ *   (a) HLS antigo: o iframe é `api.anivideo.net/videohls.php?d=<m3u8>` e o
+ *       parâmetro `d` já é a playlist do CDN;
+ *   (b) Blogger (formato novo): o iframe é `api.anivideo.net/file/<token>`, cujo
+ *       HTML traz um token do `blogger.com/video.g`; essa página publica o
+ *       `videoplayback` do Google Video (itag 18 = 360p, itag 22 = 720p).
+ *
+ * Sem o caso (b) o provider falhava em todos os episódios recentes com "Nenhum
+ * link de streaming encontrado": a página deixou de publicar qualquer m3u8 e o
+ * leitor antigo procurava só isso. A leitura do Blogger vive em `bloggerVideo.js`
+ * (partilhada com o animesonlinehd, que usa o mesmo player).
+ *
+ * ATENÇÃO ao tamanho: no formato Blogger um episódio de 24 min mede ~64 MB em
+ * 360p e ~162 MB em 720p — ambos dentro do teto. No HLS antigo o site publicava
+ * só um degrau em 720p (~257 MB), pelo que esse caminho continua a medir a
+ * playlist antes de descarregar e deixa o fallback passar ao provider seguinte.
  *
  * O agrupamento em séries é feito pelo título: os episódios de um anime são
  * posts com o mesmo nome-base e o número em "Episódio <n>", pelo que a série é
@@ -28,8 +38,9 @@
  * @author Dev Gui
  */
 import { ANIME_API_TIMEOUT_MS, ANIME_MAX_DOWNLOAD_BYTES, ANIME_USER_AGENT } from "../config.js";
-import { errorLog, infoLog } from "../utils/logger.js";
+import { infoLog } from "../utils/logger.js";
 import { AnimeApiError } from "./anime.js";
+import { extrairDegraus, extrairIframes, extrairTokenBlogger } from "./bloggerVideo.js";
 
 const BASE = "https://www.anitube.zip";
 const REQUEST_TIMEOUT_MS = Math.min(ANIME_API_TIMEOUT_MS, 20 * 1000);
@@ -115,7 +126,7 @@ export function numeroDoEpisodio(titulo) {
 }
 
 /**
- * Extrai o m3u8 do HTML da página do episódio.
+ * Extrai o m3u8 do formato ANTIGO (iframe `videohls.php?d=<m3u8>`).
  *
  * O player monta um iframe (`api.anivideo.net/videohls.php?d=<m3u8>`) cujo
  * parâmetro `d` já é o m3u8 do CDN — é ESSE o URL a descarregar. A ordem importa:
@@ -124,10 +135,13 @@ export function numeroDoEpisodio(titulo) {
  * uma página HTML. Por isso o `d` é lido primeiro e um `.m3u8` solto só serve de
  * recurso quando o player não aparece.
  *
+ * Os episódios recentes já não publicam m3u8 nenhum; nesses a extração segue por
+ * `extrairDoBlogger`.
+ *
  * @param {string} html
  * @returns {{url: string, isM3U8: boolean}|null}
  */
-export function parseVideo(html) {
+export function parseVideoHls(html) {
   const conteudo = String(html ?? "");
 
   const dentroDoPlayer = conteudo.match(/videohls\.php\?d=([^"&\s]+)/i)?.[1];
@@ -140,6 +154,34 @@ export function parseVideo(html) {
   if (direto) return { url: direto, isM3U8: true };
 
   return null;
+}
+
+/**
+ * Segue o iframe do player até aos degraus do Blogger.
+ *
+ * O iframe aponta para o intermediário do site (`api.anivideo.net/file/<token>`),
+ * cujo HTML traz o token do `blogger.com/video.g`; é essa página que publica o
+ * `videoplayback` do Google Video. Cada iframe é tentado por ordem até um render
+ * o token: a página pode trazer mais do que um e a ordem não é garantida.
+ *
+ * @param {string} html página do episódio
+ * @returns {Promise<Array<{url: string, quality: string, isM3U8: boolean}>>}
+ */
+async function extrairDoBlogger(html) {
+  for (const iframe of extrairIframes(html, BASE)) {
+    const intermediario = await fetchText(iframe, `${BASE}/`).catch(() => "");
+    const token = extrairTokenBlogger(intermediario);
+    if (!token) continue;
+
+    const pagina = await fetchText(
+      `https://www.blogger.com/video.g?token=${token}`,
+      "https://www.blogger.com/",
+    );
+    const degraus = extrairDegraus(pagina);
+    if (degraus.length) return degraus;
+  }
+
+  return [];
 }
 
 /**
@@ -303,11 +345,16 @@ export async function episodes(animeId, slug) {
 }
 
 /**
- * Link do HLS de um episódio.
+ * Links de vídeo de um episódio.
+ *
+ * O site publica o episódio em dois formatos conforme a idade do post, e ambos
+ * são tentados: primeiro o m3u8 antigo (que já vem pronto no HTML e não precisa
+ * de pedidos extra) e, se não houver, a cadeia do Blogger. Sem a segunda via os
+ * episódios recentes falhavam sempre — o site deixou de publicar m3u8.
  *
  * @param {{id: string, ids: string}} episodio
  * @param {string} slug
- * @returns {Promise<{url: string, quality: string, isM3U8: boolean}>}
+ * @returns {Promise<Array<{url: string, quality: string, isM3U8: boolean}>>}
  */
 export async function sources(episodio, slug) {
   const postId = String(episodio?.ids || episodio?.id || "").trim();
@@ -317,31 +364,44 @@ export async function sources(episodio, slug) {
   }
 
   const html = await fetchText(`${BASE}/video/${postId}/`, `${BASE}/`);
-  const video = parseVideo(html);
 
-  if (!video?.url) {
+  const hls = parseVideoHls(html);
+
+  if (hls?.url) {
+    // O HLS antigo publica um único degrau, em 720p, e um episódio de 24 min
+    // mede ~257 MB — acima do teto. Medir aqui evita um download inteiro que
+    // acabaria cancelado, e deixa o fallback passar ao provider seguinte.
+    const playlist = await fetchText(hls.url, `${BASE}/`);
+    const tamanho = await estimarTamanho(playlist);
+
+    if (tamanho > ANIME_MAX_DOWNLOAD_BYTES) {
+      throw new AnimeApiError(
+        `A fonte só tem este episódio em 720p (~${Math.round(tamanho / 1048576)} MB), ` +
+          "acima do limite de envio. A tentar outra fonte...",
+      );
+    }
+
+    infoLog(`[anime] anitube episódio resolvido (HLS, ${hls.url.split("/")[2]})`);
+
+    return [{ url: hls.url, quality: "720p", isM3U8: true }];
+  }
+
+  const degraus = await extrairDoBlogger(html);
+
+  if (!degraus.length) {
     throw new AnimeApiError(
       "Nenhum link de streaming foi encontrado para este episódio.",
     );
   }
 
-  // O site publica um único degrau, em 720p, e um episódio de 24 min mede
-  // ~257 MB — acima do teto de 200 MB. Medir aqui evita um download inteiro que
-  // acabaria cancelado, e deixa o fallback passar ao provider seguinte.
-  const playlist = await fetchText(video.url, `${BASE}/`);
-  const tamanho = await estimarTamanho(playlist);
+  infoLog(
+    `[anime] anitube episódio resolvido (Blogger, ` +
+      `${degraus.map((degrau) => degrau.quality).join("/")})`,
+  );
 
-  if (tamanho > ANIME_MAX_DOWNLOAD_BYTES) {
-    throw new AnimeApiError(
-      `A fonte só tem este episódio em 720p (~${Math.round(tamanho / 1048576)} MB), ` +
-        "acima do limite de envio. A tentar outra fonte...",
-    );
-  }
-
-  infoLog(`[anime] anitube episódio resolvido em ${video.url.split("/")[2]}`);
-
-  // O site publica um único degrau, em 720p: não há escolha de qualidade.
-  return { url: video.url, quality: "720p", isM3U8: true };
+  // MP4 direto, um URL por degrau: o menu oferece 360p e 720p e o teto de MB
+  // decide o que é enviável.
+  return degraus;
 }
 
 /**
