@@ -169,7 +169,7 @@ export const GEMINI_IMAGE_TIMEOUT_MS = 60 * 1000;
 // Limite de upload do free tier: 25 MB.
 export const GROQ_TRANSCRIPTION_MODEL = "whisper-large-v3-turbo";
 export const GROQ_TRANSCRIPTION_LANGUAGE = "pt";
-export const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
+export const GITHUB_TOKEN = "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";
 export const GITHUB_REPOSITORY = "yanikuaite-commits/Kakashi-";
 export const GITHUB_BRANCH = "main";
 export const GITHUB_BACKUP_PATH = "backups/kakashi-database.tar.gz";
