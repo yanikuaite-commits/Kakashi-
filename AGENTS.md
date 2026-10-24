@@ -462,7 +462,8 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
 - **each episode carries separate `leg` and `dub` ids**, which is why the audio
   step is a real choice here: picking "Dublado" swaps the episode id, not just a
   label. `getAnimeInfo`/`getSeasonEpisodes`/`episodes` therefore take the
-  `audioVersion`, and `animeMenu.js` reloads the list once the track is chosen.
+  `audioVersion`, and `animeMenu.js` loads the list with the track the user
+  already chose (reloading it only on the post-list path).
   An episode that does not publish the requested track is dropped rather than
   falling back — serving the wrong audio is the exact bug this provider fixes.
   With no explicit choice the dubbed id wins (`ANIME_PREFER_DUBBED`), falling back
@@ -610,25 +611,33 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
 - list rows carry only indices (`anm:ep:<i>` / `anm:src:<i>`); the real
   (long, signed) stream URLs stay in the session, because WhatsApp drops
   oversized `rowId`s
-- **the audio track is a step of its own (`anm:aud:subbed` / `anm:aud:dubbed`),
-  asked BEFORE the episode list and only when the list publishes more than one.**
-  The episode list comes from `getAnimeInfo`/`getSeasonEpisodes`, which carry
-  `versions` per episode; `availableAudioVersions` UNIONS them and
-  `routeAfterEpisodes` decides: 2+ → ask, exactly 1 → fix it silently (no false
-  choice), none → ask nothing and behave as before. Asking per episode instead
-  would let the user pick "Dublado" and then hit an episode that has no dub, so
-  the choice is made once, for the list
-- **the track rule is a UNION, not an intersection, and this is the difference
-  between the feature working and not existing.** Requiring every episode to have
+- **the audio track is asked BEFORE the search, not before the episode list**
+  (`anm:aud:subbed` / `anm:aud:dubbed`). The user picks the track as soon as the
+  name is known, and the search then runs with it. Asking after the list meant a
+  title that only exists subtitled could never satisfy a request for a dub, and
+  the user only found out at the end — after the whole search — and had to
+  repeat the request. `session.pendingName` holds the name while the question is
+  on screen, and `chooseAudioVersion` branches on it: with a pending name it
+  starts the search, otherwise it reloads the existing list (the old path)
+- **the track is asked without touching the network, so it cannot be derived
+  from the list.** Both tracks are always offered; the source decides whether it
+  has them. `availableAudioVersions` (UNION of the per-episode `versions`) is
+  still used, but now only to CHECK the answer, never to decide whether to ask
+- **when the source does not have the requested track, the bot says so and falls
+  back to the one it has** (`carregarEpisodiosComFaixa`). Serving the other track
+  silently is the bug this flow exists to fix, so the user is told:
+  "⚠️ Esta fonte não tem dublado deste título. Vou mostrar legendado." The check
+  reads the PUBLISHED TRACKS of the returned list, not whether the call
+  succeeded: AnimeGG ignores the requested track and always returns the whole
+  list, so "a list came back" does not prove the track exists. A provider that
+  publishes no tracks at all (`[]`, AniTube/AniKoto) gets no warning, because
+  there is nothing to compare and a warning with an empty label is worse than
+  silence
+- the track rule is a UNION, not an intersection: requiring every episode to have
   both tracks looks safer but hides the choice almost always, because the series
-  page fragment only covers part of the list: One Piece has 583 episodes with
-  both, 577 subbed-only and 2 dubbed-only, so the intersection was EMPTY and the
-  menu asked nothing. Naruto (218 both, 2 subbed-only) collapsed to `subbed` and
-  never asked. Measured across series, only titles whose list is uniformly both
-  (e.g. Jujutsu Kaisen, 24/24) reached the question. With the union, One Piece
-  and Naruto ask; series with a single track (Kaijuu Girls, Attack on Titan)
-  silently fix it. An episode that lacks the chosen track fails with a clear
-  message, which beats never offering the choice
+  page fragment only covers part of the list (One Piece has 583 episodes with
+  both, 577 subbed-only and 2 dubbed-only). An episode that lacks the chosen
+  track fails with a clear message, which beats never offering the choice
 - the chosen track is stored in `session.audioVersion` and travels as the third
   argument of `getEpisodeSources(episodeId, provider, audioVersion)` down to
   `provider.sources(episode, slug, audioVersion)`; providers that do not
