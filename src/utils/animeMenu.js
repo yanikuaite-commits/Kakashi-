@@ -37,7 +37,7 @@
  * @author Dev Gui
  */
 import fs from "node:fs";
-import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
+import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, ANIME_PT_DUB_PROVIDERS, OWNER_LID } from "../config.js";
 import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withDownloadSlot } from "../services/downloadQueue.js";
@@ -57,6 +57,7 @@ import {
   animeProviderLabel,
   animeSessionKey,
   animeTokenIndex,
+  audioTrackLabel,
   audioVersionLabel,
   buildAudioRows,
   buildEpisodeRows,
@@ -66,6 +67,7 @@ import {
   availableAudioVersions,
   episodePageCount,
   identitiesOverlap,
+  avisoIdiomaDublagem,
   jidIdentities,
 } from "./animeFormat.js";
 import {
@@ -358,7 +360,10 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
   touch(session);
 
   try {
-    const anime = await searchAnime(nome);
+    // A faixa escolhida vai já para a pesquisa: com "dublado", os providers de
+    // dublagem PT-BR são procurados primeiro, para o título não cair num site
+    // que só dubla em inglês com o PT-BR disponível noutro.
+    const anime = await searchAnime(nome, session.audioVersion || "");
     const seasons = await getAnimeSeasons(anime.id, anime.provider);
 
     session.anime = { ...anime };
@@ -489,6 +494,12 @@ async function loadEpisodesAndSend({ socket, session, id }) {
  *    silêncio: não há nada para comparar, e um aviso com rótulo vazio seria
  *    pior do que não dizer nada. A escolha segue para o provider, que a ignora.
  *
+ * À parte da faixa, a DUBLAGEM tem uma questão de idioma que a faixa não
+ * resolve: "dubbed" é um booleano no site, mas o idioma depende do SITE (o
+ * animesonlinehd e o anitube dublam em PT-BR, o animegg em inglês). Quando a
+ * faixa servida é a dublada e a fonte não é PT-BR, o aviso diz que o áudio é
+ * inglês — para o utilizador não receber português na etiqueta e inglês no som.
+ *
  * @returns {Promise<{lista: Array<object>, faixaAviso: string}>}
  */
 async function carregarEpisodiosComFaixa({ session, carregar, contexto }) {
@@ -503,7 +514,10 @@ async function carregarEpisodiosComFaixa({ session, carregar, contexto }) {
     // A fonte serviu mesmo a faixa pedida (ou não distingue faixas): feito.
     const versoes = availableAudioVersions(lista);
     if (!versoes.length || versoes.includes(pedida)) {
-      return { lista, faixaAviso: "" };
+      return {
+        lista,
+        faixaAviso: avisoIdiomaDublagem(pedida, session.provider, ANIME_PT_DUB_PROVIDERS),
+      };
     }
   } catch (error) {
     errorLog(`[anime] faixa "${pedida}" indisponível (${contexto}): ${error.message}`);
@@ -524,7 +538,8 @@ async function carregarEpisodiosComFaixa({ session, carregar, contexto }) {
     lista: alternativaLista,
     faixaAviso:
       `⚠️ Esta fonte não tem ${audioVersionLabel(pedida).toLowerCase()} deste ` +
-      `título. Vou mostrar ${audioVersionLabel(alternativa).toLowerCase()}.`,
+      `título. Vou mostrar ${audioVersionLabel(alternativa).toLowerCase()}.` +
+      avisoIdiomaDublagem(alternativa, session.provider, ANIME_PT_DUB_PROVIDERS),
   };
 }
 
@@ -838,7 +853,7 @@ async function sendQualityList({ socket, session, episodeIndex }) {
         canal: animeProviderLabel(session.provider),
         duracao: session.episode.title || "—",
         qualidade: session.audioVersion
-          ? `${audioVersionLabel(session.audioVersion)} · Escolhe a qualidade`
+          ? `${audioTrackLabel(session.audioVersion, session.provider, ANIME_PT_DUB_PROVIDERS)} · Escolhe a qualidade`
           : "Escolha a qualidade",
         extra:
           `⬇️ Escolhe a qualidade: as mais altas pesam mais. ` +
@@ -1032,7 +1047,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
       canal: animeProviderLabel(session.provider),
       duracao: result.durationString || "Não disponível",
       qualidade: session.audioVersion
-        ? `${audioVersionLabel(session.audioVersion)} · ${source.label}`
+        ? `${audioTrackLabel(session.audioVersion, session.provider, ANIME_PT_DUB_PROVIDERS)} · ${source.label}`
         : source.label,
     });
 

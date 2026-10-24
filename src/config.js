@@ -472,6 +472,24 @@ export const ANIME_MAX_HEIGHT = Number(process.env.ANIME_MAX_HEIGHT) || 480;
 export const ANIME_PREFER_DUBBED =
   String(process.env.ANIME_PREFER_DUBBED ?? "true").toLowerCase() !== "false";
 
+// Providers cuja faixa "dublada" é PORTUGUÊS (PT-BR), e não inglês.
+//
+// A faixa é um booleano nos sites ("dubbed" ou não), mas o IDIOMA dessa dublagem
+// depende do site: o `animesonlinehd` e o `anitube` são sites brasileiros (a
+// dublagem é PT-BR), enquanto o `animegg` é um site inglês — o "Dubbed" dele é
+// dublagem inglesa. Sem esta distinção, pedir "Dublado" podia entregar áudio em
+// inglês com o rótulo em português.
+//
+// É esta lista que permite procurar a dublagem PT-BR PRIMEIRO: com a faixa
+// dublada pedida, estes providers passam à frente na pesquisa e no fallback.
+// Ajuste se um site mudar de idioma ou se um provider PT-BR novo for adicionado.
+export const ANIME_PT_DUB_PROVIDERS = (
+  process.env.ANIME_PT_DUB_PROVIDERS || "animesonlinehd,anitube"
+)
+  .split(",")
+  .map((nome) => nome.trim().toLowerCase())
+  .filter(Boolean);
+
 // Teto do provider AnimeHeaven, que publica 720p nativo (~112–164 MB): o
 // episódio já cabe no limite de 200 MB, por isso não há razão para o degradar
 // para 480p. Mantém-se configurável para o caso de episódios mais pesados.

@@ -485,7 +485,12 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   episode already fits the 200 MB limit, so forcing 480p would only degrade the
   image for nothing. `ANIME_MAX_HEIGHT` (480) still applies to anikoto, whose
   master.m3u8 carries a single 1080p variant
-- **`animesonlinehd` is the only provider with real PT-BR dubbing.** It is a
+- **`animesonlinehd` and `anitube` are the providers whose "dubbed" track is
+  PT-BR** (`ANIME_PT_DUB_PROVIDERS` in `src/config.js`). The track is a boolean
+  on the site ("dubbed" or not), but the LANGUAGE of that dub belongs to the
+  SITE: `animegg` is an English site, so its "Dubbed" is an English dub. Without
+  the distinction, asking for "Dublado" could hand back English audio with a
+  Portuguese label. `animesonlinehd` is a
   Next.js frontend over a WordPress backend (`animesonline.blue`), and the
   `/anime/<slug>` HTML carries the whole catalogue in the RSC payload
   (`self.__next_f.push`), so one page gives every season and both audio tracks —
@@ -520,7 +525,9 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   (default `animesonlinehd,animegg,anitube,animeheaven,anikoto`); each provider
   is tried
   until one returns the episode, and the winning provider is carried in the
-  session so `getAnimeInfo`/`getEpisodeSources` hit the same source
+  session so `getAnimeInfo`/`getEpisodeSources` hit the same source. With a dub
+  requested the list is reordered so the PT-BR sites come first — see
+  `ANIME_PT_DUB_PROVIDERS` below
 - **the fallback happens at the EPISODE level, not only at search time.** The
   episode id is internal to the site that listed it, so when a provider has no
   video for one episode, `getEpisodeSourcesWithFallback` (`src/services/anime.js`)
@@ -665,9 +672,23 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   reads the PUBLISHED TRACKS of the returned list, not whether the call
   succeeded: AnimeGG ignores the requested track and always returns the whole
   list, so "a list came back" does not prove the track exists. A provider that
-  publishes no tracks at all (`[]`, AniTube/AniKoto) gets no warning, because
+  publishes no tracks at all (`[]`, AniKoto/AnimeHeaven) gets no warning, because
   there is nothing to compare and a warning with an empty label is worse than
-  silence
+  silence. AniTube DOES publish tracks (`versaoDoTitulo`, from the post title),
+  so it is checked like AnimeGG
+- **with "Dublado", the PT-BR providers are searched FIRST**
+  (`ordenarProvidersParaFaixa` in `src/utils/animeFormat.js`). The configured
+  order (`ANIME_PROVIDERS`) puts the non-PT-BR sites ahead, so asking for a dub
+  could land on a site that only dubs in English while the PT-BR dub sat on
+  another site. The reorder happens in `searchAnime(nome, audioVersion)` and in
+  `getEpisodeSourcesWithFallback`, so both the first search and the per-episode
+  fallback look for PT-BR first; the non-PT-BR sites stay behind as a safety net
+  (a title that only exists there is still reachable). With no track requested
+  the list is untouched — reordering for a track nobody asked for would impose a
+  choice. When the dubbed track ends up coming from a non-PT-BR site,
+  `avisoIdiomaDublagem` says so instead of letting the user find out by ear, and
+  the card label is `Dublado (PT-BR)` only for the sites that really dub in
+  Portuguese (`audioTrackLabel`)
 - the track rule is a UNION, not an intersection: requiring every episode to have
   both tracks looks safer but hides the choice almost always, because the series
   page fragment only covers part of the list (One Piece has 583 episodes with
@@ -676,8 +697,8 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
 - the chosen track is stored in `session.audioVersion` and travels as the third
   argument of `getEpisodeSources(episodeId, provider, audioVersion)` down to
   `provider.sources(episode, slug, audioVersion)`; providers that do not
-  distinguish tracks simply ignore it. The card shows it (`Dublado · 480p`) so
-  the user can confirm what was sent
+  distinguish tracks simply ignore it. The card shows it (`Dublado (PT-BR) ·
+  480p`) so the user can confirm what was sent
 - the fallback keeps the track: `fontesDoProvider` filters candidates by
   `versions`, because in AniTube the dubbed episode is a different post and
   matching on the number alone would silently hand back the subtitled one.

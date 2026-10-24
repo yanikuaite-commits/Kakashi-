@@ -689,6 +689,57 @@ test("fonte que não distingue faixas não gera aviso falso", async () => {
   }
 });
 
+test("dublado numa fonte não-PT-BR avisa que o áudio é inglês", async () => {
+  resetAnimeSessions();
+
+  // O animegg é um site inglês: a faixa "dubbed" dele é dublagem inglesa. Quem
+  // pede "Dublado" não pode receber áudio inglês sem saber — o card dizia
+  // "Dublado" e o utilizador só descobria pelo som.
+  const respostas = {
+    "/search/?q=naruto": `
+      <div class="media searchre">
+        <a href="/series/naruto" class="mse"><div class="media-body"><div class="first"><h2>Naruto</h2></div></div></a>
+      </div>`,
+    "/series/naruto": `
+      <a href="/naruto-episode-1" class="anm_det_pop"><strong>Naruto 1</strong></a><a href="/naruto-episode-1#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-1#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>`,
+  };
+
+  globalThis.fetch = async (url) => {
+    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const replies = [];
+    const socket = { sendMessage: async () => ({ key: { id: "m" } }) };
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async (text) => replies.push(String(text)),
+      nome: "naruto",
+    });
+
+    await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: "anm:aud:dubbed",
+      sendReply: async (text) => replies.push(String(text)),
+    });
+
+    assert.ok(
+      replies.some((r) => /dublagem desta fonte é em inglês/i.test(r)),
+      "tem de avisar que a dublagem desta fonte não é português",
+    );
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
 test("anm:sea com sessão inexistente avisa que o menu expirou", async () => {
   resetAnimeSessions();
 
