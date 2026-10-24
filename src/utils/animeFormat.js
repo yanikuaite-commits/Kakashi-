@@ -317,6 +317,7 @@ const PROVIDER_LABELS = {
   kickassanime: "KickAssAnime",
   animesaturn: "AnimeSaturn",
   animesama: "AnimeSama",
+  meusanimes: "Meus Animes",
 };
 
 /**

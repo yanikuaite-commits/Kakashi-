@@ -399,12 +399,17 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
 // preferência. Cada provider é tentado até um devolver o episódio.
 //
-// A ordem predefinida é `animesonlinehd,animegg,anitube,animeheaven,anikoto`:
+// A ordem predefinida é `meusanimes,animesonlinehd,animegg,anitube,animeheaven,anikoto`:
 //
-// - `animesonlinehd` vem primeiro por ser o único com DUBLAGEM PT-BR real e o
-//   mais estável: responde a IPs de datacenter sem Cloudflare e serve 360p
-//   (~75 MB num episódio de 24 min), bem dentro do teto de 200 MB. A imagem é
-//   menor do que a dos outros, mas é o provider que o pedido comum procura;
+// - `meusanimes` vem primeiro por ser o mais completo: responde a IPs de
+//   datacenter sem qualquer desafio Cloudflare, agrupa temporadas na própria
+//   página e serve o episódio pelo player do Blogger (que o projeto já lê).
+//   Publica 360p (~89 MB num episódio de 23 min) e 720p (~285 MB) como degraus
+//   separados, pelo que o menu de qualidades deixa o utilizador escolher;
+// - `animesonlinehd` vem a seguir por ter DUBLAGEM PT-BR real e ser estável:
+//   responde a IPs de datacenter sem Cloudflare e serve 360p (~75 MB num
+//   episódio de 24 min), bem dentro do teto. A imagem é menor do que a dos
+//   outros, mas é o provider que o pedido comum procura;
 // - `animegg` vem a seguir porque é o mais rápido (HTML estático, sem browser) e
 //   entrega H.264 num MP4 direto; falha em ~1 de cada 8 episódios com
 //   `videoSources = []`, e nesse caso o fallback passa ao seguinte;
@@ -414,13 +419,13 @@ export const YTDLP_CONCURRENT_FRAGMENTS = Number(
 // - `anikoto` fica por último porque só publica 1080p (HLS), o que obriga a
 //   baixar grande e a reduzir localmente.
 //
-// `animegg`, `anitube`, `anikoto`, `animeheaven` e `animesonlinehd` são
-// extraídos diretamente pelo bot (`src/services/*.js`) e respondem a IPs de
-// datacenter. Os restantes vêm da biblioteca e servem de alternativa (AnimeUnity
-// funciona de IP residencial e de alguns datacenters).
+// `animegg`, `anitube`, `anikoto`, `animeheaven`, `animesonlinehd` e
+// `meusanimes` são extraídos diretamente pelo bot (`src/services/*.js`) e
+// respondem a IPs de datacenter. Os restantes vêm da biblioteca e servem de
+// alternativa (AnimeUnity funciona de IP residencial e de alguns datacenters).
 export const ANIME_PROVIDERS = (
   process.env.ANIME_PROVIDERS ||
-  "animesonlinehd,animegg,anitube,animeheaven,anikoto"
+  "meusanimes,animesonlinehd,animegg,anitube,animeheaven,anikoto"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())
@@ -475,16 +480,16 @@ export const ANIME_PREFER_DUBBED =
 // Providers cuja faixa "dublada" é PORTUGUÊS (PT-BR), e não inglês.
 //
 // A faixa é um booleano nos sites ("dubbed" ou não), mas o IDIOMA dessa dublagem
-// depende do site: o `animesonlinehd` e o `anitube` são sites brasileiros (a
-// dublagem é PT-BR), enquanto o `animegg` é um site inglês — o "Dubbed" dele é
-// dublagem inglesa. Sem esta distinção, pedir "Dublado" podia entregar áudio em
-// inglês com o rótulo em português.
+// depende do site: o `meusanimes`, o `animesonlinehd` e o `anitube` são sites
+// brasileiros (a dublagem é PT-BR), enquanto o `animegg` é um site inglês — o
+// "Dubbed" dele é dublagem inglesa. Sem esta distinção, pedir "Dublado" podia
+// entregar áudio em inglês com o rótulo em português.
 //
 // É esta lista que permite procurar a dublagem PT-BR PRIMEIRO: com a faixa
 // dublada pedida, estes providers passam à frente na pesquisa e no fallback.
 // Ajuste se um site mudar de idioma ou se um provider PT-BR novo for adicionado.
 export const ANIME_PT_DUB_PROVIDERS = (
-  process.env.ANIME_PT_DUB_PROVIDERS || "animesonlinehd,anitube"
+  process.env.ANIME_PT_DUB_PROVIDERS || "meusanimes,animesonlinehd,anitube"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())

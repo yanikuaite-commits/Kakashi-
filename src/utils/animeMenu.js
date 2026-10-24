@@ -377,7 +377,11 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
     // dublagem PT-BR são procurados primeiro, para o título não cair num site
     // que só dubla em inglês com o PT-BR disponível noutro.
     const anime = await searchAnime(nome, session.audioVersion || "");
-    const seasons = await getAnimeSeasons(anime.id, anime.provider);
+    const seasons = await getAnimeSeasons(
+      anime.id,
+      anime.provider,
+      session.audioVersion || "",
+    );
 
     session.anime = { ...anime };
     session.provider = anime.provider;
@@ -931,7 +935,7 @@ function animeDownloadArgs(provider, source) {
       : ARGS_BLOGGER;
   }
 
-  if (nome === "animesonlinehd") {
+  if (nome === "animesonlinehd" || nome === "meusanimes") {
     return ARGS_BLOGGER;
   }
 

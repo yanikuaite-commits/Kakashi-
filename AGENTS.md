@@ -76,6 +76,7 @@ High-value architectural notes:
 | `src/services/anime.js` | Anime search, episodes, streaming sources and the episode-level provider fallback. |
 | `src/services/animegg.js` | AnimeGG provider: search, episodes and 480p MP4 sources (no browser). |
 | `src/services/anitube.js` | AniTube provider: WordPress REST search, plus HLS and Blogger sources. |
+| `src/services/meusanimes.js` | Meus Animes provider (default): WordPress search, seasons, and Blogger sources via the player API. |
 | `src/services/bloggerVideo.js` | Blogger/Google Video reader shared by the PT-BR providers (iframe, token, itags). |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
 | `src/services/ffmpeg.js` | Media conversion and audio/video processing. |
@@ -430,17 +431,19 @@ The Baileys path encrypts chunk by chunk, so a 350 MB episode costs ~65 MB of
 RSS as a stream against ~351 MB as a buffer. The Render `starter` plan has
 512 MB, so buffering a large episode gets the process killed by OOM.
 
-### Animes (animegg + anitube + animeheaven + animesonlinehd + anikoto + providers via @consumet/extensions)
+### Animes (meusanimes + animegg + anitube + animeheaven + animesonlinehd + anikoto + providers via @consumet/extensions)
 
 `src/services/anime.js` searches a live provider, lists episodes and returns
 streaming sources; `src/services/animegg.js`, `src/services/anitube.js`,
-`src/services/anikoto.js`, `src/services/animeheaven.js` and
-`src/services/animesonlinehd.js` are the in-house
+`src/services/anikoto.js`, `src/services/animeheaven.js`,
+`src/services/animesonlinehd.js` and `src/services/meusanimes.js` are the
+in-house
 providers; `src/utils/animeMenu.js` runs the interactive flow
 (nome → temporadas → episódios → qualidade → download) and
 `src/utils/animeFormat.js` holds the pure helpers.
 
-- **`animegg`, `anitube`, `anikoto`, `animeheaven` and `animesonlinehd` are the
+- **`animegg`, `anitube`, `anikoto`, `animeheaven`, `animesonlinehd` and
+  `meusanimes` are the
   providers that work from a datacenter IP (Render).** All are scraped by the bot itself, not by the
   library, because every `@consumet/extensions` anime provider sits behind
   Cloudflare and/or is dead. The anikoto chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
@@ -486,8 +489,43 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   episode already fits the 200 MB limit, so forcing 480p would only degrade the
   image for nothing. `ANIME_MAX_HEIGHT` (480) still applies to anikoto, whose
   master.m3u8 carries a single 1080p variant
+- **`meusanimes` is the first provider** (`meusanimes.blog`). It answers from a
+  datacenter IP with **no Cloudflare challenge at all**, groups seasons on the
+  anime page and serves the episode through the same Blogger player the other
+  PT-BR providers use, so `src/services/bloggerVideo.js` is reused as-is. The
+  chain is: `/?s=<termo>` → `/a/<slug>/` (the `id='seasons'` block holds every
+  season and its episodes) → `/e/<ep-slug>/` (an iframe
+  `serv01.meusdoramas.club/#/video/<tmdb>/<season>/<episode>`) →
+  `serv01.meusdoramas.club/posts/get-video.php?episode_number=&season_number=&tmdb=`
+  → `{success, videoUrl}` with a Blogger link → the direct `googlevideo.com` URL.
+  The player is a React SPA on another domain, and the real endpoint is
+  `posts/get-video.php` — the obvious `api/video/...` paths answer 404. The
+  `get-video.php` response is identical **with and without cookies** (the site's
+  `starstruck_...` cookie is session only), so the provider keeps no state: the
+  `tmdb`/season/episode triple travels inside the episode id
+- **the dubbed track is a separate ENTRY here** (`/a/<base>-dublado/`), not a
+  second id like in `animesonlinehd`. The suffix is the site's convention but not
+  a guarantee — `naruto-shippuden` serves a dub with no suffix — so the real
+  track is confirmed on the FIRST episode's page (`span.qualidade` says
+  "Dublado" or "Legendado") before the whole list is labelled. Without that check
+  the provider could call a dubbed episode "legendado", which is the exact bug
+  the audio flow exists to fix. `candidatosDeSlug` orders the entries to try; the
+  audio step also reaches `seasons()`, because the season index is only valid
+  inside the entry it was read from
+- it publishes itag 18 (360p, ~89 MB for a 23 min episode, inside the ceiling)
+  and itag 22 (720p, ~285 MB, right at the 300 MB limit) as separate sources, so
+  the quality menu offers both and the size rule decides what can be sent.
+  **Not every episode carries both**: older episodes often publish 360p only, so
+  a one-item quality list is normal, not a failure
+- **the real end-to-end chain was verified**: episode page → `get-video.php` →
+  Blogger token → `googlevideo.com` bytes, with `206`, `video/mp4` and a valid
+  `ftyp` header, and yt-dlp downloading the file. Search relevance matches or
+  beats `animesonlinehd` on the same terms; like every romaji-indexed PT-BR site,
+  an English term can still land on a spin-off (`attack on titan` → the Junior
+  High), which is the pre-existing `melhorResultado` limitation
 - **`animesonlinehd` and `anitube` are the providers whose "dubbed" track is
-  PT-BR** (`ANIME_PT_DUB_PROVIDERS` in `src/config.js`). The track is a boolean
+  PT-BR** (`ANIME_PT_DUB_PROVIDERS` in `src/config.js`), together with
+  `meusanimes`. The track is a boolean
   on the site ("dubbed" or not), but the LANGUAGE of that dub belongs to the
   SITE: `animegg` is an English site, so its "Dubbed" is an English dub. Without
   the distinction, asking for "Dublado" could hand back English audio with a
@@ -526,7 +564,8 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
   provider (ex-Zoro) shut down for good in March 2026
 - `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list
-  (default `animesonlinehd,animegg,anitube,animeheaven,anikoto`); each provider
+  (default `meusanimes,animesonlinehd,animegg,anitube,animeheaven,anikoto`); each
+  provider
   is tried
   until one returns the episode, and the winning provider is carried in the
   session so `getAnimeInfo`/`getEpisodeSources` hit the same source. With a dub
@@ -546,7 +585,7 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   `handleAnimeReply` returns `false` for a non-owner (the message goes on to the
   normal flow) and the session keeps waiting for its owner; an expired token is
   still answered, because that one carries no session to wait for.
-- **AnimeGG (`animegg.org`) is the first fallback after `animesonlinehd`: no
+- **AnimeGG (`animegg.org`) is the first fallback after `meusanimes`: no
   browser, H.264 (`avc1`), and it fails on roughly one episode in eight — which is
   exactly why the episode-level fallback exists.** The chain is plain `fetch` + regex, no
   Playwright:

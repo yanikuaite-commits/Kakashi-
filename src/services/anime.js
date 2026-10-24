@@ -77,6 +77,7 @@ const PROVIDERS_PROPIOS = {
   animegg: () => import("./animegg.js"),
   anitube: () => import("./anitube.js"),
   animesonlinehd: () => import("./animesonlinehd.js"),
+  meusanimes: () => import("./meusanimes.js"),
 };
 
 let consumetAnime = null;
@@ -391,16 +392,19 @@ export async function getAnimeInfo(id, provider, audioVersion = "") {
  *
  * @param {string} id
  * @param {string} provider
+ * @param {string} [audioVersion] "subbed"/"dubbed" — só os providers com
+ *   entradas por faixa (meusanimes) o usam para escolher a página de onde ler as
+ *   temporadas; os restantes ignoram-no
  * @returns {Promise<Array<{slug: string, title: string}>>}
  */
-export async function getAnimeSeasons(id, provider) {
+export async function getAnimeSeasons(id, provider, audioVersion = "") {
   const { tipo, instance } = await resolveProvider(provider);
   if (tipo !== "proprio" || typeof instance.seasons !== "function") return [];
 
   const [animeId, slug] = String(id).split(":");
 
   return withTimeout(
-    instance.seasons(animeId, slug),
+    instance.seasons(animeId, slug, audioVersion),
     ANIME_API_TIMEOUT_MS,
     `${provider}.seasons`,
   ).catch((error) => {
