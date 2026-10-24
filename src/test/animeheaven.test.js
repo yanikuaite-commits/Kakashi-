@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { ANIME_PROVIDERS } from "../config.js";
 import {
   parseEpisodes,
   parseSearch,
   parseSources,
 } from "../services/animeheaven.js";
+
+// O teste de registo abaixo pede o `animeheaven` explicitamente, mas
+// `resolveProvider` só aceita providers que estejam em `ANIME_PROVIDERS` — que
+// agora só traz o `meusanimes` ativo. A lista é fixada aqui para o teste não
+// depender da predefinição de produção. Cada ficheiro de teste corre no seu
+// próprio processo, pelo que a alteração não sai daqui.
+ANIME_PROVIDERS.length = 0;
+ANIME_PROVIDERS.push("animeheaven");
 
 /**
  * Parsers do provider AnimeHeaven, testados com HTML real capturado do site.

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
-import { ANIME_EPISODE_CREDITS, DATABASE_DIR } from "../config.js";
+import { ANIME_EPISODE_CREDITS, ANIME_PROVIDERS, DATABASE_DIR } from "../config.js";
 import { accountBalance, chargeCredits, getAccount } from "../services/credits.js";
 import {
   getAnimeSession,
@@ -10,6 +10,17 @@ import {
   resetAnimeSessions,
   startAnimeFlow,
 } from "../utils/animeMenu.js";
+
+// Os testes de fluxo abaixo substituem a rede por HTML de providers concretos
+// (anikoto, animegg) para exercitar o menu. Como `ANIME_PROVIDERS` vem do
+// `config.js`, a lista é fixada aqui: sem isto o teste passaria a depender da
+// predefinição de produção e quebrava sempre que ela mudasse, mesmo sem o menu
+// mudar — foi o que aconteceu ao deixar só o `meusanimes` ativo.
+//
+// Cada ficheiro de teste corre no seu próprio processo, pelo que a alteração não
+// sai daqui.
+ANIME_PROVIDERS.length = 0;
+ANIME_PROVIDERS.push("anikoto", "animegg");
 
 /**
  * Regressão do bug: "Fui eu a mandar o menu mas o bot nega".
