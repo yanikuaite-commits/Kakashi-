@@ -36,6 +36,17 @@ if (url.includes("bot-check")) {
   process.exit(1);
 }
 
+// Download que nunca termina: o ficheiro parcial é escrito e o processo fica
+// bloqueado até o timeout do execFile o matar (SIGTERM, stderr vazio). É o
+// cenário real de um episódio grande em ligação lenta.
+if (url.includes("lento") && !args.includes("--dump-single-json")) {
+  const idx = args.indexOf("-o");
+  const alvo = (idx === -1 ? null : args[idx + 1])?.replace("%(ext)s", "mp4");
+  if (alvo) fs.writeFileSync(alvo, Buffer.alloc(1024, 97));
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);
+  process.exit(0);
+}
+
 const duration = url.includes("longo") ? 700 : 60;
 
 if (args.includes("--dump-single-json")) {
@@ -65,6 +76,9 @@ process.env.YTDLP_COOKIES_PATH = cookiesFile;
 process.env.YTDLP_PROXY = "http://proxy.exemplo:8080";
 process.env.YTDLP_IMPERSONATE = "chrome";
 process.env.FAKE_YTDLP_LOG = argsLog;
+// Teto curto para o teste de timeout correr depressa. Só o `downloadWithYtDlp`
+// o usa; `getMediaInfo` e o `--version` passam o seu próprio limite.
+process.env.YTDLP_TIMEOUT_MS = "5000";
 
 await mkdir(fakeDir, { recursive: true });
 await writeFile(fakeBinary, fakeSource);
@@ -227,6 +241,26 @@ test("bloqueio do YouTube explica cookies/proxy e não deixa arquivo para trás"
   const leftovers = (await readdir(TMP_DIR)).filter((name) => name.startsWith("ytdlp-"));
 
   assert.deepEqual(leftovers, []);
+});
+
+test("o download que passa do tempo é explicado e não deixa ficheiro para trás", async () => {
+  // Regressão: o `execFile` mata o yt-dlp com SIGTERM e deixa o stderr vazio, por
+  // isso a mensagem saía como "Command failed: yt-dlp --cookies ... <URL assinado>"
+  // — o utilizador via o comando e o URL, e nunca o motivo.
+  await assert.rejects(
+    downloadWithYtDlp("https://exemplo.test/lento", { height: 480 }),
+    (error) => {
+      assert.match(error.message, /tempo máximo/i, "explica o tempo esgotado");
+      assert.match(error.message, /YTDLP_TIMEOUT_MS/, "diz o que ajustar");
+      assert.doesNotMatch(error.message, /Command failed/, "não despeja o comando");
+      assert.doesNotMatch(error.message, /--cookies/, "não expõe os argumentos");
+      return true;
+    },
+  );
+
+  const leftovers = (await readdir(TMP_DIR)).filter((name) => name.startsWith("ytdlp-"));
+
+  assert.deepEqual(leftovers, [], "o parcial é apagado");
 });
 
 test("o downloader usa o yt-dlp e cobra o extra de mídia longa", async () => {

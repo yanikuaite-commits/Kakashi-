@@ -372,7 +372,16 @@ export const MEDIA_CREDITS_BY_SIZE = [
 // downloads continuam funcionando pela API GenDownload (fallback).
 export const YTDLP_ENABLED = process.env.YTDLP_ENABLED !== "false";
 export const YTDLP_PATH = process.env.YTDLP_PATH || "";
-export const YTDLP_TIMEOUT_MS = 5 * 60 * 1000;
+// Teto de tempo de UMA execução do yt-dlp. 15 min por omissão: um episódio de
+// 24 min em 480p (~95 MB) desce a ~7 MB/min de alguns hosts, o que não cabia
+// nos 5 min anteriores — o processo era morto a meio, sem stderr, e o
+// utilizador só via o comando (ver `friendlyError` em `src/services/ytdlp.js`).
+// Ajustável por YTDLP_TIMEOUT_MS; valor não numérico ou <= 0 cai no default.
+const ytdlpTimeoutMs = Number(process.env.YTDLP_TIMEOUT_MS);
+export const YTDLP_TIMEOUT_MS =
+  Number.isFinite(ytdlpTimeoutMs) && ytdlpTimeoutMs > 0
+    ? ytdlpTimeoutMs
+    : 15 * 60 * 1000;
 // Cookies (formato Netscape) para o YouTube aceitar a sessão em IP de datacenter.
 export const YTDLP_COOKIES_PATH = process.env.YTDLP_COOKIES_PATH || "";
 export const YTDLP_PROXY = process.env.YTDLP_PROXY || "";

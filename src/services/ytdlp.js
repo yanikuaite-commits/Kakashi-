@@ -63,6 +63,12 @@ const INSTAGRAM_HINT =
   "continuar, configure YTDLP_COOKIES_PATH com cookies de uma conta que veja o " +
   "post.";
 
+const TIMEOUT_HINT =
+  "O download demorou mais do que o tempo máximo e foi interrompido. Isso é " +
+  "típico de ligação lenta ou de um ficheiro grande — tente de novo (a rede " +
+  "varia) ou escolha uma qualidade mais baixa. O limite é ajustável por " +
+  "YTDLP_TIMEOUT_MS.";
+
 let binaryPromise;
 
 function binaryCandidates() {
@@ -270,12 +276,26 @@ function buildFileName(title, artist, extension) {
  * @returns {string}
  */
 export function friendlyError(error) {
+  // O timeout do `execFile` mata o processo com SIGTERM e deixa o stderr VAZIO;
+  // a `message` passa a ser "Command failed: <comando inteiro>". Sem este ramo o
+  // utilizador recebia o comando completo — incluindo o URL assinado do CDN — e
+  // nunca o motivo. O par `killed`+SIGTERM é inequívoco: o estouro do `maxBuffer`
+  // chega com `killed` indefinido e código ERR_CHILD_PROCESS_STDIO_MAXBUFFER,
+  // por isso não é confundido com isto.
+  if (error?.killed === true && error?.signal === "SIGTERM") {
+    return `yt-dlp: ${TIMEOUT_HINT}`;
+  }
+
+  const bruto = String(error?.stderr || "").trim();
   const detail =
-    String(error?.stderr || error?.message || "")
+    bruto
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
-      .at(-1) || "falha ao rodar o yt-dlp";
+      .at(-1) ||
+    // Sem stderr não há motivo do yt-dlp: usar a `message` crua despejaria o
+    // comando e o URL. Melhor um texto genérico.
+    "falha ao rodar o yt-dlp (sem detalhe da origem)";
   const message = detail.replace(/^ERROR:\s*/i, "");
 
   // Antes do teste de "bot": o link pode conter "bot" em algum parâmetro.

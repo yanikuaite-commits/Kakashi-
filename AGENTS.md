@@ -420,8 +420,9 @@ the GenDownload API when the binary is missing or the extraction fails.
 
 - the binary is installed by the `Dockerfile` (standalone `yt-dlp_linux`, no Python)
 - `npm run setup:ytdlp` downloads it to `bin/yt-dlp` on non-Docker hosts; Termux uses `pkg install yt-dlp`
-- configuration lives in `src/config.js` under the `YTDLP_*` constants (`ENABLED`, `PATH`, `COOKIES_PATH`, `PROXY`, `JS_RUNTIME`, `IMPERSONATE`, `EXTRACTOR_ARGS`, `CONCURRENT_FRAGMENTS`)
+- configuration lives in `src/config.js` under the `YTDLP_*` constants (`ENABLED`, `PATH`, `TIMEOUT_MS`, `COOKIES_PATH`, `PROXY`, `JS_RUNTIME`, `IMPERSONATE`, `EXTRACTOR_ARGS`, `CONCURRENT_FRAGMENTS`)
 - `YTDLP_ENABLED=false` disables it entirely; nothing breaks without the binary
+- `YTDLP_TIMEOUT_MS` caps a single yt-dlp run (default 15 min). It used to be 5 min, which killed long downloads mid-flight: a 24 min episode at 480p (~95 MB) can take ~7 min on a slow host, and the kill is silent — `execFile` sends SIGTERM, so stderr is empty and the raw `Command failed: <full command>` (signed CDN URL included) was what reached the user. `friendlyError` now recognises `killed`+`SIGTERM` and reports the timeout, and falls back to a generic text instead of echoing the command when stderr is empty
 - `YTDLP_CONCURRENT_FRAGMENTS` sets the yt-dlp `-N` (default 4). CDNs that rate-limit parallel requests (the anime CDN answers 429) need `1`, otherwise yt-dlp drops fragments and fails with `No such file ...-FragN`; the anime flow forces `1` for `anikoto`
 - YouTube blocks datacenter IPs (Render included) with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
 
