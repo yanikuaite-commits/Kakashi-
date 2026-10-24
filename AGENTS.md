@@ -75,7 +75,8 @@ High-value architectural notes:
 | `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
 | `src/services/anime.js` | Anime search, episodes, streaming sources and the episode-level provider fallback. |
 | `src/services/animegg.js` | AnimeGG provider: search, episodes and 480p MP4 sources (no browser). |
-| `src/services/anitube.js` | AniTube provider: WordPress REST search and HLS sources. |
+| `src/services/anitube.js` | AniTube provider: WordPress REST search, plus HLS and Blogger sources. |
+| `src/services/bloggerVideo.js` | Blogger/Google Video reader shared by the PT-BR providers (iframe, token, itags). |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
 | `src/services/ffmpeg.js` | Media conversion and audio/video processing. |
 
@@ -584,14 +585,35 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
     slug must come from `/search/?q=` and never be guessed from the title.
 - **AniTube (`anitube.zip`) is a WordPress site, so search uses the native REST
   API** (`/wp-json/wp/v2/posts?search=`) instead of HTML scraping. It serves
-  H.264 (`avc1`) HLS, and the episode page carries the m3u8 inside the player
-  iframe: `videohls.php?d=<m3u8>` — the `d` parameter is the URL to download, and
-  `parseVideo` reads it BEFORE any bare `.m3u8` match, because the player URL also
-  contains `.m3u8` and downloading the player returns HTML.
-  - **each episode is its own post and there is only one tier, at 720p (~257 MB
-    for a 24 min episode, over the 200 MB ceiling).** Series are reconstructed by
-    the title minus the episode suffix, and "dublado"/"legendado" is kept in the
-    key because they are separate posts of the same anime.
+  H.264 (`avc1`), which WhatsApp plays.
+  - **the site serves the episode in TWO formats and both must be read**, since
+    old and new posts differ. `sources()` tries the old HLS first (it is already
+    in the page HTML and needs no extra request) and falls back to the Blogger
+    chain:
+    - **old HLS**: the player iframe is `api.anivideo.net/videohls.php?d=<m3u8>`
+      — the `d` parameter is the URL to download, and `parseVideoHls` reads it
+      BEFORE any bare `.m3u8` match, because the player URL also contains
+      `.m3u8` and downloading the player returns HTML.
+    - **Blogger (new)**: the iframe is `api.anivideo.net/file/<token>`, whose
+      HTML carries a `blogger.com/video.g?token=` token; that page publishes the
+      Google Video `videoplayback` (itag 18 = 360p, itag 22 = 720p). **This is
+      the format of every recent episode.** The reader lives in
+      `src/services/bloggerVideo.js`, shared with `animesonlinehd`, which uses
+      the same player.
+    - **before the Blogger path existed, every recent episode failed with
+      "Nenhum link de streaming encontrado"** — the site stopped publishing any
+      m3u8 and the old reader looked only for that.
+  - **size differs per format**: on Blogger a 24 min episode is ~64 MB at 360p
+    and ~162 MB at 720p, both inside the ceiling, so both tiers are offered. On
+    the old HLS there is only one tier at 720p (~257 MB), so that path still
+    measures the playlist before downloading and lets the fallback move on.
+  - **the download headers depend on the format**: the old HLS needs the
+    AniTube `Referer`, while the Blogger MP4 needs the Blogger `Referer` and a
+    browser `User-Agent` (without the UA the Google Video CDN answers 403). That
+    is why `animeDownloadArgs` receives the chosen source.
+  - Series are reconstructed by the title minus the episode suffix, and
+    "dublado"/"legendado" is kept in the key because they are separate posts of
+    the same anime.
   - the audio track comes from the title (`versaoDoTitulo`) and is carried on the
     episode, so the menu can offer the choice here too. Naruto Shippuden is the
     real case: `naruto-shippuden-dublado` (500 dubbed episodes) and

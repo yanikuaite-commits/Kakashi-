@@ -89,6 +89,19 @@ export const ANIME_TTL_MS = INTERACTIVE_MENU_TTL_MS;
 const CHANNEL_URL = "https://www.youtube.com/@devgui_?sub_confirmation=1";
 const CANCEL_TOKEN = "anm:cancel";
 
+/**
+ * Cabeçalhos que o CDN do Google Video (Blogger) exige: o `Referer` do Blogger e
+ * um User-Agent de browser. Sem o User-Agent responde 403 mesmo com o Referer
+ * certo. Partilhado pelo animesonlinehd e pelo anitube no formato novo.
+ */
+const ARGS_BLOGGER = [
+  "--referer",
+  "https://www.blogger.com/",
+  "--user-agent",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+];
+
 /** Sessões por `${chatId}:${ownerId}`. */
 const sessoesAnime = new Map();
 
@@ -883,10 +896,16 @@ async function sendQualityList({ socket, session, episodeIndex }) {
  * impersonation, mas o mirror confere o `Referer` do `gate.php`. O AnimeGG serve
  * o MP4 direto do CDN `vidcache.net`, que só exige o `Referer` do site.
  *
+ * O anitube serve o episódio em dois formatos, e o cabeçalho depende disso: o
+ * m3u8 antigo vem do CDN do site e exige o `Referer` do anitube, enquanto o
+ * formato novo é um MP4 do Blogger que exige o `Referer` do Blogger e um
+ * User-Agent de browser. Por isso a fonte é consultada.
+ *
  * @param {string} provider
+ * @param {{isM3U8?: boolean}} [source] fonte escolhida no menu
  * @returns {string[]}
  */
-function animeDownloadArgs(provider) {
+function animeDownloadArgs(provider, source) {
   const nome = String(provider || "").toLowerCase();
 
   if (nome === "anikoto") {
@@ -907,19 +926,13 @@ function animeDownloadArgs(provider) {
   }
 
   if (nome === "anitube") {
-    return ["--referer", "https://www.anitube.zip/"];
+    return source?.isM3U8
+      ? ["--referer", "https://www.anitube.zip/"]
+      : ARGS_BLOGGER;
   }
 
   if (nome === "animesonlinehd") {
-    // O CDN do Google Video (Blogger) exige o Referer do Blogger e um
-    // User-Agent de browser: com o UA predefinido do yt-dlp responde 403.
-    return [
-      "--referer",
-      "https://www.blogger.com/",
-      "--user-agent",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    ];
+    return ARGS_BLOGGER;
   }
 
   return [];
@@ -1032,7 +1045,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
             // não teria efeito e podia descartar o formato único disponível.
             height: source.isM3U8 ? alturaMaxima : "best",
             maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
-            extraArgs: animeDownloadArgs(session.provider),
+            extraArgs: animeDownloadArgs(session.provider, source),
             concurrentFragments: animeConcurrentFragments(session.provider),
           }),
         { priority: session.ownerId === OWNER_LID },
