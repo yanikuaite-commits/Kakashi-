@@ -526,11 +526,12 @@ async function sendSimpleText({ session, texto, mentions }) {
 
 async function sendInvalidInput({ session, categoria, funcao, motivo }) {
   const alvo =
-    motivo === "midia"
+    funcao.entrada ||
+    (motivo === "midia"
       ? "uma mídia"
       : motivo === "texto"
         ? "um texto válido"
-        : "um link";
+        : "um link");
 
   // O estado continua pendente para o utilizador tentar outra vez.
   infoLog(
@@ -571,7 +572,9 @@ async function sendResultText({ session, categoria, funcao }) {
   return sendSimpleText({
     session,
     texto: continua
-      ? "✅ Pronto! Envie outro link ou use .menu para voltar."
+      ? funcao.aceita === "link"
+        ? "✅ Pronto! Envie outro link ou use .menu para voltar."
+        : "✅ Pronto! Envie outra entrada ou use .menu para voltar."
       : "✅ Pronto! Usa .menu quando quiseres.",
   });
 }

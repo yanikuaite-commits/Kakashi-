@@ -13,6 +13,9 @@
  *   nenhuma lógica de download/IA é duplicada).
  * - `validador`: opcional, recebe o texto e devolve boolean.
  * - `args`: opcional, argumentos fixos (ex.: `conta custos`).
+ * - `entrada`: opcional, como a mensagem de erro nomeia o que se espera (ex.:
+ *   `um LID`). Sem isto, uma função validada por `validador` mas de tipo
+ *   `texto` diria "um texto válido" mesmo quando recusou por não ser um LID.
  * - `opcoes`: opcional, `{ tipo: "video" }` ou `{ tipo: "audio" }`. Funções com
  *   este campo NÃO executam direto: guardam o link na sessão e enviam a lista
  *   de qualidade/formato (videoFormatMenu / audioFormatMenu); o download só
@@ -80,6 +83,24 @@ function entry(categoria, id, comando, data) {
 }
 
 const ehLinkDo = (padrao) => (valor) => padrao.test(String(valor || ""));
+
+/**
+ * Valida um LID/telefone enviado pelo dono.
+ *
+ * Aceita as formas que o WhatsApp publica para a mesma pessoa — o LID do
+ * `.meu-lid` (`275381038891241@lid`), o mesmo com sufixo de aparelho
+ * (`275381038891241:12@lid`), o número puro ou o número com `+` e espaços. O
+ * critério é a contagem de dígitos, não a forma: rejeitar uma variante que o
+ * comando normalizaria faria o menu recusar um LID válido.
+ */
+const ehLid = (valor) => {
+  const digitos = String(valor || "")
+    .split("@")[0]
+    .split(":")[0]
+    .replace(/\D/g, "");
+
+  return digitos.length >= 8 && digitos.length <= 20;
+};
 
 /**
  * Funções guiadas. A ordem aqui é a ordem apresentada nas listas.
@@ -490,11 +511,6 @@ export const FUNCTIONS = [
     ["unblock-command", "Desbloquear comando", "Envie o nome do comando a desbloquear."],
     ["set-prefix", "Mudar prefixo", "Envie o novo símbolo de prefixo."],
     ["recarregar", "Adicionar créditos", "Envie: créditos @usuario."],
-    [
-      "private-whitelist",
-      "Whitelist privada",
-      "Envie: add|remove|list [jid].",
-    ],
   ].map(([comando, titulo, guia]) =>
     entry("dono", comando, comando, {
       titulo,
@@ -505,6 +521,19 @@ export const FUNCTIONS = [
       exemplo: "",
     }),
   ),
+  entry("dono", "private-whitelist", "private-whitelist", {
+    titulo: "Whitelist privada",
+    icone: "👑",
+    descricao: "Autoriza alguém a usar o bot no privado.",
+    // Só pede o LID: a ação "add" vai fixa, para o dono não ter de escrever
+    // `add`. O fluxo guiado despacha `.private-whitelist add <lid>`.
+    guia: "Envie o LID da pessoa (ex: 275381038891241@lid).",
+    aceita: "texto",
+    args: "add",
+    validador: ehLid,
+    entrada: "um LID",
+    exemplo: "275381038891241@lid",
+  }),
 ];
 
 /** Permissões normalizadas. */

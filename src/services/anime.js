@@ -24,6 +24,7 @@ import {
   ANIME_PREFER_DUBBED,
   ANIME_PROVIDERS,
   ANIME_PROXY_URL,
+  ANIME_PT_DUB_PROVIDERS,
   ANIME_USER_AGENT,
 } from "../config.js";
 import { errorLog, infoLog } from "../utils/logger.js";
@@ -31,6 +32,7 @@ import {
   escolherEpisodio,
   melhorResultado,
   normalizeSources,
+  ordenarProvidersParaFaixa,
   tituloDeBusca,
 } from "../utils/animeFormat.js";
 
@@ -213,17 +215,33 @@ function withTimeout(promise, ms, label) {
  * para nunca perder um título que o site só indexe com o sufixo.
  *
  * @param {string} nome
+ * @param {string} [audioVersion] faixa pedida; "dubbed" faz os providers de
+ *   dublagem PT-BR serem procurados PRIMEIRO (ver `ANIME_PT_DUB_PROVIDERS`)
  * @returns {Promise<{id: string, provider: string, title: string, image: string|null, releaseDate: string|null}>}
  */
-export async function searchAnime(nome) {
+export async function searchAnime(nome, audioVersion = "") {
   const original = String(nome || "").trim();
   if (!original) throw new AnimeApiError("Envie o nome do anime.");
 
   const normalizado = tituloDeBusca(original);
   const termos = [...new Set([normalizado, original].filter(Boolean))];
 
-  const providers = await activeProviders();
+  const providers = ordenarProvidersParaFaixa(
+    await activeProviders(),
+    audioVersion,
+    ANIME_PT_DUB_PROVIDERS,
+  );
   const falhas = [];
+
+  const faixa = String(audioVersion || "").trim().toLowerCase();
+
+  if (faixa === "dubbed" && providers.length) {
+    infoLog(
+      `[anime] faixa dublada: providers PT-BR primeiro (${providers
+        .map((p) => p.nome)
+        .join(" → ")})`,
+    );
+  }
 
   for (const termo of termos) {
     if (termo !== original) {
@@ -656,7 +674,9 @@ async function fontesDoProvider(entrada, titulo, numero, audioVersion = "") {
  * O AnimeGG falha ~1 em cada 8 episódios (`videoSources = []`) e essa falha é
  * persistente — repetir não resolve. Como o id do episódio só existe dentro do
  * provider que o listou, o fallback reencontra o mesmo episódio nos providers
- * seguintes pela pesquisa do título + número, na ordem de `ANIME_PROVIDERS`.
+ * seguintes pela pesquisa do título + número, na ordem de `ANIME_PROVIDERS` —
+ * com a dublagem pedida, os providers PT-BR vêm primeiro (ver
+ * `ordenarProvidersParaFaixa`).
  *
  * Devolve também o provider que venceu e o novo id, para o menu atualizar a
  * sessão: os argumentos do yt-dlp e a resolução máxima dependem do provider.
@@ -683,7 +703,11 @@ export async function getEpisodeSourcesWithFallback(episodeId, provider, context
   if (!titulo || !numero) throw erroOriginal;
 
   const entradaAtual = await resolveProvider(provider);
-  const providers = await activeProviders();
+  const providers = ordenarProvidersParaFaixa(
+    await activeProviders(),
+    audioVersion,
+    ANIME_PT_DUB_PROVIDERS,
+  );
   const restantes = providers.filter((p) => p.nome !== entradaAtual.nome);
 
   for (const entrada of restantes) {

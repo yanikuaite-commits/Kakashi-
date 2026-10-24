@@ -55,6 +55,95 @@ test("provider inexistente dá erro claro em vez de rebentar", async () => {
   );
 });
 
+/**
+ * A dublagem PT-BR tem de ser procurada PRIMEIRO.
+ *
+ * A ordem configurada põe os sites não-PT-BR à frente, por isso a prova tem de
+ * ser feita com essa ordem INVERTIDA — senão o teste passaria por acaso. Corre
+ * num processo filho porque `ANIME_PROVIDERS` é lido no import do `config.js`;
+ * a rede é substituída, pelo que nenhum site é tocado.
+ */
+test("com dublado pedido, o provider PT-BR é procurado antes do resto", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+
+  const script = `
+import assert from "node:assert/strict";
+
+const pedidos = [];
+
+globalThis.fetch = async (url) => {
+  const alvo = String(url);
+  pedidos.push(alvo);
+
+  if (alvo.includes("animesonlinehd.vip/api/search")) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        results: [{ slug: "naruto-dub", title: "Naruto", audios: ["dub"] }],
+      }),
+      text: async () => "",
+    };
+  }
+
+  if (alvo.includes("anikoto.cz/filter")) {
+    return {
+      ok: true,
+      status: 200,
+      text: async () => \`
+        <div id="list-items" class="ani items">
+          <div class="item "><div class="inner">
+            <div class="ani poster tip" data-tip="958">
+              <a href="https://anikoto.cz/watch/naruto-eybxz/ep-1">
+                <img src="https://cdn.anipixcdn.co/thumbnail/71a3.jpg" alt="Naruto" />
+              </a>
+            </div>
+          </div></div>
+        </div>\`,
+    };
+  }
+
+  throw new Error("pedido inesperado: " + alvo);
+};
+
+const { searchAnime } = await import("./services/anime.js");
+
+const dublado = await searchAnime("naruto", "dubbed");
+assert.equal(
+  dublado.provider,
+  "animesonlinehd",
+  "o site de dublagem PT-BR tem de ganhar, mesmo estando depois na configuração",
+);
+assert.ok(
+  !pedidos.some((alvo) => alvo.includes("anikoto.cz")),
+  "o site não-PT-BR nem devia ter sido consultado",
+);
+
+pedidos.length = 0;
+const neutro = await searchAnime("naruto");
+assert.equal(
+  neutro.provider,
+  "anikoto",
+  "sem faixa pedida, a ordem configurada é respeitada",
+);
+assert.ok(pedidos.some((alvo) => alvo.includes("anikoto.cz")));
+`;
+
+  await promisify(execFile)(
+    process.execPath,
+    ["--input-type=module", "-e", script],
+    {
+      cwd: new URL("..", import.meta.url).pathname,
+      env: {
+        ...process.env,
+        ANIME_PROVIDERS: "anikoto,animesonlinehd",
+        ANIME_PT_DUB_PROVIDERS: "animesonlinehd",
+      },
+    },
+  );
+});
+
 test("os providers recebem User-Agent de browser", async () => {
   // Regressão do erro "nenhuma fonte respondeu" no Render: a biblioteca não
   // define User-Agent, o axios envia "axios/1.x" e o Cloudflare bloqueia isso

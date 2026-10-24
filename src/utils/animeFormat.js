@@ -122,6 +122,65 @@ export function escolherEpisodio(candidatos = [], audioVersion = "", preferirDub
 }
 
 /**
+ * true se a faixa "dublada" deste provider é em PORTUGUÊS.
+ *
+ * A faixa é um booleano no site ("dubbed" ou não), mas o IDIOMA dessa dublagem
+ * é uma propriedade do SITE, não da faixa: o animesonlinehd e o anitube são
+ * brasileiros (dublagem PT-BR), o animegg é inglês (dublagem inglesa). Sem esta
+ * distinção, "Dublado" podia entregar áudio inglês com rótulo português.
+ *
+ * @param {string} provider
+ * @param {string[]} [listaPt] providers PT-BR (vem de `ANIME_PT_DUB_PROVIDERS`)
+ * @returns {boolean}
+ */
+export function isPortugueseDubProvider(provider, listaPt = []) {
+  const nome = String(provider || "").trim().toLowerCase();
+  if (!nome) return false;
+  return listaPt.map((p) => String(p).trim().toLowerCase()).includes(nome);
+}
+
+/**
+ * Reordena os providers para procurar a dublagem PT-BR PRIMEIRO.
+ *
+ * Só reordena quando a faixa pedida é a dublada: é o único caso em que o idioma
+ * da dublagem importa. Os providers PT-BR mantêm a ordem relativa entre si
+ * (a preferência configurada em `ANIME_PROVIDERS` é preservada) e os restantes
+ * passam para trás, como rede de segurança — um título que só exista num site
+ * inglês continua a ser alcançável.
+ *
+ * Sem faixa pedida devolve a lista intacta: a ordem configurada já tem o
+ * provider PT-BR à frente, e reordenar por uma faixa que não foi pedida seria
+ * impor uma escolha que o utilizador não fez.
+ *
+ * Puro (sem rede) para poder ser testado.
+ *
+ * @param {Array<{nome: string}>} providers
+ * @param {string} [audioVersion] faixa pedida ("dubbed" reordena)
+ * @param {string[]} [listaPt]
+ * @returns {Array<{nome: string}>} nova lista (a original não é alterada)
+ */
+export function ordenarProvidersParaFaixa(
+  providers = [],
+  audioVersion = "",
+  listaPt = [],
+) {
+  const lista = Array.isArray(providers) ? providers : [];
+  const faixa = String(audioVersion || "").trim().toLowerCase();
+
+  if (faixa !== AUDIO_DUBBED) return [...lista];
+
+  const pt = [];
+  const resto = [];
+
+  for (const provider of lista) {
+    if (isPortugueseDubProvider(provider?.nome, listaPt)) pt.push(provider);
+    else resto.push(provider);
+  }
+
+  return [...pt, ...resto];
+}
+
+/**
  * Nome próprio de uma faixa, para o card ("subbed" → "Legendado").
  *
  * O AnimeGG e o AniTube publicam as duas faixas em inglês; o utilizador do bot
@@ -136,6 +195,53 @@ export function audioVersionLabel(versao) {
   if (valor === AUDIO_SUBBED) return "Legendado";
   if (valor === AUDIO_DUBBED) return "Dublado";
   return valor;
+}
+
+/**
+ * Rótulo da faixa para o card, com o IDIOMA quando é dublagem confirmada PT-BR.
+ *
+ * A faixa dublada existe em vários sites, mas o idioma dessa dublagem é do
+ * SITE: o animesonlinehd e o anitube dublam em português, o animegg em inglês.
+ * Marcar "Dublado (PT-BR)" só quando é mesmo português evita prometer o idioma
+ * errado; nos restantes fica "Dublado", sem afirmar um idioma que não se sabe.
+ *
+ * @param {string} versao
+ * @param {string} provider
+ * @param {string[]} [listaPt]
+ * @returns {string}
+ */
+export function audioTrackLabel(versao, provider, listaPt = []) {
+  const rotulo = audioVersionLabel(versao);
+  if (rotulo !== "Dublado") return rotulo;
+  return isPortugueseDubProvider(provider, listaPt) ? "Dublado (PT-BR)" : rotulo;
+}
+
+/**
+ * Aviso de IDIOMA quando a faixa dublada servida não é PT-BR.
+ *
+ * A faixa ("dubbed") é um booleano no site, mas o idioma dessa dublagem é uma
+ * propriedade do SITE: o animesonlinehd e o anitube dublam em português, o
+ * animegg em inglês. Sem este aviso, quem pede "Dublado" pode receber áudio
+ * inglês com o card a dizer "Dublado" — o utilizador só o descobre pelo som.
+ *
+ * Devolve "" sempre que não há nada a dizer: faixa legendada, ou provider que
+ * dubla em PT-BR. Só fala quando há uma diferença real a comunicar.
+ *
+ * Puro (sem rede) para poder ser testado.
+ *
+ * @param {string} faixa
+ * @param {string} provider
+ * @param {string[]} [listaPt]
+ * @returns {string} "" quando não há aviso
+ */
+export function avisoIdiomaDublagem(faixa, provider, listaPt = []) {
+  if (String(faixa || "").trim().toLowerCase() !== AUDIO_DUBBED) return "";
+  if (isPortugueseDubProvider(provider, listaPt)) return "";
+
+  return (
+    "\n⚠️ A dublagem desta fonte é em inglês. Vou tentar as fontes de " +
+    "dublagem PT-BR primeiro; se não tiverem, o áudio fica em inglês."
+  );
 }
 
 /**
@@ -174,6 +280,12 @@ export function availableAudioVersions(episodes = []) {
 /**
  * Monta as linhas da escolha de faixa.
  *
+ * A linha do dublado promete "PT-BR sempre que existir", não "português": a
+ * escolha acontece ANTES de a fonte ser conhecida e nem todo o site que publica
+ * dublado o faz em português (o animegg dubla em inglês). A procura tenta os
+ * sites PT-BR primeiro, mas afirmar o idioma aqui seria prometer o que a fonte
+ * ainda não confirmou — o card final é que diz o idioma real.
+ *
  * @param {string[]} versions
  * @returns {Array<{id: string, title: string, description: string}>}
  */
@@ -185,7 +297,7 @@ export function buildAudioRows(versions = []) {
     title: audioVersionLabel(versao),
     description:
       versao === AUDIO_DUBBED
-        ? "Áudio em português"
+        ? "Áudio PT-BR sempre que existir"
         : "Áudio original com legendas",
   }));
 }

@@ -130,7 +130,7 @@ export const MENU_CATEGORIES = [
       ["delete-backup", "apaga o backup do GitHub"], ["get-group-id"],
       ["recarregar <créditos> @usuario", "adicionar créditos após pagamento"],
       ["block-command <nome>"], ["unblock-command <nome>"], ["blocked-commands"],
-      ["private-whitelist <add|remove|list>"],
+      ["private-whitelist add <lid>", "autorizar no privado"],
       ["set-menu-image", "responda a uma imagem"],
       ["set-prefix <símbolo>"], ["set-spider-api-token <token>"],
       ["on"], ["off"], ["exec <código>"],

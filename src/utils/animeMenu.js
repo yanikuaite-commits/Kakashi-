@@ -4,17 +4,18 @@
  * Passos:
  *   1. o utilizador escolhe "Animes" no menu (ou usa `.anime <nome>`) → o bot
  *      pede o nome e guarda o estado `aguardando_nome`;
- *   2. com o nome, pesquisa no provider. Se o título tiver temporadas
- *      agrupadas, lista-as (`rowId` `anm:sea:<índice>`); senão salta direto
- *      para os episódios — muitas temporadas no site são, na verdade, animes
- *      separados, por isso a escolha evita misturar episódios de temporadas
- *      diferentes;
+ *   2. com o nome, o bot pergunta a faixa ANTES de pesquisar
+ *      (`rowId` `anm:aud:<faixa>`). A pergunta vem primeiro porque um título só
+ *      legendado nunca satisfaz um pedido de dublado: descobri-lo no fim obrigava
+ *      a repetir o pedido. Escolhida a faixa, a pesquisa arranca já com ela. Se
+ *      o título tiver temporadas agrupadas, lista-as (`rowId` `anm:sea:<índice>`);
+ *      senão salta direto para os episódios — muitas temporadas no site são, na
+ *      verdade, animes separados, por isso a escolha evita misturar episódios de
+ *      temporadas diferentes. Quando a fonte não tem a faixa pedida, o bot avisa
+ *      e cai para a que existe, em vez de servir o áudio errado em silêncio;
  *   3. escolhida a temporada, lista 10 episódios (`rowId` `anm:ep:<índice>`),
  *      com um botão `anm:pg:<página>` no fundo para os restantes — a lista
- *      fica curta e todos os episódios continuam alcançáveis. Antes da lista,
- *      quando o provider publica as duas faixas em TODOS os episódios, pergunta
- *      a faixa (`rowId` `anm:aud:<faixa>`): a escolha é feita uma vez, para a
- *      lista, e não episódio a episódio;
+ *      fica curta e todos os episódios continuam alcançáveis;
  *   4. ao escolher o episódio, busca as `sources` (na faixa escolhida) e lista
  *      as qualidades (rowId `anm:src:<índice>`);
  *   5. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
@@ -36,7 +37,7 @@
  * @author Dev Gui
  */
 import fs from "node:fs";
-import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, OWNER_LID } from "../config.js";
+import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, ANIME_PT_DUB_PROVIDERS, OWNER_LID } from "../config.js";
 import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnime } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withDownloadSlot } from "../services/downloadQueue.js";
@@ -51,10 +52,12 @@ import { mediaUploadFromFile } from "./mediaSend.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
   ANIME_TOKEN_PREFIXES,
+  AUDIO_VERSIONS,
   EPISODES_PER_PAGE,
   animeProviderLabel,
   animeSessionKey,
   animeTokenIndex,
+  audioTrackLabel,
   audioVersionLabel,
   buildAudioRows,
   buildEpisodeRows,
@@ -64,6 +67,7 @@ import {
   availableAudioVersions,
   episodePageCount,
   identitiesOverlap,
+  avisoIdiomaDublagem,
   jidIdentities,
 } from "./animeFormat.js";
 import {
@@ -210,6 +214,7 @@ function ensureSession({
       sources: [],
       audioVersions: [],
       audioVersion: "",
+      pendingName: "",
       cleanupTimer: null,
     };
     sessoesAnime.set(key, session);
@@ -310,7 +315,8 @@ export async function startAnimeFlow({
   });
 
   if (nome) {
-    return searchAndSendEpisodes({ socket, session, nome });
+    session.pendingName = nome;
+    return askAudioBeforeSearch({ socket, session });
   }
 
   session.stage = "aguardando_nome";
@@ -323,6 +329,7 @@ export async function startAnimeFlow({
   session.sources = [];
   session.audioVersions = [];
   session.audioVersion = "";
+  session.pendingName = "";
 
   infoLog(`[anime] a pedir o nome do anime para "${chatId}" (owner ${ownerId})`);
 
@@ -342,14 +349,21 @@ export async function startAnimeFlow({
   });
 }
 
-/* ═══════════ PASSO 2 · LISTAR AS TEMPORADAS (se existirem) ═══════════ */
+/* ═══════════ PASSO 2 · PERGUNTAR A FAIXA E PESQUISAR ═══════════ */
 
 async function searchAndSendEpisodes({ socket, session, nome }) {
   session.stage = "buscando";
+  // O nome já foi consumido: a partir daqui a pergunta da faixa está fora do
+  // ecrã, pelo que uma nova escolha de faixa recarrega a lista em vez de
+  // repetir a pesquisa.
+  session.pendingName = "";
   touch(session);
 
   try {
-    const anime = await searchAnime(nome);
+    // A faixa escolhida vai já para a pesquisa: com "dublado", os providers de
+    // dublagem PT-BR são procurados primeiro, para o título não cair num site
+    // que só dubla em inglês com o PT-BR disponível noutro.
+    const anime = await searchAnime(nome, session.audioVersion || "");
     const seasons = await getAnimeSeasons(anime.id, anime.provider);
 
     session.anime = { ...anime };
@@ -361,7 +375,9 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
     session.episode = null;
     session.sources = [];
     session.audioVersions = [];
-    session.audioVersion = "";
+
+    // `session.audioVersion` NÃO é limpa aqui: a faixa escolhida antes da
+    // pesquisa é a que seleciona os ids dos episódios e tem de sobreviver.
 
     // Só há passo de temporada quando a fonte agrupa 2+ títulos: um grupo de
     // um é o próprio anime e a escolha seria ruído.
@@ -420,18 +436,31 @@ async function loadEpisodesAndSend({ socket, session, id }) {
   touch(session);
 
   try {
-    const info = await getAnimeInfo(id, session.provider);
+    const carregar = async (faixa) => {
+      const info = await getAnimeInfo(id, session.provider, faixa);
+      if (info.title) session.anime = { ...session.anime, title: info.title };
+      return info.episodes;
+    };
 
-    session.anime = { ...session.anime, title: info.title || session.anime?.title || "Anime" };
-    session.episodes = info.episodes;
+    const { lista, faixaAviso } = await carregarEpisodiosComFaixa({
+      session,
+      carregar,
+      contexto: `id ${id}`,
+    });
+
+    session.episodes = lista;
     session.episode = null;
     session.sources = [];
     session.seasonTitle = "";
     session.seasonSlug = "";
 
     infoLog(
-      `[anime] "${session.anime.title}" (id ${id}) com ${info.episodes.length} episódios`,
+      `[anime] "${session.anime?.title}" (id ${id}) com ${lista.length} episódios`,
     );
+
+    if (faixaAviso) {
+      await session.sendReply(faixaAviso).catch(() => {});
+    }
 
     return routeAfterEpisodes({ socket, session });
   } catch (error) {
@@ -440,6 +469,78 @@ async function loadEpisodesAndSend({ socket, session, id }) {
     await session.sendReply(`❌ ${error.message}`).catch(() => {});
     return false;
   }
+}
+
+/**
+ * Carrega os episódios na faixa pedida, com queda para a outra quando não há.
+ *
+ * O utilizador escolhe a faixa ANTES de a fonte ser conhecida, por isso pode
+ * pedir dublado num título que só existe legendado. Servir a outra faixa em
+ * silêncio é o defeito que este fluxo existe para corrigir. Aqui a escolha é
+ * explícita: cai para a faixa que existe e DIZ que caiu, para o utilizador saber
+ * o que vai receber.
+ *
+ * A verificação é feita sobre as FAIXAS PUBLICADAS na lista devolvida, e não
+ * sobre o sucesso da chamada: há providers que ignoram a faixa pedida e
+ * devolvem sempre a lista inteira (o animegg), pelo que "veio lista" não prova
+ * que a faixa pedida existe. Sem esta verificação, pedir dublado num título só
+ * legendado devolvia o legendado em silêncio — exatamente o defeito a corrigir.
+ *
+ * Três desfechos, por ordem:
+ *
+ * 1. a fonte serve a faixa pedida → nada a dizer;
+ * 2. a fonte publica faixas mas não a pedida → avisa e fixa a que existe;
+ * 3. a fonte não publica faixa nenhuma (`[]`, como o anikoto) → fica em
+ *    silêncio: não há nada para comparar, e um aviso com rótulo vazio seria
+ *    pior do que não dizer nada. A escolha segue para o provider, que a ignora.
+ *
+ * À parte da faixa, a DUBLAGEM tem uma questão de idioma que a faixa não
+ * resolve: "dubbed" é um booleano no site, mas o idioma depende do SITE (o
+ * animesonlinehd e o anitube dublam em PT-BR, o animegg em inglês). Quando a
+ * faixa servida é a dublada e a fonte não é PT-BR, o aviso diz que o áudio é
+ * inglês — para o utilizador não receber português na etiqueta e inglês no som.
+ *
+ * @returns {Promise<{lista: Array<object>, faixaAviso: string}>}
+ */
+async function carregarEpisodiosComFaixa({ session, carregar, contexto }) {
+  const pedida = session.audioVersion || "";
+
+  if (!pedida) return { lista: await carregar(""), faixaAviso: "" };
+
+  let lista = null;
+  try {
+    lista = await carregar(pedida);
+
+    // A fonte serviu mesmo a faixa pedida (ou não distingue faixas): feito.
+    const versoes = availableAudioVersions(lista);
+    if (!versoes.length || versoes.includes(pedida)) {
+      return {
+        lista,
+        faixaAviso: avisoIdiomaDublagem(pedida, session.provider, ANIME_PT_DUB_PROVIDERS),
+      };
+    }
+  } catch (error) {
+    errorLog(`[anime] faixa "${pedida}" indisponível (${contexto}): ${error.message}`);
+  }
+
+  // A faixa pedida não existe: mostra a que existe e diz qual é.
+  const alternativaLista = await carregar("");
+  const versoes = availableAudioVersions(alternativaLista);
+
+  if (!versoes.length || versoes.includes(pedida)) {
+    return { lista: alternativaLista, faixaAviso: "" };
+  }
+
+  const alternativa = versoes[0];
+  session.audioVersion = alternativa;
+
+  return {
+    lista: alternativaLista,
+    faixaAviso:
+      `⚠️ Esta fonte não tem ${audioVersionLabel(pedida).toLowerCase()} deste ` +
+      `título. Vou mostrar ${audioVersionLabel(alternativa).toLowerCase()}.` +
+      avisoIdiomaDublagem(alternativa, session.provider, ANIME_PT_DUB_PROVIDERS),
+  };
 }
 
 /**
@@ -456,40 +557,51 @@ async function routeAfterEpisodes({ socket, session }) {
   const versoes = availableAudioVersions(session.episodes);
 
   session.audioVersions = versoes;
-  session.audioVersion = versoes.length === 1 ? versoes[0] : "";
-  session.episode = null;
-  session.sources = [];
 
-  if (versoes.length > 1) {
-    return sendAudioList({ socket, session });
+  // A faixa é escolhida ANTES da pesquisa, por isso não se pergunta aqui outra
+  // vez: sobrepor-se-ia à escolha do utilizador. Só se fixa sozinha quando não
+  // houve escolha (caminho antigo ou recarga) — e uma só faixa publicada é a
+  // única resposta possível.
+  if (!session.audioVersion) {
+    session.audioVersion = versoes.length === 1 ? versoes[0] : "";
   }
 
+  session.episode = null;
+  session.sources = [];
   session.stage = "episodios";
+
   return sendEpisodePage({ socket, session, page: 0 });
 }
 
 /**
- * Envia a escolha da faixa de áudio (Legendado / Dublado).
+ * Pergunta a faixa (Legendado / Dublado) ANTES de pesquisar.
+ *
+ * A pergunta vem primeiro porque é isso que o utilizador pediu e porque é a
+ * única ordem honesta: só depois de saber a faixa é que faz sentido procurar —
+ * um título que só existe legendado nunca poderia satisfazer um pedido de
+ * dublado, e descobri-lo no fim obrigava o utilizador a repetir o pedido todo.
+ *
+ * Oferece sempre as duas faixas: a fonte é que decide se as tem. Quando não tem
+ * a faixa pedida, o passo seguinte avisa e cai para a que existe (ver
+ * `carregarEpisodiosComFaixa`) em vez de servir o áudio errado em silêncio.
  *
  * @returns {Promise<boolean>}
  */
-async function sendAudioList({ socket, session }) {
+async function askAudioBeforeSearch({ socket, session }) {
   session.stage = "faixas";
   touch(session);
 
-  const rows = [...buildAudioRows(session.audioVersions), cancelRow()];
+  const rows = [...buildAudioRows(AUDIO_VERSIONS), cancelRow()];
 
   return sendCard({
     socket,
     session,
     text: mediaCaption({
-      titulo: session.seasonTitle
-        ? `${session.anime?.title || "Anime"} — ${session.seasonTitle}`
-        : session.anime?.title || "Anime",
-      canal: animeProviderLabel(session.provider),
-      duracao: `${session.episodes.length} episódios`,
+      titulo: session.pendingName || "Anime",
+      canal: "Menu de animes",
+      duracao: "—",
       qualidade: "—",
-      extra: "🔊 Este anime tem as duas faixas. Escolhe como queres ver.",
+      extra: "🔊 Como queres ver? Escolhe a faixa de áudio.",
       rodape: null,
     }),
     title: "Áudio",
@@ -498,18 +610,35 @@ async function sendAudioList({ socket, session }) {
 }
 
 /**
- * Aplica a faixa escolhida e segue para a lista de episódios.
+ * Aplica a faixa escolhida e segue para a pesquisa (ou recarrega a lista).
  *
- * A faixa pedida é validada contra as que a lista realmente publica: um token
- * antigo (o site mudou) ou forjado não pode fixar uma faixa inexistente, senão o
+ * Dois caminhos, conforme a altura do fluxo:
+ *
+ * - ANTES de pesquisar (`pendingName` preenchido): a faixa é fixada e a pesquisa
+ *   arranca já com ela. É o caminho normal.
+ * - DEPOIS de a lista existir: recarrega os episódios na faixa nova. Só os
+ *   providers que publicam ids por faixa (animesonlinehd) ganham com isto.
+ *
+ * A validação muda com o caminho. Antes da pesquisa oferecem-se sempre as duas
+ * faixas, pelo que qualquer uma é aceitável — é a fonte que dirá se a tem. Com a
+ * lista carregada, a faixa é validada contra as que ela publica: um token antigo
+ * (o site mudou) ou forjado não pode fixar uma faixa inexistente, senão o
  * download falharia mais tarde com um erro difícil de entender.
  *
  * @returns {Promise<boolean>}
  */
 async function chooseAudioVersion({ socket, session, version }) {
-  const disponiveis = session.audioVersions || [];
+  const antesDaPesquisa = Boolean(session.pendingName);
 
-  if (!disponiveis.includes(version)) {
+  if (!AUDIO_VERSIONS.includes(version)) {
+    dropSession(session);
+    await session.sendReply(
+      "❌ Essa faixa não existe. Envia .menu para recomeçar.",
+    ).catch(() => {});
+    return true;
+  }
+
+  if (!antesDaPesquisa && !(session.audioVersions || []).includes(version)) {
     dropSession(session);
     await session.sendReply(
       "❌ Essa faixa já não está disponível. Envia .menu para recomeçar.",
@@ -520,9 +649,10 @@ async function chooseAudioVersion({ socket, session, version }) {
   session.audioVersion = version;
   infoLog(`[anime] faixa escolhida: ${version}`);
 
-  // A faixa escolhe o ID do episódio: no animesonlinehd o dublado e o legendado
-  // são registos distintos, com ids próprios. Sem recarregar, a lista continuava
-  // com os ids da faixa predefinida e a escolha não tinha efeito no download.
+  if (antesDaPesquisa) {
+    return searchAndSendEpisodes({ socket, session, nome: session.pendingName });
+  }
+
   return reloadEpisodesForAudio({ socket, session });
 }
 
@@ -535,18 +665,20 @@ async function chooseAudioVersion({ socket, session, version }) {
  * @returns {Promise<boolean>}
  */
 async function reloadEpisodesForAudio({ socket, session }) {
+  const carregar = async (faixa) => {
+    if (session.seasonSlug) {
+      return getSeasonEpisodes(session.seasonSlug, session.provider, faixa);
+    }
+    const info = await getAnimeInfo(session.anime?.id, session.provider, faixa);
+    return info.episodes;
+  };
+
   try {
-    const lista = session.seasonSlug
-      ? await getSeasonEpisodes(
-          session.seasonSlug,
-          session.provider,
-          session.audioVersion,
-        )
-      : await getAnimeInfo(
-          session.anime?.id,
-          session.provider,
-          session.audioVersion,
-        ).then((info) => info.episodes);
+    const { lista } = await carregarEpisodiosComFaixa({
+      session,
+      carregar,
+      contexto: session.seasonSlug || session.anime?.id,
+    });
 
     if (lista?.length) session.episodes = lista;
   } catch (error) {
@@ -580,17 +712,28 @@ async function chooseSeasonAndSendEpisodes({ socket, session, seasonIndex }) {
   touch(session);
 
   try {
-    const episodes = await getSeasonEpisodes(temporada.slug, session.provider);
+    const carregar = (faixa) =>
+      getSeasonEpisodes(temporada.slug, session.provider, faixa);
 
-    session.episodes = episodes;
+    const { lista, faixaAviso } = await carregarEpisodiosComFaixa({
+      session,
+      carregar,
+      contexto: temporada.slug,
+    });
+
+    session.episodes = lista;
     session.episode = null;
     session.sources = [];
     session.seasonTitle = temporada.title;
     session.seasonSlug = temporada.slug;
 
     infoLog(
-      `[anime] temporada "${temporada.title}" com ${episodes.length} episódios`,
+      `[anime] temporada "${temporada.title}" com ${lista.length} episódios`,
     );
+
+    if (faixaAviso) {
+      await session.sendReply(faixaAviso).catch(() => {});
+    }
 
     return routeAfterEpisodes({ socket, session });
   } catch (error) {
@@ -710,7 +853,7 @@ async function sendQualityList({ socket, session, episodeIndex }) {
         canal: animeProviderLabel(session.provider),
         duracao: session.episode.title || "—",
         qualidade: session.audioVersion
-          ? `${audioVersionLabel(session.audioVersion)} · Escolhe a qualidade`
+          ? `${audioTrackLabel(session.audioVersion, session.provider, ANIME_PT_DUB_PROVIDERS)} · Escolhe a qualidade`
           : "Escolha a qualidade",
         extra:
           `⬇️ Escolhe a qualidade: as mais altas pesam mais. ` +
@@ -904,7 +1047,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
       canal: animeProviderLabel(session.provider),
       duracao: result.durationString || "Não disponível",
       qualidade: session.audioVersion
-        ? `${audioVersionLabel(session.audioVersion)} · ${source.label}`
+        ? `${audioTrackLabel(session.audioVersion, session.provider, ANIME_PT_DUB_PROVIDERS)} · ${source.label}`
         : source.label,
     });
 
@@ -1106,7 +1249,8 @@ export async function handleAnimeReply({
     }
 
     if (sendReply) sessao.sendReply = sendReply;
-    return searchAndSendEpisodes({ socket, session: sessao, nome: value });
+    sessao.pendingName = value;
+    return askAudioBeforeSearch({ socket, session: sessao });
   }
 
   return false;

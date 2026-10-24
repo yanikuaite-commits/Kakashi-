@@ -66,6 +66,8 @@ High-value architectural notes:
 | `src/utils/loadCommonFunctions.js` | Injected helper functions used by command handlers. |
 | `src/utils/database.js` | Safe access layer for JSON persistence. |
 | `src/utils/interactive.js` | Interactive-message builders: `singleSelectButton`, `urlButton`, `ownerButton` (owner WhatsApp link from `MAIN_MENU_OWNER_NUMBER`), `copyButton`. |
+| `src/interactive/flow.js` | Guided menu flow (menu → category → function → input) and the dispatch of the selected command. |
+| `src/interactive/menuRegistry.js` | Guided-function registry (`FUNCTIONS`, `CATEGORIES`, `getFunction`, `listFunctions`) and the per-function `validador`/`aceita`/`args`/`entrada` metadata. |
 | `src/utils/richTable.js` | Native WhatsApp tables (`RICH_RESPONSE_TABLE`) via `sendRichTable`, plus `sendTabela`, which sends a pricing table from `src/utils/tabelaPrecos.js` and falls back to aligned text when the relay fails. |
 | `src/utils/tabelaPrecos.js` | Pricing-table data and formatting only (no Baileys): `TABELAS` (`dias`, `creditos`), `tabelaOpcoes()`, `tabelaIdDoArgumento()`, `formatTabelaTexto()`. |
 | `src/@types/index.d.ts` | Typing and documentation for command and middleware props. |
@@ -330,6 +332,39 @@ pointing at a private repository.
 Deleting does not undo a publication: the commit history keeps the blob, so
 secrets from an already-public archive must be rotated.
 
+## GUIDED_MENU
+
+`.menu` opens a guided flow (`src/interactive/flow.js`) that reuses the real
+command handlers: it never duplicates download or AI logic. Steps: main card →
+category → function → input → dispatch.
+
+Registry rules (`src/interactive/menuRegistry.js`):
+
+- `FUNCTIONS` entries are declared through `entry(categoria, id, comando, data)`
+- `aceita` is the input type: `link`, `texto`, `midia` or `nenhum`
+- `validador` is an extra boolean check on the raw text (ex.: the whitelist
+  entry accepts only a LID)
+- `args` are fixed arguments dispatched before the input (ex.: `add` for the
+  whitelist, `custos` for the cost table), so the owner does not retype them
+- `entrada` names what the input is in the error message (ex.: `um LID`).
+  Without it a `texto` function validated by `validador` would say
+  "um texto válido" even when it refused a non-LID
+- the card's shortcut line shows the full command, including `args`
+
+Owner category (`dono`) rules:
+
+- adding someone to the private whitelist is a guided flow: the owner picks the
+  function and sends only the LID; `args: "add"` supplies the action
+- the whitelist command parses `fullArgs` by whitespace. `args` from
+  `extractDataFromMessage` splits on `\`, `|` and `/` — NOT on space, so
+  `.private-whitelist add <lid>` would arrive as a single `args[0]`. Any command
+  taking space-separated arguments must read `fullArgs`
+- the LID is normalized to `digits@lid` (`275381038891241:12@lid`, the bare
+  number and the number with `+`/spaces all collapse to the same entry)
+
+`handleAnimeReply` runs BEFORE `handleGuidedFlow` in the message middleware, so
+the anime session owns the name typed after `.menu → Animes`.
+
 ## ANTI_PAYMENT
 
 Two entry points punish a payment message:
@@ -450,7 +485,12 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   episode already fits the 200 MB limit, so forcing 480p would only degrade the
   image for nothing. `ANIME_MAX_HEIGHT` (480) still applies to anikoto, whose
   master.m3u8 carries a single 1080p variant
-- **`animesonlinehd` is the only provider with real PT-BR dubbing.** It is a
+- **`animesonlinehd` and `anitube` are the providers whose "dubbed" track is
+  PT-BR** (`ANIME_PT_DUB_PROVIDERS` in `src/config.js`). The track is a boolean
+  on the site ("dubbed" or not), but the LANGUAGE of that dub belongs to the
+  SITE: `animegg` is an English site, so its "Dubbed" is an English dub. Without
+  the distinction, asking for "Dublado" could hand back English audio with a
+  Portuguese label. `animesonlinehd` is a
   Next.js frontend over a WordPress backend (`animesonline.blue`), and the
   `/anime/<slug>` HTML carries the whole catalogue in the RSC payload
   (`self.__next_f.push`), so one page gives every season and both audio tracks —
@@ -462,7 +502,8 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
 - **each episode carries separate `leg` and `dub` ids**, which is why the audio
   step is a real choice here: picking "Dublado" swaps the episode id, not just a
   label. `getAnimeInfo`/`getSeasonEpisodes`/`episodes` therefore take the
-  `audioVersion`, and `animeMenu.js` reloads the list once the track is chosen.
+  `audioVersion`, and `animeMenu.js` loads the list with the track the user
+  already chose (reloading it only on the post-list path).
   An episode that does not publish the requested track is dropped rather than
   falling back — serving the wrong audio is the exact bug this provider fixes.
   With no explicit choice the dubbed id wins (`ANIME_PREFER_DUBBED`), falling back
@@ -484,7 +525,9 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   (default `animesonlinehd,animegg,anitube,animeheaven,anikoto`); each provider
   is tried
   until one returns the episode, and the winning provider is carried in the
-  session so `getAnimeInfo`/`getEpisodeSources` hit the same source
+  session so `getAnimeInfo`/`getEpisodeSources` hit the same source. With a dub
+  requested the list is reordered so the PT-BR sites come first — see
+  `ANIME_PT_DUB_PROVIDERS` below
 - **the fallback happens at the EPISODE level, not only at search time.** The
   episode id is internal to the site that listed it, so when a provider has no
   video for one episode, `getEpisodeSourcesWithFallback` (`src/services/anime.js`)
@@ -610,30 +653,52 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
 - list rows carry only indices (`anm:ep:<i>` / `anm:src:<i>`); the real
   (long, signed) stream URLs stay in the session, because WhatsApp drops
   oversized `rowId`s
-- **the audio track is a step of its own (`anm:aud:subbed` / `anm:aud:dubbed`),
-  asked BEFORE the episode list and only when the list publishes more than one.**
-  The episode list comes from `getAnimeInfo`/`getSeasonEpisodes`, which carry
-  `versions` per episode; `availableAudioVersions` UNIONS them and
-  `routeAfterEpisodes` decides: 2+ → ask, exactly 1 → fix it silently (no false
-  choice), none → ask nothing and behave as before. Asking per episode instead
-  would let the user pick "Dublado" and then hit an episode that has no dub, so
-  the choice is made once, for the list
-- **the track rule is a UNION, not an intersection, and this is the difference
-  between the feature working and not existing.** Requiring every episode to have
+- **the audio track is asked BEFORE the search, not before the episode list**
+  (`anm:aud:subbed` / `anm:aud:dubbed`). The user picks the track as soon as the
+  name is known, and the search then runs with it. Asking after the list meant a
+  title that only exists subtitled could never satisfy a request for a dub, and
+  the user only found out at the end — after the whole search — and had to
+  repeat the request. `session.pendingName` holds the name while the question is
+  on screen, and `chooseAudioVersion` branches on it: with a pending name it
+  starts the search, otherwise it reloads the existing list (the old path)
+- **the track is asked without touching the network, so it cannot be derived
+  from the list.** Both tracks are always offered; the source decides whether it
+  has them. `availableAudioVersions` (UNION of the per-episode `versions`) is
+  still used, but now only to CHECK the answer, never to decide whether to ask
+- **when the source does not have the requested track, the bot says so and falls
+  back to the one it has** (`carregarEpisodiosComFaixa`). Serving the other track
+  silently is the bug this flow exists to fix, so the user is told:
+  "⚠️ Esta fonte não tem dublado deste título. Vou mostrar legendado." The check
+  reads the PUBLISHED TRACKS of the returned list, not whether the call
+  succeeded: AnimeGG ignores the requested track and always returns the whole
+  list, so "a list came back" does not prove the track exists. A provider that
+  publishes no tracks at all (`[]`, AniKoto/AnimeHeaven) gets no warning, because
+  there is nothing to compare and a warning with an empty label is worse than
+  silence. AniTube DOES publish tracks (`versaoDoTitulo`, from the post title),
+  so it is checked like AnimeGG
+- **with "Dublado", the PT-BR providers are searched FIRST**
+  (`ordenarProvidersParaFaixa` in `src/utils/animeFormat.js`). The configured
+  order (`ANIME_PROVIDERS`) puts the non-PT-BR sites ahead, so asking for a dub
+  could land on a site that only dubs in English while the PT-BR dub sat on
+  another site. The reorder happens in `searchAnime(nome, audioVersion)` and in
+  `getEpisodeSourcesWithFallback`, so both the first search and the per-episode
+  fallback look for PT-BR first; the non-PT-BR sites stay behind as a safety net
+  (a title that only exists there is still reachable). With no track requested
+  the list is untouched — reordering for a track nobody asked for would impose a
+  choice. When the dubbed track ends up coming from a non-PT-BR site,
+  `avisoIdiomaDublagem` says so instead of letting the user find out by ear, and
+  the card label is `Dublado (PT-BR)` only for the sites that really dub in
+  Portuguese (`audioTrackLabel`)
+- the track rule is a UNION, not an intersection: requiring every episode to have
   both tracks looks safer but hides the choice almost always, because the series
-  page fragment only covers part of the list: One Piece has 583 episodes with
-  both, 577 subbed-only and 2 dubbed-only, so the intersection was EMPTY and the
-  menu asked nothing. Naruto (218 both, 2 subbed-only) collapsed to `subbed` and
-  never asked. Measured across series, only titles whose list is uniformly both
-  (e.g. Jujutsu Kaisen, 24/24) reached the question. With the union, One Piece
-  and Naruto ask; series with a single track (Kaijuu Girls, Attack on Titan)
-  silently fix it. An episode that lacks the chosen track fails with a clear
-  message, which beats never offering the choice
+  page fragment only covers part of the list (One Piece has 583 episodes with
+  both, 577 subbed-only and 2 dubbed-only). An episode that lacks the chosen
+  track fails with a clear message, which beats never offering the choice
 - the chosen track is stored in `session.audioVersion` and travels as the third
   argument of `getEpisodeSources(episodeId, provider, audioVersion)` down to
   `provider.sources(episode, slug, audioVersion)`; providers that do not
-  distinguish tracks simply ignore it. The card shows it (`Dublado · 480p`) so
-  the user can confirm what was sent
+  distinguish tracks simply ignore it. The card shows it (`Dublado (PT-BR) ·
+  480p`) so the user can confirm what was sent
 - the fallback keeps the track: `fontesDoProvider` filters candidates by
   `versions`, because in AniTube the dubbed episode is a different post and
   matching on the number alone would silently hand back the subtitled one.

@@ -9,6 +9,7 @@ import {
   animeTokenIndex,
   audioVersionLabel,
   availableAudioVersions,
+  avisoIdiomaDublagem,
   buildAudioRows,
   buildEpisodeRows,
   buildNextPageRow,
@@ -17,11 +18,14 @@ import {
   episodePageCount,
   escolherEpisodio,
   identitiesOverlap,
+  isPortugueseDubProvider,
   jidDigits,
   jidIdentities,
   melhorResultado,
   normalizeSources,
+  ordenarProvidersParaFaixa,
   tituloDeBusca,
+  audioTrackLabel,
 } from "../utils/animeFormat.js";
 
 test("animeSessionKey junta chat e autor", () => {
@@ -369,3 +373,105 @@ test("melhorResultado compara ignorando os sufixos de site", () => {
     "(TV) não impede a correspondência",
   );
 });
+
+/* ═══════════ DUBLAGEM PT-BR PRIMEIRO ═══════════ */
+
+const PT = ["animesonlinehd", "anitube"];
+
+test("isPortugueseDubProvider só reconhece os sites de dublagem PT-BR", () => {
+  assert.equal(isPortugueseDubProvider("animesonlinehd", PT), true);
+  assert.equal(isPortugueseDubProvider("anitube", PT), true);
+  assert.equal(
+    isPortugueseDubProvider("animegg", PT),
+    false,
+    "o animegg dubla em inglês, não em português",
+  );
+  assert.equal(isPortugueseDubProvider("anikoto", PT), false);
+  assert.equal(isPortugueseDubProvider("", PT), false);
+  assert.equal(isPortugueseDubProvider(undefined, PT), false);
+  assert.equal(
+    isPortugueseDubProvider("AnimesOnlineHD", PT),
+    true,
+    "a comparação ignora a caixa",
+  );
+});
+
+test("ordenarProvidersParaFaixa põe os PT-BR à frente no dublado", () => {
+  const providers = [
+    { nome: "anikoto" },
+    { nome: "animegg" },
+    { nome: "animesonlinehd" },
+    { nome: "anitube" },
+  ];
+
+  const ordenados = ordenarProvidersParaFaixa(providers, "dubbed", PT);
+
+  assert.deepEqual(
+    ordenados.map((p) => p.nome),
+    ["animesonlinehd", "anitube", "anikoto", "animegg"],
+    "os PT-BR primeiro e a ordem relativa preservada nos dois grupos",
+  );
+  assert.deepEqual(
+    providers.map((p) => p.nome),
+    ["anikoto", "animegg", "animesonlinehd", "anitube"],
+    "a lista original não é alterada",
+  );
+});
+
+test("ordenarProvidersParaFaixa não mexe na lista fora do dublado", () => {
+  const providers = [{ nome: "anikoto" }, { nome: "animesonlinehd" }];
+
+  for (const faixa of ["", "subbed", undefined]) {
+    assert.deepEqual(
+      ordenarProvidersParaFaixa(providers, faixa, PT).map((p) => p.nome),
+      ["anikoto", "animesonlinehd"],
+      `faixa "${faixa}" mantém a ordem configurada`,
+    );
+  }
+});
+
+test("ordenarProvidersParaFaixa aguenta lista vazia e nomes ausentes", () => {
+  assert.deepEqual(ordenarProvidersParaFaixa([], "dubbed", PT), []);
+  assert.deepEqual(ordenarProvidersParaFaixa(undefined, "dubbed", PT), []);
+  assert.deepEqual(
+    ordenarProvidersParaFaixa([{ nome: "x" }, {}], "dubbed", PT).map((p) => p.nome),
+    ["x", undefined],
+  );
+});
+
+test("audioTrackLabel só afirma PT-BR quando o site dubla em português", () => {
+  assert.equal(audioTrackLabel("dubbed", "animesonlinehd", PT), "Dublado (PT-BR)");
+  assert.equal(audioTrackLabel("dubbed", "anitube", PT), "Dublado (PT-BR)");
+  assert.equal(
+    audioTrackLabel("dubbed", "animegg", PT),
+    "Dublado",
+    "não pode prometer português numa fonte que dubla em inglês",
+  );
+  assert.equal(
+    audioTrackLabel("subbed", "animesonlinehd", PT),
+    "Legendado",
+    "o idioma só qualifica a dublagem",
+  );
+  assert.equal(audioTrackLabel("", "animesonlinehd", PT), "");
+});
+
+test("avisoIdiomaDublagem avisa só quando a dublagem não é PT-BR", () => {
+  assert.equal(
+    avisoIdiomaDublagem("dubbed", "animesonlinehd", PT),
+    "",
+    "dublagem PT-BR não tem nada a avisar",
+  );
+  assert.equal(avisoIdiomaDublagem("dubbed", "anitube", PT), "");
+
+  const ingles = avisoIdiomaDublagem("dubbed", "animegg", PT);
+  assert.match(ingles, /inglês/i);
+  assert.match(ingles, /PT-BR/i, "diz o que vai tentar fazer a seguir");
+
+  assert.equal(
+    avisoIdiomaDublagem("subbed", "animegg", PT),
+    "",
+    "o idioma só é uma questão na dublagem",
+  );
+  assert.equal(avisoIdiomaDublagem("", "animegg", PT), "");
+});
+
