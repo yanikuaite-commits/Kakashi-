@@ -66,6 +66,8 @@ High-value architectural notes:
 | `src/utils/loadCommonFunctions.js` | Injected helper functions used by command handlers. |
 | `src/utils/database.js` | Safe access layer for JSON persistence. |
 | `src/utils/interactive.js` | Interactive-message builders: `singleSelectButton`, `urlButton`, `ownerButton` (owner WhatsApp link from `MAIN_MENU_OWNER_NUMBER`), `copyButton`. |
+| `src/interactive/flow.js` | Guided menu flow (menu → category → function → input) and the dispatch of the selected command. |
+| `src/interactive/menuRegistry.js` | Guided-function registry (`FUNCTIONS`, `CATEGORIES`, `getFunction`, `listFunctions`) and the per-function `validador`/`aceita`/`args`/`entrada` metadata. |
 | `src/utils/richTable.js` | Native WhatsApp tables (`RICH_RESPONSE_TABLE`) via `sendRichTable`, plus `sendTabela`, which sends a pricing table from `src/utils/tabelaPrecos.js` and falls back to aligned text when the relay fails. |
 | `src/utils/tabelaPrecos.js` | Pricing-table data and formatting only (no Baileys): `TABELAS` (`dias`, `creditos`), `tabelaOpcoes()`, `tabelaIdDoArgumento()`, `formatTabelaTexto()`. |
 | `src/@types/index.d.ts` | Typing and documentation for command and middleware props. |
@@ -329,6 +331,39 @@ pointing at a private repository.
 `.delete-backup` (`deleteRemoteBackup`) removes the remote file on request.
 Deleting does not undo a publication: the commit history keeps the blob, so
 secrets from an already-public archive must be rotated.
+
+## GUIDED_MENU
+
+`.menu` opens a guided flow (`src/interactive/flow.js`) that reuses the real
+command handlers: it never duplicates download or AI logic. Steps: main card →
+category → function → input → dispatch.
+
+Registry rules (`src/interactive/menuRegistry.js`):
+
+- `FUNCTIONS` entries are declared through `entry(categoria, id, comando, data)`
+- `aceita` is the input type: `link`, `texto`, `midia` or `nenhum`
+- `validador` is an extra boolean check on the raw text (ex.: the whitelist
+  entry accepts only a LID)
+- `args` are fixed arguments dispatched before the input (ex.: `add` for the
+  whitelist, `custos` for the cost table), so the owner does not retype them
+- `entrada` names what the input is in the error message (ex.: `um LID`).
+  Without it a `texto` function validated by `validador` would say
+  "um texto válido" even when it refused a non-LID
+- the card's shortcut line shows the full command, including `args`
+
+Owner category (`dono`) rules:
+
+- adding someone to the private whitelist is a guided flow: the owner picks the
+  function and sends only the LID; `args: "add"` supplies the action
+- the whitelist command parses `fullArgs` by whitespace. `args` from
+  `extractDataFromMessage` splits on `\`, `|` and `/` — NOT on space, so
+  `.private-whitelist add <lid>` would arrive as a single `args[0]`. Any command
+  taking space-separated arguments must read `fullArgs`
+- the LID is normalized to `digits@lid` (`275381038891241:12@lid`, the bare
+  number and the number with `+`/spaces all collapse to the same entry)
+
+`handleAnimeReply` runs BEFORE `handleGuidedFlow` in the message middleware, so
+the anime session owns the name typed after `.menu → Animes`.
 
 ## ANTI_PAYMENT
 
