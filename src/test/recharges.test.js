@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { DATABASE_DIR, OWNER_LID, PREFIX } from "../config.js";
+import { DATABASE_DIR, DAILY_FREE_CREDITS, OWNER_LID, PREFIX } from "../config.js";
 import { accountBalance, getAccount } from "../services/credits.js";
 import {
   confirmRecharge,
@@ -42,7 +42,7 @@ const SMS_MPESA =
   "850446446 aos 18/9/26 as 2:37 PM. O teu novo saldo M-Pesa e de 0.00MT. E SEM " +
   "TAXAS as transferencias de  M-Pesa para M-Pesa. Em caso de duvida,liga 100!";
 
-const FICHEIROS = ["pending-recharges", "credits"].map((nome) =>
+const FICHEIROS = ["pending-recharges", "credits", "subscriptions"].map((nome) =>
   path.join(DATABASE_DIR, `${nome}.json`),
 );
 
@@ -394,6 +394,71 @@ test("os comandos de dono existem e confirmam pelo id", async () => {
     "confirmed",
     "não se recusa o que já foi confirmado",
   );
+});
+
+test("confirmar um plano pelo comando ativa a assinatura", async () => {
+  const senderLid = testJid("plano");
+  registerPendingRecharge({
+    transactionId: "TX-PLANO-1",
+    provider: "emola",
+    amount: 45,
+    destination: "865672009",
+    senderLid,
+    kind: "assinatura",
+    plan: { dias: 14, mt: 45, bonus: 60 },
+  });
+
+  const confirmar = (
+    await import("../commands/owner/recarga-confirmar.js")
+  ).default;
+  const respostas = [];
+
+  await confirmar.handle({
+    fullArgs: "TX-PLANO-1",
+    sendReply: async (t) => respostas.push(String(t)),
+    sendErrorReply: async (t) => respostas.push(String(t)),
+  });
+
+  const texto = respostas.join(" | ");
+
+  assert.ok(/ASSINATURA CONFIRMADA/i.test(texto), texto);
+  assert.ok(/14 dias/.test(texto), texto);
+  assert.ok(/\+60 créditos\/dia/.test(texto), texto);
+  assert.ok(/Bónus de hoje: \+60/.test(texto), texto);
+
+  // O bónus entra já no dia da compra; a conta diária fica com 30 + 60.
+  assert.equal(getAccount(senderLid).dailyCredits, DAILY_FREE_CREDITS + 60);
+  assert.equal(getPendingRecharge("TX-PLANO-1").status, "confirmed");
+});
+
+test("o dono pode forçar assinatura num valor ambíguo sem resposta", async () => {
+  const senderLid = testJid("forcar");
+  registerPendingRecharge({
+    transactionId: "TX-FORCAR-1",
+    provider: "emola",
+    amount: 20,
+    destination: "865672009",
+    senderLid,
+    credits: 65,
+    kind: "creditos",
+  });
+
+  const confirmar = (
+    await import("../commands/owner/recarga-confirmar.js")
+  ).default;
+  const respostas = [];
+
+  await confirmar.handle({
+    fullArgs: "TX-FORCAR-1 assinatura",
+    sendReply: async (t) => respostas.push(String(t)),
+    sendErrorReply: async (t) => respostas.push(String(t)),
+  });
+
+  const texto = respostas.join(" | ");
+
+  assert.ok(/ASSINATURA CONFIRMADA/i.test(texto), texto);
+  assert.ok(/7 dias/.test(texto), texto);
+  assert.equal(getAccount(senderLid).dailyCredits, DAILY_FREE_CREDITS + 40);
 });
 
 test("o toque do dono na lista vira o comando de confirmar", async () => {

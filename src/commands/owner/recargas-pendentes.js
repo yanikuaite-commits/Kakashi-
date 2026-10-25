@@ -38,14 +38,26 @@ export default {
       return;
     }
 
-    const campos = pendentes.flatMap((recharge, index) => [
-      `*${index + 1}. ${recharge.transactionId || recharge.key}*`,
-      `   ├ 💰 ${recharge.amount} MT (${recharge.providerLabel})`,
-      `   ├ 👤 @${String(recharge.senderLid).split("@")[0]}`,
-      `   ├ 🎁 ${recharge.credits == null ? "fora da tabela" : `${recharge.credits} créditos`}`,
-      `   ├ 🕒 Enviado: ${formatarHora(recharge.createdAt)}`,
-      `   └ ⌛ Expira: ${formatarHora(recharge.expiresAt)}`,
-    ]);
+    const campos = pendentes.flatMap((recharge, index) => {
+      const plano = recharge.plan;
+      const entrega =
+        recharge.kind === "assinatura"
+          ? plano
+            ? `⭐ ${plano.dias} dias (+${plano.bonus}/dia)`
+            : "⭐ assinatura (plano por confirmar)"
+          : recharge.credits == null
+            ? "fora da tabela"
+            : `🎁 ${recharge.credits} créditos`;
+
+      return [
+        `*${index + 1}. ${recharge.transactionId || recharge.key}*`,
+        `   ├ 💰 ${recharge.amount} MT (${recharge.providerLabel})`,
+        `   ├ 👤 @${String(recharge.senderLid).split("@")[0]}`,
+        `   ├ ${entrega}`,
+        `   ├ 🕒 Enviado: ${formatarHora(recharge.createdAt)}`,
+        `   └ ⌛ Expira: ${formatarHora(recharge.expiresAt)}`,
+      ];
+    });
 
     await sendReply(
       panelMessage({
@@ -55,6 +67,7 @@ export default {
           ...campos,
           "",
           `✅ Confirmar: *${PREFIX}recarga-confirmar <id>*`,
+          `⭐ Forçar assinatura: *${PREFIX}recarga-confirmar <id> assinatura*`,
           `🚫 Recusar: *${PREFIX}recarga-recusar <id>*`,
         ],
       }),

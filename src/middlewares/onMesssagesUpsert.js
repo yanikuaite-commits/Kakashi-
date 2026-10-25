@@ -29,6 +29,7 @@ import { handleVideoFormatReply } from "../utils/videoFormatMenu.js";
 import { handleGuidedFlow, resumePendingFunction } from "../interactive/flow.js";
 import { handleAnimeReply } from "../utils/animeMenu.js";
 import { handlePaymentSms } from "../utils/paymentFlow.js";
+import { handlePaymentChoiceReply } from "../utils/paymentChoice.js";
 import { isBotOwner } from "./index.js";
 
 export async function onMessagesUpsert({ socket, messages, startProcess }) {
@@ -137,6 +138,21 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
           text: commonFunctions.fullMessage,
           sendReply: commonFunctions.sendReply,
         }))
+      ) {
+        continue;
+      }
+
+      // Compra ambígua (20 MT): o "1"/"2" responde à pergunta do pagamento e
+      // tem de ser lido ANTES do fluxo guiado — senão vira uma função pendente.
+      // O handler só trata o caso de haver pergunta em aberto para este autor;
+      // qualquer outro "1" segue o fluxo normal.
+      if (
+        await handlePaymentChoiceReply({
+          chatId: commonFunctions.remoteJid,
+          senderLid: commonFunctions.userLid || commonFunctions.remoteJid,
+          text: commonFunctions.fullMessage,
+          sendReply: commonFunctions.sendReply,
+        })
       ) {
         continue;
       }

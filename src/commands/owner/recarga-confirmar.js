@@ -36,12 +36,23 @@ export default {
       return;
     }
 
+    // Tipo da compra: o registo já traz "assinatura" ou "creditos". O dono pode
+    // forçar o outro com "assinatura" ou "creditos" no comando — útil quando o
+    // utilizador não respondeu à pergunta de um valor ambíguo (20 MT).
+    const forcado = parts.find((part) => /^(assinatura|plano|creditos|credito)$/i.test(part));
+    const kind = forcado
+      ? /^(assinatura|plano)$/i.test(forcado)
+        ? "assinatura"
+        : "creditos"
+      : null;
+
     // Créditos: os da tabela para o valor pago, ou o que o dono indicar
     // (para valores fora da tabela).
     const indicado = parts.filter((part) => /^\d+$/.test(part)).map(Number).pop();
     const credits = indicado || creditsForAmount(pendente.amount);
+    const assinatura = (kind || pendente.kind) === "assinatura";
 
-    if (!credits) {
+    if (!assinatura && !credits) {
       await sendErrorReply(
         `⚠️ O valor de ${pendente.amount} MT não está na tabela de créditos. ` +
           `Indica os créditos. Ex: ${PREFIX}recarga-confirmar ${key} 20`,
@@ -49,7 +60,7 @@ export default {
       return;
     }
 
-    const resultado = confirmRecharge(key, { credits, by: "dono" });
+    const resultado = confirmRecharge(key, { credits, by: "dono", kind });
 
     if (!resultado.ok) {
       const motivo =
@@ -59,25 +70,39 @@ export default {
             ? "já tinha sido recusada"
             : resultado.reason === "expired"
               ? "caducou (passaram mais de 10 horas)"
-              : resultado.reason;
+              : resultado.reason === "sem-plano"
+                ? "o valor não corresponde a nenhum plano de dias"
+                : resultado.reason;
 
       await sendErrorReply(`❌ Não confirmei a transação *${key}*: ${motivo}.`);
       return;
     }
 
     const saldoAtual = accountBalance(getAccount(pendente.senderLid));
+    const plano = resultado.subscription;
 
     await sendReply(
       panelMessage({
-        icone: "✅",
-        titulo: "Recarga confirmada",
+        icone: resultado.kind === "assinatura" ? "⭐" : "✅",
+        titulo:
+          resultado.kind === "assinatura"
+            ? "Assinatura confirmada"
+            : "Recarga confirmada",
         campos: [
           `🔖 Transação: ${pendente.transactionId || key}`,
           `👤 Usuário: @${String(pendente.senderLid).split("@")[0]}`,
           `💰 Valor: ${pendente.amount} MT (${pendente.providerLabel})`,
-          `➕ Créditos: ${resultado.credited}`,
+          resultado.kind === "assinatura"
+            ? `⭐ Plano: ${plano?.days} dias (+${plano?.bonus} créditos/dia)`
+            : `➕ Créditos: ${resultado.credited}`,
+          resultado.kind === "assinatura"
+            ? `🎁 Bónus de hoje: +${resultado.credited} créditos`
+            : "",
+          resultado.kind === "assinatura" && plano?.expiresDay
+            ? `📅 Válida até: ${plano.expiresDay}`
+            : "",
           `💳 Saldo atual: ${saldoAtual} créditos`,
-        ],
+        ].filter(Boolean),
       }),
       [pendente.senderLid],
     );

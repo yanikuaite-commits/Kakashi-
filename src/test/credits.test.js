@@ -77,6 +77,7 @@ async function runCommand(jid, remoteJid, text) {
 
 const databaseFiles = [
   path.join(DATABASE_DIR, "credits.json"),
+  path.join(DATABASE_DIR, "subscriptions.json"),
   path.join(DATABASE_DIR, "bot-state.json"),
   path.join(DATABASE_DIR, "inactive-groups.json"),
 ];
