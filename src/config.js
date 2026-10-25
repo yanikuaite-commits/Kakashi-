@@ -41,10 +41,21 @@ export const OWNER_PRIVATE_JIDS = [];
 export const COMMANDS_DIR = path.join(__dirname, "commands");
 
 // Diretório de arquivos de mídia.
-export const DATABASE_DIR = path.resolve(__dirname, "..", "database");
+//
+// `DATABASE_DIR` e `AUTH_DIR` são configuráveis por ambiente porque em hosts
+// com disco efémero (Cloady, Render, Fly) o estado só sobrevive se ficar num
+// volume persistente, e cada host monta o volume num caminho diferente. Sem o
+// override, apontar o volume para outro sítio obrigava a mexer no código.
+export const DATABASE_DIR =
+  process.env.DATABASE_DIR || path.resolve(__dirname, "..", "database");
 
 // Diretório de arquivos de mídia.
 export const ASSETS_DIR = path.resolve(__dirname, "..", "assets");
+
+// Sessão do WhatsApp (Baileys). Separado do resto porque é o que se perde a
+// cada deploy sem volume: sem esta pasta o bot volta a pedir pareamento.
+export const AUTH_DIR =
+  process.env.AUTH_DIR || path.join(ASSETS_DIR, "auth", "baileys");
 
 // Diretório de arquivos temporários.
 export const TEMP_DIR = path.resolve(__dirname, "..", "assets", "temp");

@@ -162,6 +162,37 @@ Mandatory rule:
 
 This keeps persistence behavior consistent and avoids duplicated parsing logic.
 
+### Persistence on ephemeral hosts
+
+Hosts without a mounted volume (Cloady, Render, Fly, Railway) start each deploy
+from a fresh container. Two directories are lost, and losing either one is
+visible to the user:
+
+| Path | What is lost without a volume | Env override |
+| --- | --- | --- |
+| `database/` | credits, active subscriptions, pending payments, warns, prefixes, muted users, restrictions | `DATABASE_DIR` |
+| `assets/auth/baileys/` | the WhatsApp pairing — the bot asks for the number again | `AUTH_DIR` |
+
+Both paths are configurable **because each host mounts its volume at a different
+path**. `src/config.js` reads `DATABASE_DIR` / `AUTH_DIR` and falls back to the
+repository paths, so a host that mounts its volume at `/data` only needs
+`DATABASE_DIR=/data` — no code change.
+
+- `src/utils/database.js` and `src/connection.js` run `mkdirSync(..., { recursive: true })`
+  on their directories at import time. A freshly mounted volume is empty, and
+  without the `mkdir` the first write dies with `ENOENT` before the bot answers.
+  Do not remove those calls.
+- `database/` must be one volume, not two: the credits and the pending payments
+  are read and written in the same flow.
+- **the volume is what makes the data survive; a database engine does not.**
+  Moving from JSON to SQLite/Postgres without a volume still loses everything on
+  every deploy. Fix the volume first.
+- on Cloady, volumes survive start/stop/redeploy and are only destroyed when the
+  app is deleted. Never delete an app to rename it.
+- `ANIME_DOCUMENT_LIMIT_MB` (300) assumes ~2x the media size on disk (the
+  download plus the Baileys encrypted copy). The Cloady free tier gives 5 GB of
+  SSD; check it before raising the limit.
+
 ## TABLES_AND_PRICING
 
 `tabela` shows both pricing tables through one interactive list (1 = day plans,

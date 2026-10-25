@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
+  AUTH_DIR,
+  DATABASE_DIR,
   GITHUB_BACKUP_PATH,
   GITHUB_BRANCH,
   GITHUB_REPOSITORY,
@@ -48,12 +50,24 @@ async function githubRequest(config, endpoint, options = {}) {
  * `assets/auth/baileys` é a SESSÃO do WhatsApp: as chaves privadas de
  * pareamento. Quem tiver esse ficheiro fala pelo número do bot, por isso ele
  * NÃO entra no backup sem pedido explícito do dono.
+ *
+ * `entry` é o nome canónico DENTRO do arquivo (é o que o restore espera);
+ * `source` é onde o ficheiro vive nesta instalação. Separá-los é o que permite
+ * `DATABASE_DIR`/`AUTH_DIR` apontarem para um volume: sem isto, o backup de um
+ * volume montado fora do projeto arquivava a pasta vazia do repositório.
  */
 const CANDIDATES = [
-  { entry: "database", requiresAuth: false },
-  { entry: ".env", requiresAuth: false },
-  { entry: "assets/auth/baileys", requiresAuth: true },
+  { entry: "database", source: DATABASE_DIR, requiresAuth: false },
+  { entry: ".env", source: path.join(projectRoot, ".env"), requiresAuth: false },
+  { entry: "assets/auth/baileys", source: AUTH_DIR, requiresAuth: true },
 ];
+
+function destinationFor(entry, targetRoot) {
+  if (targetRoot) return path.join(targetRoot, entry);
+  if (entry === "database") return DATABASE_DIR;
+  if (entry === "assets/auth/baileys") return AUTH_DIR;
+  return path.join(projectRoot, entry);
+}
 
 /**
  * Decide quais caminhos entram no arquivo. Exportado para os testes poderem
@@ -64,10 +78,10 @@ const CANDIDATES = [
  */
 export async function backupEntries({ includeAuth = false } = {}) {
   const entries = [];
-  for (const { entry, requiresAuth } of CANDIDATES) {
+  for (const { entry, source, requiresAuth } of CANDIDATES) {
     if (requiresAuth && !includeAuth) continue;
     try {
-      await fs.access(path.join(projectRoot, entry));
+      await fs.access(source);
       entries.push(entry);
     } catch {
       // O arquivo pode não existir em uma instalação nova.
@@ -80,7 +94,25 @@ async function createArchive({ includeAuth = false } = {}) {
   const archivePath = path.join(os.tmpdir(), `kakashi-backup-${Date.now()}.tar.gz`);
   const entries = await backupEntries({ includeAuth });
   if (!entries.length) throw new Error("Não há dados disponíveis para criar o backup.");
-  await execFileAsync("tar", ["-czf", archivePath, "-C", projectRoot, ...entries]);
+
+  // Copia para uma pasta de preparação com os nomes canónicos antes de
+  // arquivar: assim o arquivo tem sempre a mesma estrutura, mesmo que a origem
+  // seja um volume montado em `/data`.
+  const stageDir = path.join(
+    os.tmpdir(),
+    `kakashi-backup-stage-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  try {
+    for (const entry of entries) {
+      const { source } = CANDIDATES.find((candidate) => candidate.entry === entry);
+      const staged = path.join(stageDir, entry);
+      await fs.mkdir(path.dirname(staged), { recursive: true });
+      await fs.cp(source, staged, { recursive: true, force: true });
+    }
+    await execFileAsync("tar", ["-czf", archivePath, "-C", stageDir, ...entries]);
+  } finally {
+    await fs.rm(stageDir, { recursive: true, force: true });
+  }
   return { archivePath, entries };
 }
 
@@ -165,7 +197,7 @@ export async function restoreBackup({ includeAuth = false } = {}) {
  * @param {{includeAuth?: boolean, targetRoot?: string}} [options]
  * @returns {Promise<{includesSession: boolean}>}
  */
-export async function applyArchive(archivePath, { includeAuth = false, targetRoot = projectRoot } = {}) {
+export async function applyArchive(archivePath, { includeAuth = false, targetRoot = null } = {}) {
   const stageDir = path.join(os.tmpdir(), `kakashi-restore-stage-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   try {
     await fs.mkdir(stageDir, { recursive: true });
@@ -177,7 +209,9 @@ export async function applyArchive(archivePath, { includeAuth = false, targetRoo
     }
 
     for (const entry of await fs.readdir(stageDir)) {
-      await fs.cp(path.join(stageDir, entry), path.join(targetRoot, entry), {
+      const destination = destinationFor(entry, targetRoot);
+      await fs.mkdir(path.dirname(destination), { recursive: true });
+      await fs.cp(path.join(stageDir, entry), destination, {
         recursive: true,
         force: true,
       });

@@ -25,9 +25,8 @@ import makeWASocket, {
 import NodeCache from "node-cache";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import pino from "pino";
-import { PAIRING_NUMBER, PREFIX, TEMP_DIR } from "./config.js";
+import { AUTH_DIR, PAIRING_NUMBER, PREFIX, TEMP_DIR } from "./config.js";
 import { load } from "./loader.js";
 import { badMacHandler } from "./utils/badMacHandler.js";
 import { onlyNumbers, question } from "./utils/index.js";
@@ -43,9 +42,6 @@ import {
   successLog,
   warningLog,
 } from "./utils/logger.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -72,13 +68,11 @@ function clearScreenWithBanner() {
 }
 
 export async function connect() {
-  const baileysFolder = path.resolve(
-    __dirname,
-    "..",
-    "assets",
-    "auth",
-    "baileys",
-  );
+  // Pasta da sessão (volume persistente em produção): o pareamento sobrevive a
+  // deploys desde que este caminho esteja montado num volume.
+  const baileysFolder = AUTH_DIR;
+
+  fs.mkdirSync(baileysFolder, { recursive: true });
 
   const { state, saveCreds } = await useMultiFileAuthState(baileysFolder);
 
