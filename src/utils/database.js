@@ -6,13 +6,15 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { PREFIX, SPIDER_API_TOKEN } from "../config.js";
+import { DATABASE_DIR, PREFIX, SPIDER_API_TOKEN } from "../config.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const databasePath = DATABASE_DIR;
 
-const databasePath = path.resolve(__dirname, "..", "..", "database");
+// O volume persistente monta num caminho que pode vir vazio (ou não existir)
+// no primeiro arranque. Sem o mkdir, a primeira escrita rebenta com ENOENT e o
+// bot morre antes de responder — o `database/` só existe na imagem porque os
+// JSON versionados o criam, e o `.dockerignore` exclui-os.
+fs.mkdirSync(databasePath, { recursive: true });
 
 const AFK_GROUPS_FILE = "afk-groups";
 const ANTI_LINK_GROUPS_FILE = "anti-link-groups";
