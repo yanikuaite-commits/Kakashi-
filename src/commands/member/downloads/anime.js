@@ -16,6 +16,7 @@ export default {
     webMessage,
     userLid,
     sendReply,
+    textOnly,
   }) => {
     await startAnimeFlow({
       socket,
@@ -28,6 +29,7 @@ export default {
         webMessage?.key?.participantAlt,
       ].filter(Boolean),
       nome: fullArgs.trim(),
+      textOnly,
     });
   },
 };

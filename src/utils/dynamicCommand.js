@@ -128,13 +128,17 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   }
 
   const groupPrefix = getPrefix(remoteJid);
+  // O prefixo `!` é o "cantinho" dos clientes que não renderizam botões (iOS):
+  // além de invocar o comando, pede a resposta em TEXTO. Sem ele, estes
+  // utilizadores recebiam cards que não conseguem abrir.
+  const textOnly = prefix === "!";
   const validPrefix = verifyPrefix(prefix, remoteJid) ||
-    prefix === "" || (prefix === "!" && ["baixar", "download"].includes(commandName));
+    prefix === "" || textOnly;
   const resolved = validPrefix
     ? await findCommandInMessage(commandName, paramsHandler.fullArgs)
     : { type: "", command: null, commandName, fullArgs: paramsHandler.fullArgs, args: paramsHandler.args };
   const { type, command } = resolved;
-  const invocation = { ...paramsHandler, ...resolved, prefix: prefix || groupPrefix };
+  const invocation = { ...paramsHandler, ...resolved, prefix: prefix || groupPrefix, textOnly };
 
   if (!isOwner && (isCommandBlocked(commandName) || command?.commands.some(isCommandBlocked))) {
     return;

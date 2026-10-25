@@ -40,8 +40,8 @@ import {
 import { errorLog, infoLog } from "../utils/logger.js";
 import { isAdmin, isBotOwner, isOwnerInPrivateChat } from "../middlewares/index.js";
 import { resolveDownloadSource } from "../services/downloader.js";
-import { startVideoFormatMenu } from "../utils/videoFormatMenu.js";
-import { startAudioSourceMenu } from "../utils/audioFormatMenu.js";
+import { startVideoFormatMenu, hasPendingVideoFormat } from "../utils/videoFormatMenu.js";
+import { startAudioSourceMenu, hasPendingAudioFormat } from "../utils/audioFormatMenu.js";
 import { startAnimeFlow } from "../utils/animeMenu.js";
 import {
   CATEGORIES,
@@ -137,6 +137,7 @@ function ensureSession({
   sendReply,
   permissions,
   senderJids = [],
+  textOnly = false,
 }) {
   const key = keyOf(chatId, ownerId);
   let session = sessions.get(key);
@@ -153,12 +154,16 @@ function ensureSession({
       options: new Map(),
       pending: null,
       timer: null,
+      textOnly: Boolean(textOnly),
     };
     sessions.set(key, session);
   } else {
     if (sendReply) session.sendReply = sendReply;
     if (ownerName) session.ownerName = sanitizeName(ownerName);
     if (permissions) session.permissions = permissions;
+    // Uma sessão aberta por `!menu` mantém o modo texto nos passos seguintes;
+    // abrir com `.menu` volta a permitir botões (a intenção mais recente ganha).
+    session.textOnly = Boolean(textOnly);
     // Alarga as formas de JID conhecidas do autor (nunca as reduz).
     for (const jid of senderJids.filter(Boolean)) {
       if (!session.senderJids.includes(jid)) session.senderJids.push(jid);
@@ -257,6 +262,8 @@ async function deliver({ socket, session, content, options, label }) {
     content,
     fallbackText,
     sendReply: session.sendReply,
+    // Modo texto (`!`): entrega logo o texto numerado, sem card.
+    textOnly: Boolean(session.textOnly),
     onSendError: (error) => {
       fallbackUsed = true;
       errorLog(
@@ -265,7 +272,9 @@ async function deliver({ socket, session, content, options, label }) {
     },
   });
 
-  session.cardFallback = fallbackUsed;
+  // No modo texto o "card" É o texto: `cardFallback` fica verdadeiro para que a
+  // navegação por número seja aceite (é o que ela significa no fluxo guiado).
+  session.cardFallback = fallbackUsed || Boolean(session.textOnly);
 
   const sentId = sent?.key?.id || sent?.message?.key?.id || null;
   infoLog(
@@ -647,6 +656,7 @@ async function runFunction({
       ownerName: session.ownerName,
       sendReply: session.sendReply,
       senderLids: session.senderJids || [],
+      textOnly: Boolean(session.textOnly),
     });
     return;
   }
@@ -688,6 +698,7 @@ async function runFunction({
       sendReply: session.sendReply,
       source,
       url: input,
+      textOnly: Boolean(session.textOnly),
     };
 
     if (funcao.opcoes.tipo === "video") {
@@ -702,6 +713,7 @@ async function runFunction({
         source,
         url: props.url,
         jid: session.ownerId,
+        textOnly: Boolean(session.textOnly),
       });
     }
     return;
@@ -856,6 +868,17 @@ export async function handleGuidedFlow({
   // é a entrada da função pendente (ex.: 1/0 das proteções).
   const numeroDeNavegacao =
     numero && own?.cardFallback ? own.options.get(value) : null;
+
+  // Um menu de formato aberto (qualidade do vídeo / formato do áudio) tem
+  // prioridade sobre a navegação: "1" é a primeira qualidade, não a opção 1 do
+  // card. Sem isto o número era consumido aqui e a escolha nunca chegava ao
+  // menu — o que já afetava o fallback em texto.
+  if (numero && (hasPendingVideoFormat(chatId, ownerId) || hasPendingAudioFormat(chatId, ownerId))) {
+    infoLog(
+      `[fluxo] número "${value}" deixado para o menu de formato (pendência ativa)`,
+    );
+    return false;
+  }
 
   // Passo 4: a próxima mensagem é a entrada da função pendente.
   if (own?.pending && !looksToken && !numeroDeNavegacao) {
@@ -1048,6 +1071,7 @@ export async function startGuidedMenu({
   webMessage,
   section = "",
   permissions,
+  textOnly = false,
 }) {
   const authorId = ownerId || (chatId.endsWith("@g.us") ? "" : chatId);
 
@@ -1077,6 +1101,7 @@ export async function startGuidedMenu({
       webMessage?.key?.participant,
       webMessage?.key?.participantAlt,
     ].filter(Boolean),
+    textOnly,
   });
 
   const chave = String(section || "").trim();
@@ -1118,6 +1143,7 @@ export async function openGuidedSession({
   sendReply,
   permissions,
   webMessage,
+  textOnly = false,
 }) {
   const authorId = ownerId || (chatId.endsWith("@g.us") ? "" : chatId);
   if (!authorId) return null;
@@ -1141,6 +1167,7 @@ export async function openGuidedSession({
       webMessage?.key?.participant,
       webMessage?.key?.participantAlt,
     ].filter(Boolean),
+    textOnly,
   });
 }
 

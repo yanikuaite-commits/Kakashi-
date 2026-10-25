@@ -356,6 +356,119 @@ test("anm:sea carrega os episódios da temporada escolhida", async () => {
   }
 });
 
+test("modo texto: cards saem em texto numerado e o número escolhe a linha", async () => {
+  resetAnimeSessions();
+
+  const respostas = {
+    "/filter?keyword=attack%20on%20titan": `
+      <div class="item ">
+        <div class="inner">
+          <div class="ani poster tip" data-tip="1631">
+            <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa/ep-1">
+              <img src="https://cdn.anipixcdn.co/a.jpg" alt="Attack on Titan" />
+            </a>
+          </div>
+        </div>
+      </div>`,
+    "/api/seasons/1631": JSON.stringify({ status: 200, result: "" }),
+    "/ajax/episode/list/1631": JSON.stringify({
+      status: 200,
+      result: `<a href="#" data-id="1" data-num="1" data-ids="T1">1</a>`,
+    }),
+  };
+
+  globalThis.fetch = async (url) => {
+    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
+    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
+  };
+
+  try {
+    const enviados = [];
+    const replies = [];
+    const socket = {
+      sendMessage: async (_chat, content) => {
+        enviados.push(content);
+        return { key: { id: "m" } };
+      },
+    };
+
+    // `!anime <nome>`: modo texto desde o início.
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async (text) => replies.push(String(text)),
+      nome: "attack on titan",
+      textOnly: true,
+    });
+
+    // A lista de faixas saiu como TEXTO (nada foi para o socket).
+    assert.deepEqual(enviados, [], "modo texto não envia cards");
+    assert.equal(replies.length, 1);
+    assert.match(replies[0], /1\. .*Legendado/i);
+    assert.doesNotMatch(replies[0], /Não consegui abrir o menu interativo/);
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.textOnly, true);
+    assert.equal(sessao.stage, "faixas");
+    assert.ok(sessao.lastRows.length >= 2, "as linhas do card ficam guardadas");
+
+    // "1" = primeira linha = legendado: pesquisa e mostra os episódios em texto.
+    const consumiu = await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: "1",
+      sendReply: async (text) => replies.push(String(text)),
+    });
+
+    assert.equal(consumiu, true);
+    assert.equal(getAnimeSession(CHAT, LID).audioVersion, "subbed");
+    assert.deepEqual(enviados, [], "os episódios também saem em texto");
+    assert.equal(getAnimeSession(CHAT, LID).stage, "episodios");
+    assert.match(replies.at(-1), /1\. Episódio 1/i);
+    assert.doesNotMatch(replies.at(-1), /Não consegui abrir o menu interativo/);
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
+test("modo texto: número fora do intervalo não consome a linha", async () => {
+  resetAnimeSessions();
+  await startAnimeFlow({
+    socket: makeSocket(),
+    chatId: CHAT,
+    ownerLid: LID,
+    ownerName: "Yanik Uaite",
+    sendReply: async () => {},
+    nome: "attack on titan",
+    textOnly: true,
+  });
+
+  const sessao = getAnimeSession(CHAT, LID);
+  assert.equal(sessao.stage, "faixas");
+  const linhas = sessao.lastRows.length;
+
+  const replies = [];
+  // O menu das faixas tem 3 linhas (legendado, dublado, cancelar): "9" não
+  // corresponde a nenhuma e a mensagem segue o fluxo normal.
+  const consumiu = await handleAnimeReply({
+    socket: makeSocket(),
+    chatId: CHAT,
+    senderLid: LID,
+    senderLids: [LID],
+    text: "9",
+    sendReply: async (text) => replies.push(String(text)),
+  });
+
+  assert.equal(consumiu, false, "número inválido segue o fluxo normal");
+  assert.deepEqual(replies, []);
+  assert.equal(getAnimeSession(CHAT, LID).stage, "faixas");
+  assert.equal(getAnimeSession(CHAT, LID).lastRows.length, linhas);
+});
+
 test("sem temporadas agrupadas, salta direto para os episódios", async () => {
   resetAnimeSessions();
 

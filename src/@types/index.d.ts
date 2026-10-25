@@ -142,6 +142,15 @@ declare global {
     prefix: string;
 
     /**
+     * Modo texto: `true` quando o comando foi invocado com o prefixo `!`.
+     *
+     * Clientes que não renderizam botões interativos (iOS, por exemplo) não
+     * conseguem abrir os cards. Com `!`, os menus saem como texto numerado e a
+     * escolha é feita respondendo com o número.
+     */
+    textOnly: boolean;
+
+    /**
      * ID do grupo/usuário que está recebendo a mensagem.
      */
     remoteJid: string;

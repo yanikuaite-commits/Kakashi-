@@ -25,6 +25,7 @@ export default {
     sendReply,
     userLid,
     isOwner,
+    textOnly,
   }) => {
     if (typeof sendSuccessReact === "function") {
       await sendSuccessReact().catch(() => {});
@@ -61,6 +62,7 @@ export default {
           webMessage,
           section: categoria.id,
           permissions,
+          textOnly,
         });
 
         if (sent) return;
@@ -73,6 +75,7 @@ export default {
           webMessage,
           permissions,
           timestamp: webMessage?.messageTimestamp,
+          textOnly,
         });
 
         if (sent) return;

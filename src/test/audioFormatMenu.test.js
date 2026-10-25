@@ -97,3 +97,80 @@ test("menu de áudio respeita o autor e envia documento com nome e mimetype fixo
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test("modo texto: lista de formato sai numerada, sem card, e o número envia", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "audio-texto-"));
+  const filePath = path.join(tempDir, "audio.mp3");
+  await fs.writeFile(filePath, "audio");
+
+  const cards = [];
+  const replies = [];
+  const documents = [];
+  const socket = {
+    sendMessage: async (_chatId, content) => {
+      cards.push(content);
+    },
+  };
+  const common = {
+    chatId: "grupo-audio-texto@g.us",
+    socket,
+    sendReply: async (text) => replies.push(text),
+    sendAudioFromFile: async () => {},
+    sendAudioDocumentFromFile: async (...args) => documents.push(args),
+  };
+
+  try {
+    assert.equal(
+      await startAudioFormatMenu({
+        socket,
+        chatId: common.chatId,
+        ownerLid: "utilizador-a",
+        ownerName: "Pessoa A",
+        sendReply: common.sendReply,
+        payload: {
+          filePath,
+          fileName: "original.mp3",
+          title: "Música / teste",
+          artist: "Artista",
+          duration: 125,
+          platform: "YouTube",
+          mimetype: "audio/ogg",
+        },
+        textOnly: true,
+      }),
+      true,
+    );
+
+    assert.deepEqual(cards, [], "modo texto não tenta o card");
+    assert.equal(replies.length, 1);
+    assert.match(replies[0], /1\. /);
+    assert.match(replies[0], /4\. /);
+    assert.doesNotMatch(replies[0], /Não consegui abrir o menu interativo/);
+
+    // O reenvio da lista continua em texto.
+    assert.equal(
+      await handleAudioFormatReply({
+        ...common,
+        senderLid: "utilizador-a",
+        text: "fmt:menu",
+      }),
+      true,
+    );
+    assert.deepEqual(cards, [], "o reenvio também não usa o card");
+
+    // Número 4 = documento: envia e apaga o temporário.
+    assert.equal(
+      await handleAudioFormatReply({
+        ...common,
+        senderLid: "utilizador-a",
+        text: "4",
+      }),
+      true,
+    );
+    assert.equal(documents.length, 1);
+    assert.equal(documents[0][1], "Música - teste.mp3");
+    await assert.rejects(fs.access(filePath));
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});

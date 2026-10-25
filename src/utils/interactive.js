@@ -100,6 +100,25 @@ export function numberedFallback(options, prompt = "Responde apenas com o númer
   ].join("\n");
 }
 
+/**
+ * Corpo do modo texto (prefixo `!`): a mesma lista numerada, sem o aviso de
+ * falha do card.
+ *
+ * O aviso só faz sentido quando o card foi TENTADO e falhou. Quem pede texto de
+ * propósito não pode ler "não consegui abrir o menu interativo" — foi o próprio
+ * utilizador que o dispensou.
+ *
+ * @param {string} fallbackText corpo produzido por `numberedFallback`
+ * @returns {string}
+ */
+export function textOnlyBody(fallbackText) {
+  const corpo = String(fallbackText ?? "");
+  const aviso = "Não consegui abrir o menu interativo 😕";
+  return corpo.startsWith(aviso)
+    ? corpo.slice(aviso.length).replace(/^\n+/, "")
+    : corpo;
+}
+
 function idsFromContent(content) {
   const ids = [];
 
@@ -257,6 +276,70 @@ export async function handleInteractiveMenuReply({
   return null;
 }
 
+/**
+ * Entrega o menu como TEXTO numerado, sem tentar o card interativo.
+ *
+ * Usado pelo modo texto (prefixo `!`) e partilhado com o fallback, para que o
+ * registo das ações numéricas seja idêntico nos dois caminhos — é o registo que
+ * faz "1" valer como a opção 1.
+ *
+ * @returns {Promise<boolean>} true se o texto saiu
+ */
+async function deliverTextFallback({
+  socket,
+  chatId,
+  content,
+  fallbackText,
+  sendReply,
+  ownerId,
+  responseMappings = [],
+  fallbackActions = [],
+  ttlMs = INTERACTIVE_MENU_TTL_MS,
+  onExpire,
+  textOnly = false,
+}) {
+  if (!fallbackText) return false;
+
+  const register = () =>
+    registerMenu({
+      chatId,
+      ownerId,
+      ids: idsFromContent(content),
+      responseMappings,
+      fallbackActions,
+      sendReply,
+      ttlMs,
+      onExpire,
+    });
+
+  try {
+    if (!sendReply) throw new Error("sendReply indisponível");
+    await sendReply(textOnly ? textOnlyBody(fallbackText) : fallbackText);
+    register();
+    return true;
+  } catch (replyError) {
+    errorLog(
+      `O fallback via sendReply falhou para ${chatId}: ${replyError.message || replyError}; a tentar envio direto.`,
+    );
+
+    try {
+      await socket.sendMessage(chatId, {
+        text: withFooter(ensureFrame(textOnly ? textOnlyBody(fallbackText) : fallbackText)),
+      });
+      register();
+      return true;
+    } catch (fallbackError) {
+      errorLog(
+        `O fallback direto também falhou para ${chatId}: ${fallbackError.message || fallbackError}`,
+      );
+      throw new Error(
+        `Falha no menu interativo e no fallback: ${fallbackError.message || fallbackError}`,
+        { cause: fallbackError },
+      );
+    }
+  }
+}
+
 export async function sendInteractiveWithFallback({
   socket,
   chatId,
@@ -269,13 +352,36 @@ export async function sendInteractiveWithFallback({
   fallbackActions = [],
   ttlMs = INTERACTIVE_MENU_TTL_MS,
   onExpire,
+  textOnly = false,
 }) {
   /**
    * Envia o conteúdo (card nativeFlow com `interactiveButtons` só com
    * `single_select` + `cta_url`, ou lista clássica) e devolve o resultado do
    * `socket.sendMessage` (objeto com `key.id`), para os logs do fluxo guiado.
    * No fallback em texto devolve `true`.
+   *
+   * `textOnly` (prefixo `!`) salta o envio interativo e vai DIRETO ao texto
+   * numerado: clientes que não renderizam botões (iOS) precisam do texto, e
+   * mandar-lhes o card só gastaria uma mensagem que eles não sabem abrir. As
+   * ações numéricas continuam a ser registadas, por isso a escolha por número
+   * funciona exatamente como no fallback.
    */
+  if (textOnly) {
+    return deliverTextFallback({
+      socket,
+      chatId,
+      content,
+      fallbackText,
+      sendReply,
+      ownerId,
+      responseMappings,
+      fallbackActions,
+      ttlMs,
+      onExpire,
+      textOnly: true,
+    });
+  }
+
   try {
     const sent = await socket.sendMessage(chatId, content);
     registerMenu({
@@ -298,49 +404,17 @@ export async function sendInteractiveWithFallback({
     }
     if (!sendReply || !fallbackText) return false;
 
-    try {
-      if (!sendReply) throw new Error("sendReply indisponível");
-      await sendReply(fallbackText);
-      registerMenu({
-        chatId,
-        ownerId,
-        ids: idsFromContent(content),
-        responseMappings,
-        fallbackActions,
-        sendReply,
-        ttlMs,
-        onExpire,
-      });
-      return true;
-    } catch (replyError) {
-      errorLog(
-        `O fallback via sendReply falhou para ${chatId}: ${replyError.message || replyError}; a tentar envio direto.`,
-      );
-
-      try {
-        await socket.sendMessage(chatId, {
-          text: withFooter(ensureFrame(fallbackText)),
-        });
-        registerMenu({
-          chatId,
-          ownerId,
-          ids: idsFromContent(content),
-          responseMappings,
-          fallbackActions,
-          sendReply,
-          ttlMs,
-          onExpire,
-        });
-        return true;
-      } catch (fallbackError) {
-        errorLog(
-          `O fallback direto também falhou para ${chatId}: ${fallbackError.message || fallbackError}`,
-        );
-        throw new Error(
-          `Falha no menu interativo e no fallback: ${fallbackError.message || fallbackError}`,
-          { cause: fallbackError },
-        );
-      }
-    }
+    return deliverTextFallback({
+      socket,
+      chatId,
+      content,
+      fallbackText,
+      sendReply,
+      ownerId,
+      responseMappings,
+      fallbackActions,
+      ttlMs,
+      onExpire,
+    });
   }
 }

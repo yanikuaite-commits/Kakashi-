@@ -48,7 +48,110 @@ function limpar() {
   resetGuidedSessions();
 }
 
-/* ═══════════ DOWNLOAD · TIKTOK ═══════════ */
+/* ═══════════ MODO TEXTO (PREFIXO `!`) ═══════════ */
+
+test("fluxo guiado em modo texto: cards saem numerados e o número navega", async () => {
+  limpar();
+  const ambiente = criarAmbiente();
+
+  // `!menu` abre a sessão já em modo texto.
+  await openGuidedSession({
+    socket: ambiente.socket,
+    chatId: GROUP,
+    ownerId: DONO,
+    ownerName: "Membro",
+    sendReply: ambiente.sendReply,
+    permissions: { isOwner: false, isAdmin: false },
+    textOnly: true,
+  });
+
+  assert.equal(getGuidedSession(GROUP, DONO).textOnly, true);
+
+  // Abrir a categoria sai em TEXTO (nada foi para o socket).
+  assert.equal(
+    await handleGuidedFlow({
+      socket: ambiente.socket,
+      chatId: GROUP,
+      senderId: DONO,
+      text: "cat:download",
+      commonFunctions: {},
+      sendReply: ambiente.sendReply,
+      dispatch: async () => {},
+    }),
+    true,
+  );
+
+  assert.deepEqual(
+    ambiente.enviadas,
+    [],
+    "o modo texto não envia cards que o cliente iOS não abre",
+  );
+  const ultima = ambiente.replies.at(-1).text;
+  assert.match(ultima, /1\. .*TikTok/i);
+  assert.doesNotMatch(ultima, /Não consegui abrir o menu interativo/);
+
+  // O número navega: "1" abre a primeira função da categoria.
+  assert.equal(
+    await handleGuidedFlow({
+      socket: ambiente.socket,
+      chatId: GROUP,
+      senderId: DONO,
+      text: "1",
+      commonFunctions: {},
+      sendReply: ambiente.sendReply,
+      dispatch: async () => {},
+    }),
+    true,
+  );
+  assert.deepEqual(ambiente.enviadas, []);
+  assert.notEqual(ambiente.replies.at(-1).text, ultima);
+
+  // O modo texto fica na sessão: a função escolhida pede o link em texto.
+  assert.equal(getGuidedSession(GROUP, DONO).textOnly, true);
+});
+
+test("fluxo guiado em modo texto: lista de qualidade do YouTube sai numerada", async () => {
+  limpar();
+  const ambiente = criarAmbiente();
+
+  await openGuidedSession({
+    socket: ambiente.socket,
+    chatId: GROUP,
+    ownerId: DONO,
+    ownerName: "Membro",
+    sendReply: ambiente.sendReply,
+    permissions: { isOwner: false, isAdmin: false },
+    textOnly: true,
+  });
+
+  await handleGuidedFlow({
+    socket: ambiente.socket,
+    chatId: GROUP,
+    senderId: DONO,
+    text: "fn:download:youtube-video",
+    commonFunctions: {},
+    sendReply: ambiente.sendReply,
+    dispatch: async () => {},
+  });
+
+  await handleGuidedFlow({
+    socket: ambiente.socket,
+    chatId: GROUP,
+    senderId: DONO,
+    text: "https://youtu.be/abc123",
+    commonFunctions: {},
+    sendReply: ambiente.sendReply,
+    dispatch: async () => {},
+  });
+
+  assert.deepEqual(ambiente.enviadas, [], "sem lista interativa");
+  assert.match(ambiente.replies.at(-1).text, /1\. 📱 360p/);
+  assert.match(ambiente.replies.at(-1).text, /3\. 🎬 720p/);
+
+  // A pendência de qualidade guarda o modo texto para o reenvio.
+  const sessao = getGuidedSession(GROUP, DONO);
+  assert.equal(sessao.pending.input, "https://youtu.be/abc123");
+});
 
 test(" tik-tok: link baixa direto e mantém a função ativa", async (t) => {
   limpar();

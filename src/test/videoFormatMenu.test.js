@@ -124,6 +124,85 @@ test("menu de vídeo respeita o autor, abre a lista e baixa na qualidade escolhi
   }
 });
 
+test("modo texto: lista de qualidade sai numerada, sem card, e o número baixa", async () => {
+  const { tempDir, filePath } = await makeTempVideo();
+
+  const cards = [];
+  const replies = [];
+  const videos = [];
+  const socket = {
+    sendMessage: async (_chatId, content) => {
+      cards.push(content);
+    },
+  };
+  const common = {
+    chatId: "grupo-texto@g.us",
+    socket,
+    sendReply: async (text) => replies.push(text),
+    sendVideoFromFile: async (file, caption) => videos.push({ file, caption }),
+  };
+
+  try {
+    assert.equal(
+      await startVideoFormatMenu({
+        socket,
+        chatId: common.chatId,
+        ownerLid: "utilizador-a",
+        ownerName: "Pessoa A",
+        sendReply: common.sendReply,
+        source: "https://www.youtube.com/watch?v=exemplo",
+        title: "Vídeo / teste",
+        textOnly: true,
+      }),
+      true,
+    );
+
+    // O card NÃO foi tentado: o texto numerado foi direto.
+    assert.deepEqual(cards, [], "modo texto não gasta a mensagem do card");
+    assert.equal(replies.length, 1);
+    assert.match(replies[0], /1\. 📱 360p/);
+    assert.match(replies[0], /3\. 🎬 720p/);
+    assert.match(replies[0], /5\. 🏆 Best/);
+    assert.doesNotMatch(replies[0], /Não consegui abrir o menu interativo/);
+
+    // O reenvio da lista (vfmt:menu) continua em texto.
+    assert.equal(
+      await handleVideoFormatReply({
+        ...common,
+        senderLid: "utilizador-a",
+        text: "vfmt:menu",
+      }),
+      true,
+    );
+    assert.deepEqual(cards, [], "o reenvio também não usa o card");
+    assert.equal(replies.length, 2);
+    assert.match(replies[1], /3\. 🎬 720p/);
+
+    // Número 3 = 720p: baixa na altura certa e envia.
+    const downloads = [];
+    assert.equal(
+      await handleVideoFormatReply({
+        ...common,
+        senderLid: "utilizador-a",
+        jid: "utilizador-a",
+        text: "3",
+        download: async (source, height) => {
+          downloads.push({ source, height });
+          return { filePath };
+        },
+      }),
+      true,
+    );
+    assert.deepEqual(downloads, [
+      { source: "https://www.youtube.com/watch?v=exemplo", height: 720 },
+    ]);
+    assert.equal(videos.length, 1);
+    assert.match(videos[0].caption, /📺 \*Qualidade:\* 720p/);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("em conversa privada o próprio chat é o autor; sem remetente não há menu", async () => {
   const chatId = "5511999999999@s.whatsapp.net";
   const replies = [];

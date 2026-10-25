@@ -31,6 +31,7 @@ export default {
     socket,
     remoteJid,
     userLid,
+    textOnly,
   }) => {
     if (!fullArgs.length) {
       throw new InvalidParameterError("Você precisa enviar uma URL do TikTok!");
@@ -67,6 +68,7 @@ export default {
           thumbnail: data.thumbnail,
           mimetype: "audio/mpeg",
         },
+        textOnly,
       });
       if (!sent) await sendErrorReply("Não consegui abrir as opções de formato do áudio.");
       data.filePath = sent ? null : data.filePath;
