@@ -35,6 +35,7 @@ before(async () => {
   for (const file of [
     RATE_LIMIT_FILE,
     path.join(DATABASE_DIR, "credits.json"),
+    path.join(DATABASE_DIR, "subscriptions.json"),
     path.join(DATABASE_DIR, "bot-state.json"),
     path.join(DATABASE_DIR, "inactive-groups.json"),
   ]) {

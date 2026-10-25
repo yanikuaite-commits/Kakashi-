@@ -980,8 +980,13 @@ test("episódio sem saldo para 20 créditos é bloqueado antes do download", asy
   resetAnimeSessions();
   const dbDir = DATABASE_DIR;
   const creditsFile = path.join(dbDir, "credits.json");
+  const subscriptionsFile = path.join(dbDir, "subscriptions.json");
   const anterior = await readFile(creditsFile, "utf8").catch(() => null);
+  const assinaturasAnteriores = await readFile(subscriptionsFile, "utf8").catch(
+    () => null,
+  );
   await writeFile(creditsFile, "{}");
+  await writeFile(subscriptionsFile, "{}");
 
   try {
     const chatId = "120363111111111111@g.us";
@@ -1024,10 +1029,15 @@ test("episódio sem saldo para 20 créditos é bloqueado antes do download", asy
     assert.equal(accountBalance(getAccount(ownerLid)), 0, "nada foi cobrado");
   } finally {
     resetAnimeSessions();
-    if (anterior === null) {
-      await rm(creditsFile, { force: true });
-    } else {
-      await writeFile(creditsFile, anterior);
+    for (const [ficheiro, guardado] of [
+      [creditsFile, anterior],
+      [subscriptionsFile, assinaturasAnteriores],
+    ]) {
+      if (guardado === null) {
+        await rm(ficheiro, { force: true });
+      } else {
+        await writeFile(ficheiro, guardado);
+      }
     }
   }
 });
@@ -1035,8 +1045,13 @@ test("episódio sem saldo para 20 créditos é bloqueado antes do download", asy
 test("com saldo, o episódio passa do portão e cobra 20 créditos", async () => {
   resetAnimeSessions();
   const creditsFile = path.join(DATABASE_DIR, "credits.json");
+  const subscriptionsFile = path.join(DATABASE_DIR, "subscriptions.json");
   const anterior = await readFile(creditsFile, "utf8").catch(() => null);
+  const assinaturasAnteriores = await readFile(subscriptionsFile, "utf8").catch(
+    () => null,
+  );
   await writeFile(creditsFile, "{}");
+  await writeFile(subscriptionsFile, "{}");
 
   try {
     const chatId = "120363222222222222@g.us";
@@ -1081,10 +1096,15 @@ test("com saldo, o episódio passa do portão e cobra 20 créditos", async () =>
     );
   } finally {
     resetAnimeSessions();
-    if (anterior === null) {
-      await rm(creditsFile, { force: true });
-    } else {
-      await writeFile(creditsFile, anterior);
+    for (const [ficheiro, guardado] of [
+      [creditsFile, anterior],
+      [subscriptionsFile, assinaturasAnteriores],
+    ]) {
+      if (guardado === null) {
+        await rm(ficheiro, { force: true });
+      } else {
+        await writeFile(ficheiro, guardado);
+      }
     }
   }
 });

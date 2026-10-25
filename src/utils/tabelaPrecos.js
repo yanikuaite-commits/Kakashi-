@@ -12,24 +12,31 @@
  * `src/utils/richTable.js`.
  */
 
-/** Tabela 1 — planos de acesso por dias. */
+/**
+ * Tabela 1 — planos de assinatura por dias.
+ *
+ * Cada plano paga um valor único e, em troca, soma `bonus` créditos POR DIA ao
+ * bônus gratuito (`DAILY_FREE_CREDITS`) durante `dias` dias. Um plano de 7 dias
+ * com `bonus: 40` rende 30 + 40 = 70 créditos por dia, todos os dias, até
+ * completar os 7 dias.
+ */
 const DIAS = {
   id: "dias",
   titulo: "Tabela de planos (dias)",
-  cabecalho: ["Dias", "Preço"],
+  cabecalho: ["Dias", "Preço", "Créditos/dia"],
   linhas: [
-    ["7 dias", "20 MT"],
-    ["14 dias", "45 MT"],
-    ["20 dias", "60 MT"],
-    ["30 dias", "90 MT"],
-    ["60 dias", "140 MT"],
+    ["7 dias", "20 MT", "+40 créditos"],
+    ["14 dias", "45 MT", "+60 créditos"],
+    ["20 dias", "60 MT", "+100 créditos"],
+    ["30 dias", "90 MT", "+150 créditos"],
+    ["60 dias", "140 MT", "+300 créditos"],
   ],
   valores: [
-    { dias: 7, mt: 20 },
-    { dias: 14, mt: 45 },
-    { dias: 20, mt: 60 },
-    { dias: 30, mt: 90 },
-    { dias: 60, mt: 140 },
+    { dias: 7, mt: 20, bonus: 40 },
+    { dias: 14, mt: 45, bonus: 60 },
+    { dias: 20, mt: 60, bonus: 100 },
+    { dias: 30, mt: 90, bonus: 150 },
+    { dias: 60, mt: 140, bonus: 300 },
   ],
   comando: "tabela-dias",
   resumo: "7, 14, 20, 30 e 60 dias",

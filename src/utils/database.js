@@ -32,6 +32,7 @@ const BOT_STATE_FILE = "bot-state";
 const PRIVATE_WHITELIST_FILE = "private-whitelist";
 const BLOCKED_COMMANDS_FILE = "blocked-commands";
 const CREDITS_FILE = "credits";
+const SUBSCRIPTIONS_FILE = "subscriptions";
 const PENDING_RECHARGES_FILE = "pending-recharges";
 const RATE_LIMIT_FILE = "rate-limit";
 
@@ -609,6 +610,18 @@ export function readCreditsAccounts() {
 
 export function saveCreditsAccounts(accounts) {
   writeJSON(CREDITS_FILE, accounts, {});
+}
+
+/**
+ * Assinaturas ativas por usuário (chave = LID/JID).
+ * A regra de negócio fica em src/services/subscriptions.js.
+ */
+export function readSubscriptions() {
+  return readJSON(SUBSCRIPTIONS_FILE, {});
+}
+
+export function saveSubscriptions(subscriptions) {
+  writeJSON(SUBSCRIPTIONS_FILE, subscriptions, {});
 }
 
 /**

@@ -25,12 +25,16 @@ import {
 import { errorLog, infoLog } from "./logger.js";
 import { PROVIDER_EMOLA, parsePaymentSms, providerLabel } from "./paymentText.js";
 import { sendTabela } from "./richTable.js";
+import { registerPaymentChoice } from "./paymentChoice.js";
 import {
   creditsForAmount,
   expireRecharges,
   listPendingRecharges,
+  paymentIntent,
+  planForAmount,
   registerPendingRecharge,
 } from "../services/recharges.js";
+import { planByAmount } from "../services/subscriptions.js";
 
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -75,13 +79,21 @@ function formatarHora(dateTime) {
 
 /** Ficha da transação, como o dono a vê no privado. */
 export function rechargeOwnerMessage(recharge) {
-  const creditos =
-    recharge.credits == null
+  const assinatura = recharge.kind === "assinatura";
+  const plano = recharge.plan;
+
+  const creditos = assinatura
+    ? plano
+      ? `⭐ Assinatura ${plano.dias} dias (+${plano.bonus} créditos/dia)`
+      : "⭐ Assinatura (plano por confirmar)"
+    : recharge.credits == null
       ? "⚠️ Valor fora da tabela — define os créditos na confirmação"
       : `${recharge.credits} créditos`;
 
   return [
-    "💳 *NOVO PAGAMENTO PARA CONFIRMAR*",
+    assinatura
+      ? "⭐ *NOVA ASSINATURA PARA CONFIRMAR*"
+      : "💳 *NOVO PAGAMENTO PARA CONFIRMAR*",
     "",
     `🔖 Transação: ${recharge.transactionId || recharge.key}`,
     `📱 Operador: ${recharge.providerLabel}`,
@@ -95,7 +107,10 @@ export function rechargeOwnerMessage(recharge) {
     `🆔 ID do usuário: ${String(recharge.senderLid).split("@")[0]}`,
     `📥 Chat: ${recharge.chatId || "—"}`,
     "",
-    `🎁 Créditos a adicionar: ${creditos}`,
+    `🎁 A entregar: ${creditos}`,
+    assinatura
+      ? `ℹ️ A assinatura credita o bónus todos os dias às 00h00, até ao fim do plano.`
+      : null,
     "",
     `⏳ Tens ${Math.round(PAYMENT_CONFIRM_TTL_MS / (60 * 60 * 1000))} horas para confirmar ou recusar. ` +
       "Depois disso a transação é cancelada e o usuário tem de enviar de novo.",
@@ -106,8 +121,14 @@ export function rechargeOwnerMessage(recharge) {
 
 /** Mensagem enviada ao grupo quando o pagamento é detetado. */
 export function rechargeGroupMessage({ recharge, senderLid }) {
-  const creditos =
-    recharge.credits == null
+  const assinatura = recharge.kind === "assinatura";
+  const plano = recharge.plan;
+
+  const entrega = assinatura
+    ? plano
+      ? `${plano.dias} dias de assinatura (+${plano.bonus} créditos/dia)`
+      : "assinatura a confirmar pelo dono"
+    : recharge.credits == null
       ? "valor a confirmar pelo dono"
       : `${recharge.credits} créditos`;
 
@@ -116,13 +137,42 @@ export function rechargeGroupMessage({ recharge, senderLid }) {
     "",
     `💰 Valor: ${recharge.amount} MT`,
     `📱 Operador: ${recharge.providerLabel}`,
-    `🎁 Créditos: ${creditos}`,
+    `🎁 ${assinatura ? "Assinatura" : "Créditos"}: ${entrega}`,
     `🔖 Transação: ${recharge.transactionId || "—"}`,
     "",
-    "⏳ O dono foi avisado e vai confirmar o pagamento. Assim que confirmar, os créditos entram na tua conta.",
+    assinatura
+      ? "⏳ O dono foi avisado e vai confirmar. Assim que confirmar, a assinatura fica ativa e o bónus entra na tua conta TODOS OS DIAS até o plano acabar."
+      : "⏳ O dono foi avisado e vai confirmar o pagamento. Assim que confirmar, os créditos entram na tua conta.",
     "",
     `📊 Vê a tua conta com *${PREFIX}conta*`,
   ].join("\n");
+}
+
+/**
+ * Pergunta ao utilizador se um valor ambíguo (20 MT) é créditos ou assinatura.
+ *
+ * Só existe um valor nas duas tabelas (20 MT: 65 créditos ou 7 dias), mas a
+ * pergunta é genérica para qualquer ambiguidade futura. Sem ela o bot teria de
+ * escolher por conta própria e metade das compras sairia errada.
+ */
+export function ambiguousAmountMessage({ recharge }) {
+  const plano = planByAmount(recharge.amount);
+  const creditos = creditsForAmount(recharge.amount);
+
+  return [
+    "🤔 *O que queres com este pagamento?*",
+    "",
+    `💰 Valor: ${recharge.amount} MT`,
+    "",
+    `1️⃣ *Créditos avulsos* — ${creditos} créditos de uma vez`,
+    plano
+      ? `2️⃣ *Assinatura* — ${plano.dias} dias com +${plano.bonus} créditos/dia`
+      : null,
+    "",
+    `Responde *1* ou *2* aqui no chat. Sem resposta, o dono escolhe na confirmação.`,
+  ]
+    .filter((linha) => linha !== null)
+    .join("\n");
 }
 
 /** Aviso ao usuário de que o dono confirmou e os créditos entraram. */
@@ -296,12 +346,22 @@ export async function handlePaymentSms({
     return false;
   }
 
+  // O valor decide o que se compra: pacote de créditos, plano de assinatura, ou
+  // — quando o mesmo valor existe nas duas tabelas (20 MT) — pergunta-se.
+  const intencao = paymentIntent(sms.amount);
+  const plano = planForAmount(sms.amount);
+  const ambiguo = intencao === "escolha";
+
   const registo = registerPendingRecharge({
     ...sms,
     senderLid,
     senderName,
     chatId,
     credits: creditsForAmount(sms.amount),
+    // Numa compra ambígua fica "creditos" por omissão e o dono pode converter na
+    // confirmação; o utilizador é perguntado logo abaixo.
+    kind: ambiguo ? "creditos" : intencao === "assinatura" ? "assinatura" : "creditos",
+    plan: ambiguo ? plano : intencao === "assinatura" ? plano : null,
   });
 
   if (!registo.ok) {
@@ -325,17 +385,32 @@ export async function handlePaymentSms({
       `(${registo.recharge.transactionId || registo.recharge.key})`,
   );
 
-  // Tabela de créditos + aviso no grupo, depois o pedido ao dono.
+  // Tabela + aviso no grupo, depois o pedido ao dono. A tabela mostrada é a que
+  // interessa àquele pagamento: um plano merece a tabela de dias.
   await sendTabela({
     socket,
     remoteJid: chatId,
     sendReply,
-    id: "creditos",
+    id: registo.recharge.kind === "assinatura" ? "dias" : "creditos",
   }).catch((error) => errorLog(`[pagamento] falha ao enviar a tabela: ${error.message}`));
 
   await sendReply?.(
     rechargeGroupMessage({ recharge: registo.recharge, senderLid }),
   ).catch?.(() => {});
+
+  // Valor nas duas tabelas: pergunta antes de o dono confirmar, para a compra
+  // não sair errada. A resposta ("1"/"2") é apanhada no middleware.
+  if (ambiguo) {
+    registerPaymentChoice({
+      chatId,
+      senderLid,
+      rechargeKey: registo.recharge.key,
+    });
+
+    await sendReply?.(ambiguousAmountMessage({ recharge: registo.recharge })).catch?.(
+      () => {},
+    );
+  }
 
   await notifyOwner({ socket, recharge: registo.recharge }).catch((error) =>
     errorLog(`[pagamento] falha ao avisar o dono: ${error.message}`),
