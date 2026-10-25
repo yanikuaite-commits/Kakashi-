@@ -30,6 +30,13 @@ import {
   saveCreditsAccounts,
 } from "../utils/database.js";
 import { infoLog } from "../utils/logger.js";
+import { mozambiqueClock, minutesUntilDailyReset } from "../utils/clock.js";
+import { dailySubscriptionBonus, getSubscription, daysRemaining } from "./subscriptions.js";
+
+// Reexportado: o relógio de Moçambique nasceu aqui e outros módulos (e testes)
+// importam-no deste ficheiro. A implementação vive em `utils/clock.js` para as
+// assinaturas a poderem usar sem criar um ciclo de importação.
+export { mozambiqueClock, minutesUntilDailyReset };
 
 /**
  * Normaliza um nome de comando para comparação (sem acentos, minúsculo,
@@ -52,41 +59,6 @@ const commandCosts = new Map(
     Number(cost) || 0,
   ]),
 );
-
-const maputoFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: CREDITS_TIMEZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
-
-/**
- * Data e hora atuais no fuso de Moçambique.
- * @returns {{ day: string, hour: number, minute: number }}
- */
-export function mozambiqueClock(now = Date.now()) {
-  const parts = Object.fromEntries(
-    maputoFormatter
-      .formatToParts(new Date(now))
-      .map(({ type, value }) => [type, value]),
-  );
-
-  return {
-    day: `${parts.year}-${parts.month}-${parts.day}`,
-    hour: Number(parts.hour) % 24,
-    minute: Number(parts.minute),
-  };
-}
-
-/** Minutos restantes até o reset diário das 00h00 (horário de Moçambique). */
-export function minutesUntilDailyReset(now = Date.now()) {
-  const { hour, minute } = mozambiqueClock(now);
-
-  return 24 * 60 - (hour * 60 + minute);
-}
 
 function untilResetLabel(minutes) {
   const hours = Math.floor(minutes / 60);
@@ -168,16 +140,25 @@ export function hasSufficientCredits(jid, amount, { now = Date.now() } = {}) {
   return { ok: cost <= balance, cost, balance, account };
 }
 
+function dailyAllowance(jid, now) {
+  return DAILY_FREE_CREDITS + dailySubscriptionBonus(jid, now);
+}
+
 function createAccount(jid, now) {
   const { day } = mozambiqueClock(now);
   const timestamp = new Date(now).toISOString();
+  const bonus = dailySubscriptionBonus(jid, now);
 
   return {
     jid,
-    dailyCredits: DAILY_FREE_CREDITS,
+    dailyCredits: DAILY_FREE_CREDITS + bonus,
     paidCredits: 0,
     lastResetDay: day,
     lastResetAt: timestamp,
+    // Dia cujo bónus de assinatura já está incluído em `dailyCredits`. Nasce
+    // marcado quando a conta já entra com o bónus (compra no mesmo dia da
+    // primeira utilização), senão `addDailyBonus` somaria o bónus duas vezes.
+    subscriptionBonusDay: bonus > 0 ? day : "",
     totalSpent: 0,
     commandsUsed: 0,
     totalRecharged: 0,
@@ -187,6 +168,14 @@ function createAccount(jid, now) {
   };
 }
 
+/**
+ * Reset diário das 00h00 (Moçambique).
+ *
+ * O valor reposto inclui o bónus da assinatura: um plano ativo rende
+ * `DAILY_FREE_CREDITS + bonus` todos os dias até acabar. É AQUI que o bónus é
+ * pago — creditá-lo de uma vez na compra daria o total no primeiro dia e zero
+ * nos seguintes, que é o contrário de uma assinatura.
+ */
 function applyDailyReset(account, now) {
   const { day } = mozambiqueClock(now);
 
@@ -194,9 +183,12 @@ function applyDailyReset(account, now) {
     return false;
   }
 
-  account.dailyCredits = DAILY_FREE_CREDITS;
+  const bonus = dailySubscriptionBonus(account.jid, now);
+
+  account.dailyCredits = DAILY_FREE_CREDITS + bonus;
   account.lastResetDay = day;
   account.lastResetAt = new Date(now).toISOString();
+  account.subscriptionBonusDay = bonus > 0 ? day : "";
 
   return true;
 }
@@ -275,7 +267,10 @@ export function refundCredits(jid, amount, { now = Date.now() } = {}) {
     return account;
   }
 
-  const roomForDaily = Math.max(0, DAILY_FREE_CREDITS - account.dailyCredits);
+  // O teto do dia inclui o bónus da assinatura: devolver até ao valor que o
+  // reset repõe, senão um reembolso num plano ativo ficava preso em
+  // `DAILY_FREE_CREDITS` e o bónus do dia perdia-se.
+  const roomForDaily = Math.max(0, dailyAllowance(account.jid, now) - account.dailyCredits);
   const backToDaily = Math.min(refund, roomForDaily);
 
   account.dailyCredits += backToDaily;
@@ -284,6 +279,43 @@ export function refundCredits(jid, amount, { now = Date.now() } = {}) {
   account.commandsUsed = Math.max(0, account.commandsUsed - 1);
 
   return saveAccount(account);
+}
+
+/**
+ * Credita o bónus do dia da ativação de uma assinatura.
+ *
+ * O reset diário das 00h00 só corre no dia seguinte, por isso o dia da compra
+ * seria o único sem bónus. Aqui soma-se ao saldo do dia (não aos recarregados,
+ * que não expiram): é o mesmo tipo de crédito que o reset vai repor amanhã.
+ *
+ * É IDEMPOTENTE por dia: se a conta já nasceu com o bónus de hoje (compra no
+ * mesmo dia da primeira utilização, quando `createAccount` correu já com a
+ * assinatura ativa), não soma outra vez. Sem isto, o primeiro dia de um plano
+ * novo rendia o bónus a dobrar.
+ *
+ * @param {string} jid
+ * @param {number} amount
+ * @param {{now?: number}} [options]
+ * @returns {{ok: boolean, credited: number, account: object}}
+ */
+export function addDailyBonus(jid, amount, { now = Date.now() } = {}) {
+  const account = getAccount(jid, now);
+  const bonus = Math.max(0, Math.ceil(Number(amount) || 0));
+
+  if (!bonus) {
+    return { ok: false, credited: 0, account };
+  }
+
+  const { day } = mozambiqueClock(now);
+
+  if (account.subscriptionBonusDay === day) {
+    return { ok: true, credited: 0, account };
+  }
+
+  account.dailyCredits += bonus;
+  account.subscriptionBonusDay = day;
+
+  return { ok: true, credited: bonus, account: saveAccount(account) };
 }
 
 /** Recarga feita pelo dono após pagamento em dinheiro (créditos não expiram). */
@@ -376,6 +408,9 @@ export function accountMessage({ account, name = "Você", prefix = PREFIX, now =
   const id = String(account.jid || "").split("@")[0];
   const minutes = minutesUntilDailyReset(now);
   const recharges = Array.isArray(account.recharges) ? account.recharges : [];
+  const assinatura = getSubscription(account.jid, now);
+  const bonus = dailySubscriptionBonus(account.jid, now);
+  const faltam = daysRemaining(assinatura, now);
 
   return (
     `╭━━━ 💳 *MINHA CONTA*\n` +
@@ -383,8 +418,14 @@ export function accountMessage({ account, name = "Você", prefix = PREFIX, now =
     `┃ 🆔 ID: ${id}\n` +
     `┣━━━━━━━━━━━━━━━━━━\n` +
     `┃ 💰 *Saldo:* ${accountBalance(account)} créditos\n` +
-    `┃ ├ 🎁 Diários grátis: ${Math.max(0, account.dailyCredits)}/${DAILY_FREE_CREDITS}\n` +
+    `┃ ├ 🎁 Diários grátis: ${Math.max(0, account.dailyCredits)}/${DAILY_FREE_CREDITS + bonus}\n` +
     `┃ └ 💎 Recarregados: ${Math.max(0, account.paidCredits)}\n` +
+    (bonus > 0
+      ? `┣━━━━━━━━━━━━━━━━━━\n` +
+        `┃ ⭐ *Assinatura ativa:* +${bonus}/dia\n` +
+        `┃ ├ Faltam: ${faltam} dia${faltam === 1 ? "" : "s"}\n` +
+        `┃ └ O bónus renova sozinho às 00h00\n`
+      : "") +
     `┣━━━━━━━━━━━━━━━━━━\n` +
     `┃ 📊 *Estatísticas*\n` +
     `┃ ├ Comandos usados: ${account.commandsUsed || 0}\n` +
@@ -397,7 +438,7 @@ export function accountMessage({ account, name = "Você", prefix = PREFIX, now =
     `\n┣━━━━━━━━━━━━━━━━━━\n` +
     `┃ 🕛 Reset diário: 00h00 (Moçambique)\n` +
     `┃    ├ Faltam: ${untilResetLabel(minutes)}\n` +
-    `┃    └ Próximo dia: +${DAILY_FREE_CREDITS} créditos grátis\n` +
+    `┃    └ Próximo dia: +${DAILY_FREE_CREDITS + bonus} créditos\n` +
     `┣━━━━━━━━━━━━━━━━━━\n` +
     `┃ ${ownerContactLine()}\n` +
     `┃ 📋 Tabela de custos: ${prefix}conta custos\n` +

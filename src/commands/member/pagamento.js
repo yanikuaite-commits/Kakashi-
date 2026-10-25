@@ -36,7 +36,11 @@ export function paymentMessage() {
       "📸 Depois de pagar, *reencaminha o SMS do comprovativo* para este chat.",
       "O dono confirma o pagamento e os créditos entram na tua conta.",
       "",
-      `📊 Confere os pacotes com *${PREFIX}tabela-creditos*`,
+      "⭐ Também podes comprar *planos por dias*: pagas uma vez e recebes",
+      "créditos extra TODOS OS DIAS até o plano acabar.",
+      "",
+      `📊 Pacotes de créditos: *${PREFIX}tabela-creditos*`,
+      `⭐ Planos por dias: *${PREFIX}tabela-dias*`,
       contact ? `💬 Dúvidas? Fala com o dono: https://wa.me/${contact}` : null,
     ].filter((linha) => linha !== null),
   });

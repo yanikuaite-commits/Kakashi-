@@ -14,9 +14,13 @@ if [ ! -d "assets" ]; then
     exit 1
 fi
 
-if [ ! -d "assets/auth/baileys" ]; then
+# Em hosts com volume, a sessão pode estar fora do projeto (AUTH_DIR). Sem esta
+# leitura o script dizia "não existe" e deixava a sessão antiga no volume.
+AUTH_PATH="${AUTH_DIR:-assets/auth/baileys}"
+
+if [ ! -d "$AUTH_PATH" ]; then
     echo "⚠️  A pasta de autenticação não existe ou já foi removida"
-    echo "   Caminho: ./assets/auth/baileys"
+    echo "   Caminho: $AUTH_PATH"
     exit 0
 fi
 
@@ -33,7 +37,7 @@ case $confirm in
         echo ""
         echo "🔄 Removendo arquivos de autenticação..."
         
-        rm -rf ./assets/auth/baileys
+        rm -rf "$AUTH_PATH"
         
         if [ $? -eq 0 ]; then
             echo "✅ Arquivos de autenticação removidos com sucesso!"

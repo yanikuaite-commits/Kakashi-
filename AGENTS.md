@@ -162,6 +162,37 @@ Mandatory rule:
 
 This keeps persistence behavior consistent and avoids duplicated parsing logic.
 
+### Persistence on ephemeral hosts
+
+Hosts without a mounted volume (Cloady, Render, Fly, Railway) start each deploy
+from a fresh container. Two directories are lost, and losing either one is
+visible to the user:
+
+| Path | What is lost without a volume | Env override |
+| --- | --- | --- |
+| `database/` | credits, active subscriptions, pending payments, warns, prefixes, muted users, restrictions | `DATABASE_DIR` |
+| `assets/auth/baileys/` | the WhatsApp pairing — the bot asks for the number again | `AUTH_DIR` |
+
+Both paths are configurable **because each host mounts its volume at a different
+path**. `src/config.js` reads `DATABASE_DIR` / `AUTH_DIR` and falls back to the
+repository paths, so a host that mounts its volume at `/data` only needs
+`DATABASE_DIR=/data` — no code change.
+
+- `src/utils/database.js` and `src/connection.js` run `mkdirSync(..., { recursive: true })`
+  on their directories at import time. A freshly mounted volume is empty, and
+  without the `mkdir` the first write dies with `ENOENT` before the bot answers.
+  Do not remove those calls.
+- `database/` must be one volume, not two: the credits and the pending payments
+  are read and written in the same flow.
+- **the volume is what makes the data survive; a database engine does not.**
+  Moving from JSON to SQLite/Postgres without a volume still loses everything on
+  every deploy. Fix the volume first.
+- on Cloady, volumes survive start/stop/redeploy and are only destroyed when the
+  app is deleted. Never delete an app to rename it.
+- `ANIME_DOCUMENT_LIMIT_MB` (300) assumes ~2x the media size on disk (the
+  download plus the Baileys encrypted copy). The Cloady free tier gives 5 GB of
+  SSD; check it before raising the limit.
+
 ## TABLES_AND_PRICING
 
 `tabela` shows both pricing tables through one interactive list (1 = day plans,
@@ -184,8 +215,67 @@ This keeps persistence behavior consistent and avoids duplicated parsing logic.
 - add or change prices in `TABELAS` only; do not duplicate the rows in commands
 - the three commands are in `FREE_COMMANDS`, so checking prices never costs credits
 - each table also carries a structured `valores` array (`{mt, creditos}` /
-  `{dias, mt}`) next to the display `linhas`, so the recharge flow maps a paid
-  amount to credits without parsing the presentation strings
+  `{dias, mt, bonus}`) next to the display `linhas`, so the recharge flow maps a
+  paid amount to what it buys without parsing the presentation strings
+- table 1 (`dias`) is the subscription plans: each plan pays one price and adds
+  `bonus` credits PER DAY on top of `DAILY_FREE_CREDITS` for `dias` days (see
+  SUBSCRIPTIONS)
+
+## SUBSCRIPTIONS
+
+A subscription is a day plan bought through the same payment flow as credits.
+The member pays once (e.g. 45 MT) and, for the next N days, receives
+`DAILY_FREE_CREDITS + bonus` credits every day at the 00h00 reset.
+
+- the plans live in `TABELAS.dias.valores` (`{dias, mt, bonus}`); there is no
+  second list to keep in sync
+- `src/services/subscriptions.js` is the core: `activateSubscription`,
+  `getSubscription`, `coversDay`, `daysRemaining`, `remainingBonus`,
+  `dailySubscriptionBonus`, `cancelSubscription`, `listActiveSubscriptions`
+- the record is a day RANGE, `[startDay, expiresDay[`, both in `YYYY-MM-DD`
+  (Mozambique days, from `src/utils/clock.js`). The activation day counts; the
+  expiry day does not. Comparing day strings avoids the DST/timezone traps that
+  a timestamp comparison would bring
+- **the bonus is paid per day, by the daily reset** (`applyDailyReset` in
+  `credits.js` sets `dailyCredits = DAILY_FREE_CREDITS + bonus`). Crediting the
+  whole `dias * bonus` at purchase would hand the total on day one and nothing
+  after — the opposite of a subscription
+- the activation day would be the only one without a bonus, because the reset
+  only runs the next day, so `addDailyBonus` credits it immediately. It is
+  idempotent per day via `account.subscriptionBonusDay`: when the account is
+  created after the subscription already exists, `createAccount` is born with
+  the bonus included and the later call adds nothing (no double credit)
+- renewing while a plan is still running does NOT throw the remaining days away:
+  the new plan starts on the old `expiresDay` and `extended` is true
+  (`bonusToday` is 0 then, since the new plan has not started)
+- the bonus is not a separate balance: it lives in `dailyCredits`, so it expires
+  with the day, and the daily cap (`DAILY_FREE_CREDITS + bonus`) also bounds the
+  refund in `refundCredits`
+- `conta` shows the active plan, the daily bonus and the days left
+- `database/subscriptions.json` holds the records, through
+  `readSubscriptions` / `saveSubscriptions` — never read it with `fs` directly
+
+Which table a payment belongs to is decided by the amount:
+
+| Amount | `paymentIntent` | Result |
+| --- | --- | --- |
+| 5, 10, 30, 50 MT | `creditos` | credit pack |
+| 45, 60, 90, 140 MT | `assinatura` | day plan |
+| 20 MT | `escolha` | in both tables: ask |
+| anything else | `null` | refused until the owner sets the credits |
+
+20 MT is the only value in both tables (65 credits or 7 days). `handlePaymentSms`
+asks "1 or 2"; the answer is stored IN THE PENDING REQUEST by
+`setRechargeKind`, not only in the process memory, because the owner confirms
+later and `confirmRecharge` reads the kind from the record. `src/utils/paymentChoice.js`
+only tracks who still owes an answer (indexed by chat + author, so another
+member's "2" cannot convert someone else's purchase) and its TTL is short on
+purpose. Without an answer the request stays as credits and the owner can force
+the other kind: `${prefix}recarga-confirmar <id> assinatura`.
+
+`confirmRecharge` closes the request first, then activates the subscription and
+credits the day's bonus. The credited amount reported for a plan is the plan's
+`bonus`, not what that call happened to add — the member receives it either way.
 
 ## PAYMENT_RECHARGES
 
@@ -213,11 +303,15 @@ Flow:
    `database/pending-recharges.json` keyed by the transaction id (or by a
    signature of the fields when the SMS has no id), so the same SMS cannot pay
    twice. Credits come from `TABELAS.creditos.valores` by the paid amount.
-5. the group gets the credit table plus a "payment received" note, and the owner
-   gets the transaction details in a private interactive list (confirm/refuse),
-   valid `PAYMENT_CONFIRM_TTL_MS` (10 hours).
-6. `confirmRecharge` closes the transaction before crediting, so a repeated
-   click cannot credit twice; `declineRecharge` cancels without crediting.
+5. the group gets the matching table (day plans for a subscription, credit packs
+   otherwise) plus a "payment received" note, and the owner gets the transaction
+   details in a private interactive list (confirm/refuse), valid
+   `PAYMENT_CONFIRM_TTL_MS` (10 hours). An ambiguous amount (20 MT) also asks the
+   member "1 or 2" (see SUBSCRIPTIONS).
+6. `confirmRecharge` closes the transaction before delivering, so a repeated
+   click cannot credit twice; `declineRecharge` cancels without crediting. A
+   credit pack calls `addCredits`; a plan calls `activateSubscription` and then
+   `addDailyBonus` for the activation day.
 7. after confirming, the owner command calls `notifyRechargeConfirmed`, which
    posts the confirmation in the chat where the SMS arrived (mentioning who
    paid) and then re-sends the credit table. The owner confirms in private, so
@@ -228,7 +322,8 @@ Flow:
 
 Owner commands: `recarga-confirmar`, `recarga-recusar` and
 `recargas-pendentes`. A value outside the table is refused until the owner passes
-the credits explicitly (`${prefix}recarga-confirmar <id> <creditos>`).
+the credits explicitly (`${prefix}recarga-confirmar <id> <creditos>`); the owner
+can also force the kind with `... <id> assinatura` / `... <id> creditos`.
 
 Do not credit on parse alone: the money is only real once the owner confirms.
 Do not lower the "same SMS twice" guard — the transaction id is the only thing

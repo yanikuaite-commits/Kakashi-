@@ -9,6 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
 const TMP_DIR = path.join(ROOT_DIR, "tmp");
 const creditsFile = path.join(ROOT_DIR, "database", "credits.json");
+const subscriptionsFile = path.join(ROOT_DIR, "database", "subscriptions.json");
 
 // O binário é falso: nenhum teste aqui acessa a internet.
 const fakeDir = path.join(TMP_DIR, `fake-ytdlp-${randomUUID()}`);
@@ -97,19 +98,31 @@ const { accountBalance, getAccount, withCreditsContext } = await import(
 );
 
 let previousCreditsFile;
+let previousSubscriptionsFile;
 
 before(async () => {
   previousCreditsFile = await readFile(creditsFile).catch((error) => {
     if (error.code === "ENOENT") return null;
     throw error;
   });
+  previousSubscriptionsFile = await readFile(subscriptionsFile).catch(
+    (error) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    },
+  );
 });
 
 after(async () => {
-  if (previousCreditsFile === null) {
-    await rm(creditsFile, { force: true });
-  } else {
-    await writeFile(creditsFile, previousCreditsFile);
+  for (const [ficheiro, guardado] of [
+    [creditsFile, previousCreditsFile],
+    [subscriptionsFile, previousSubscriptionsFile],
+  ]) {
+    if (guardado === null) {
+      await rm(ficheiro, { force: true });
+    } else {
+      await writeFile(ficheiro, guardado);
+    }
   }
 
   // Nenhum arquivo de mídia ou binário falso deve sobrar em tmp/.

@@ -93,10 +93,34 @@ pode vir de `src/config.js` ou da variável de ambiente `PAIRING_SECRET` (o
 ambiente tem prioridade). O serviço usa a variável `PORT` fornecida pelo Render.
 
 A sessão do WhatsApp (`assets/auth/baileys`) **não** é versionada: cada
-instalação cria a sua no pareamento. Em hosts com disco efêmero (o Render, sem
-disco montado), o container começa sem sessão a cada deploy/reinício e o
-pareamento precisa ser refeito. Para manter a sessão entre reinícios, monte um
-disco persistente no caminho `/opt/project/assets/auth/baileys`.
+instalação cria a sua no pareamento.
+
+#### Persistência entre deploys (volume)
+
+Em hosts com disco efémero (Cloady, Render, Fly, Railway) o container começa
+limpo a cada deploy. **Sem um volume perdem-se os créditos, as assinaturas e o
+pareamento** — o bot volta a pedir o número. Monte um volume persistente para os
+**dois** caminhos que guardam estado:
+
+| Caminho | O que guarda |
+| --- | --- |
+| `database/` | créditos, assinaturas, pagamentos pendentes, avisos, prefixos |
+| `assets/auth/baileys/` | o pareamento do WhatsApp |
+
+Cada host monta volumes num caminho próprio (consulte o painel do seu host).
+Em vez de alterar o código, aponte as variáveis de ambiente para onde o volume
+está montado:
+
+| Variável | Padrão | Para que serve |
+| --- | --- | --- |
+| `DATABASE_DIR` | `<projeto>/database` | pasta dos dados |
+| `AUTH_DIR` | `<projeto>/assets/auth/baileys` | pasta da sessão |
+
+O bot cria as pastas sozinho quando não existem, por isso um volume acabado de
+montar (vazio) funciona à primeira.
+
+No Cloady os volumes sobrevivem a start, stop e redeploy; só são destruídos se
+apagar a aplicação. **Nunca apague a app para a renomear** — isso apaga os dados.
 
 ### Downloads no Render (yt-dlp)
 

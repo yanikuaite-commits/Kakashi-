@@ -17,13 +17,35 @@ import {
 
 test("tabela 1 lista os planos por dias pedidos", () => {
   assert.deepEqual(TABELAS.dias.linhas, [
-    ["7 dias", "20 MT"],
-    ["14 dias", "45 MT"],
-    ["20 dias", "60 MT"],
-    ["30 dias", "90 MT"],
-    ["60 dias", "140 MT"],
+    ["7 dias", "20 MT", "+40 créditos"],
+    ["14 dias", "45 MT", "+60 créditos"],
+    ["20 dias", "60 MT", "+100 créditos"],
+    ["30 dias", "90 MT", "+150 créditos"],
+    ["60 dias", "140 MT", "+300 créditos"],
   ]);
-  assert.deepEqual(TABELAS.dias.cabecalho, ["Dias", "Preço"]);
+  assert.deepEqual(TABELAS.dias.cabecalho, ["Dias", "Preço", "Créditos/dia"]);
+});
+
+test("cada plano traz o bónus diário que anuncia", () => {
+  assert.deepEqual(
+    TABELAS.dias.valores,
+    [
+      { dias: 7, mt: 20, bonus: 40 },
+      { dias: 14, mt: 45, bonus: 60 },
+      { dias: 20, mt: 60, bonus: 100 },
+      { dias: 30, mt: 90, bonus: 150 },
+      { dias: 60, mt: 140, bonus: 300 },
+    ],
+  );
+
+  // O rótulo da linha e o valor do plano não podem divergir: um "+40 créditos"
+  // numa linha cujo plano paga 30 é um anúncio falso.
+  for (const [indice, plano] of TABELAS.dias.valores.entries()) {
+    assert.ok(
+      TABELAS.dias.linhas[indice][2].includes(String(plano.bonus)),
+      `${plano.dias} dias: linha não anuncia o bónus ${plano.bonus}`,
+    );
+  }
 });
 
 test("tabela 2 lista os pacotes de créditos pedidos", () => {

@@ -6,13 +6,15 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { PREFIX, GITHUB_TOKEN, SPIDER_API_TOKEN } from "../config.js";
+import { DATABASE_DIR, PREFIX, GITHUB_TOKEN, SPIDER_API_TOKEN } from "../config.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const databasePath = DATABASE_DIR;
 
-const databasePath = path.resolve(__dirname, "..", "..", "database");
+// O volume persistente monta num caminho que pode vir vazio (ou não existir)
+// no primeiro arranque. Sem o mkdir, a primeira escrita rebenta com ENOENT e o
+// bot morre antes de responder — o `database/` só existe na imagem porque os
+// JSON versionados o criam, e o `.dockerignore` exclui-os.
+fs.mkdirSync(databasePath, { recursive: true });
 
 const AFK_GROUPS_FILE = "afk-groups";
 const ANTI_LINK_GROUPS_FILE = "anti-link-groups";
@@ -32,6 +34,7 @@ const BOT_STATE_FILE = "bot-state";
 const PRIVATE_WHITELIST_FILE = "private-whitelist";
 const BLOCKED_COMMANDS_FILE = "blocked-commands";
 const CREDITS_FILE = "credits";
+const SUBSCRIPTIONS_FILE = "subscriptions";
 const PENDING_RECHARGES_FILE = "pending-recharges";
 const RATE_LIMIT_FILE = "rate-limit";
 
@@ -635,6 +638,18 @@ export function readCreditsAccounts() {
 
 export function saveCreditsAccounts(accounts) {
   writeJSON(CREDITS_FILE, accounts, {});
+}
+
+/**
+ * Assinaturas ativas por usuário (chave = LID/JID).
+ * A regra de negócio fica em src/services/subscriptions.js.
+ */
+export function readSubscriptions() {
+  return readJSON(SUBSCRIPTIONS_FILE, {});
+}
+
+export function saveSubscriptions(subscriptions) {
+  writeJSON(SUBSCRIPTIONS_FILE, subscriptions, {});
 }
 
 /**
