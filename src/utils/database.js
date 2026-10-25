@@ -602,9 +602,10 @@ export function getSpiderApiToken() {
 /**
  * Token do GitHub para o backup remoto.
  *
- * Mesmo padrão do token da Spider: guardado em `database/config.json`, que não
- * é versionado. O valor do ambiente tem prioridade, para quem prefere configurar
- * pelos segredos do host em vez de pelo WhatsApp.
+ * Mesmo padrão do token da Spider: o valor definido pelo `.set-github-token`
+ * (guardado em `database/config.json`, que não é versionado) tem prioridade, e
+ * `GITHUB_TOKEN` do ambiente serve de valor inicial. Assim o que o dono define
+ * pelo WhatsApp não é silenciosamente substituído pelo ambiente.
  */
 export function setGithubToken(token) {
   const filename = CONFIG_FILE;
