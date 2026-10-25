@@ -255,6 +255,7 @@ export const COMMAND_CREDITS = {
   "play-audio": 7,
   "baixar": 7,
   "anime": 2,
+  "megacine": 2,
   "yt-search": 5,
   // Inteligência artificial
   "deepseek": 6,
@@ -484,6 +485,58 @@ export const ANIME_ACCEPT_LANGUAGE = process.env.ANIME_ACCEPT_LANGUAGE || "en-US
 export const ANIME_PROXY_URL = process.env.ANIME_PROXY_URL || "";
 
 export const ANIME_API_TIMEOUT_MS = 30 * 1000;
+
+// ==========================================================================
+// MEGACINE (séries, doramas e animes episódicos)
+// ==========================================================================
+// Catálogo diferente do dos animes: aqui o foco são séries com temporadas e
+// episódios, que o bot não tinha. Fica num comando próprio (`.megacine`) porque
+// misturar os dois catálogos confundiria pesquisas com regras diferentes.
+// Filmes ficam de fora — ver `MEGACINE_TIPOS_EXCLUIDOS`.
+//
+// O stream vive num domínio separado do site e esse domínio tem dois lados: o
+// primário (`ondemand.madfirebox.shop`) bloqueia IPs de datacenter com 403 do
+// Cloudflare, e o fallback (`forks-<tipo>.madfirebox.shop`) serve normalmente.
+// O bot usa o fallback — ver `src/services/megacine.js`.
+export const MEGACINE_BASE_URL =
+  process.env.MEGACINE_BASE_URL || "https://www.megacine.online";
+
+export const MEGACINE_USER_AGENT =
+  process.env.MEGACINE_USER_AGENT || ANIME_USER_AGENT;
+
+export const MEGACINE_TIMEOUT_MS = 30 * 1000;
+
+// O m3u8 é servido por um CDN que responde devagar: medições repetidas deram
+// 9–28 s só para o manifesto, muito acima do que uma página HTML do site
+// demora (~1 s). Com o timeout curto das páginas, a verificação da playlist
+// abortava um stream que estava bom — e o utilizador via "a fonte não
+// respondeu" num título que funcionava. Por isso este passo tem um teto
+// próprio e generoso.
+export const MEGACINE_PLAYLIST_TIMEOUT_MS = Number(
+  process.env.MEGACINE_PLAYLIST_TIMEOUT_MS || 60 * 1000,
+);
+
+// O comando serve só conteúdo episódico (séries, doramas e animes). Filmes são
+// um download único de duas horas, com outro perfil de uso, e ficaram fora por
+// decisão do dono do bot. A lista é configurável para o dia em que isso mudar.
+export const MEGACINE_TIPOS_EXCLUIDOS = (
+  process.env.MEGACINE_TIPOS_EXCLUIDOS || "filmes"
+)
+  .split(",")
+  .map((tipo) => tipo.trim().toLowerCase())
+  .filter(Boolean);
+
+// Custo por episódio baixado. A pesquisa e o menu são baratos
+// (`COMMAND_CREDITS.megacine`), porque só pesquisar não gasta banda — o gasto
+// real é o download.
+export const MEGACINE_DOWNLOAD_CREDITS = Number(
+  process.env.MEGACINE_DOWNLOAD_CREDITS || 25,
+);
+
+// Teto do download. Um episódio de série fica bem dentro do teto dos animes
+// (300 MB), que já cobre um episódio longo em boa qualidade.
+export const MEGACINE_MAX_DOWNLOAD_BYTES =
+  Number(process.env.MEGACINE_MAX_DOWNLOAD_MB || 300) * 1024 * 1024;
 
 // Tradução de títulos PT → língua do catálogo (ver `src/services/translate.js`).
 //

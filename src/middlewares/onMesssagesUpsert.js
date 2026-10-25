@@ -28,6 +28,7 @@ import { handleInteractiveMenuReply } from "../utils/interactive.js";
 import { handleVideoFormatReply } from "../utils/videoFormatMenu.js";
 import { handleGuidedFlow, resumePendingFunction } from "../interactive/flow.js";
 import { handleAnimeReply } from "../utils/animeMenu.js";
+import { handleMegacineReply } from "../utils/megacineMenu.js";
 import { handlePaymentSms } from "../utils/paymentFlow.js";
 import { handlePaymentChoiceReply } from "../utils/paymentChoice.js";
 import { isBotOwner } from "./index.js";
@@ -160,6 +161,26 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
       // Fluxo de animes (HiAnime): antes do fluxo guiado, porque com uma
       // sessão de anime aberta o próximo texto é o NOME do anime.
       if (await handleAnimeReply({
+        socket,
+        chatId: commonFunctions.remoteJid,
+        senderLid: commonFunctions.userLid,
+        senderLids: [
+          webMessage?.key?.participant,
+          webMessage?.key?.participantAlt,
+        ].filter(Boolean),
+        senderName: webMessage?.pushName,
+        text: commonFunctions.fullMessage,
+        sendReply: commonFunctions.sendReply,
+        sendVideoFromFile: commonFunctions.sendVideoFromFile,
+        prefix: getPrefix(commonFunctions.remoteJid) || PREFIX,
+      })) {
+        continue;
+      }
+
+      // Fluxo do Megacine (séries, doramas e animes episódicos): antes do fluxo
+      // guiado, porque com uma sessão aberta o próximo texto pode ser o NOME do
+      // título.
+      if (await handleMegacineReply({
         socket,
         chatId: commonFunctions.remoteJid,
         senderLid: commonFunctions.userLid,
