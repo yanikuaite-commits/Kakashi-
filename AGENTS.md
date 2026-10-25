@@ -78,6 +78,8 @@ High-value architectural notes:
 | `src/services/anitube.js` | AniTube provider: WordPress REST search, plus HLS and Blogger sources. |
 | `src/services/meusanimes.js` | Meus Animes provider (default): WordPress search, seasons, and Blogger sources via the player API. |
 | `src/services/bloggerVideo.js` | Blogger/Google Video reader shared by the PT-BR providers (iframe, token, itags). |
+| `src/services/megacine.js` | Megacine scraper: series/dorama search (films filtered out), seasons, episodes and the m3u8 stream. |
+| `src/utils/megacineMenu.js` | Interactive Megacine flow: title → seasons → episodes → download. |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
 | `src/services/ffmpeg.js` | Media conversion and audio/video processing. |
 
@@ -948,6 +950,42 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   240p–1080p and, with no limit, yt-dlp picked 1080p and blew past the 200 MB
   ceiling (a 24 min episode is ~470 MB at 1080p vs ~70 MB at 480p). The quality
   list picks the *source* (URL), not the final resolution
+
+### Megacine (séries + doramas + animes episódicos)
+
+`src/services/megacine.js` scrapes `megacine.online` directly; `src/utils/megacineMenu.js`
+runs the interactive flow (nome → título → temporadas → episódios → download) and the
+command is `src/commands/member/downloads/megacine.js` (aliases `serie`, `series`,
+`novela`, `novelas`).
+
+- **this is a SEPARATE command (`.megacine`), not an anime provider.** The catalogue
+  is episodic series with seasons, which the `.anime` flow does not cover; mixing the
+  two would conflate catalogues with different rules.
+- **films are deliberately excluded** (`MEGACINE_TIPOS_EXCLUIDOS`, default `filmes`).
+  The site does NOT separate films from series in the URL — both live at
+  `/series/<slug>` — so the type is decided by two signals: the search card's
+  `card-meta` (`"2026 • Filmes"`) and, as a safety net, the title page itself
+  ("Assistir Filme" vs "Assistir Agora"). The page is the source of truth; the
+  season count is NOT a signal, because single-season series exist
+  (`duna-a-profecia-dublado` is 1 season with 6 episodes). A title that slips past
+  the search filter is refused when opened.
+- the chain is: `/search/?q=` → `/series/<slug>` → `/series/<slug>/temporada-NN/episodio-NN`
+  → the page's `urlConfig` → `<S>/<slug>/<NN>-temporada/<NN>/stream.m3u8`
+  (`<S>` is the slug's first letter, uppercased). `buildStreamPath` mirrors the
+  site's own `construirStreamPath`.
+- the data domain has two sides and only one answers datacenter IPs: the primary
+  `ondemand.madfirebox.shop` returns Cloudflare 403 ("you have been blocked"), while
+  the fallback `forks-<tipo>.madfirebox.shop` serves the m3u8 normally. The bot uses
+  the fallback directly.
+- **there is only ONE quality** (a media playlist of `.ts` segments, no
+  `EXT-X-STREAM-INF`), so the flow has no quality step — asking for a choice that does
+  not exist would be a fake step. The size ceiling still applies at download time.
+- **the CDN is slow: 9–28 s for the manifest alone**, against ~1 s for the site's HTML
+  pages. Verifying the playlist with the short page timeout aborted streams that were
+  fine — the user saw "the source did not respond" on a title that worked. That step
+  therefore uses `MEGACINE_PLAYLIST_TIMEOUT_MS` (60 s), not `MEGACINE_TIMEOUT_MS`.
+- a non-owner message while a menu is open is ignored in SILENCE (same rule as the
+  anime flow), so group chatter does not turn into bot replies.
 
 ### Media Services
 

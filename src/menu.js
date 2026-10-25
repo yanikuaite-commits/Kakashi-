@@ -73,6 +73,13 @@ export const MENU_CATEGORIES = [
     ],
   },
   {
+    key: "cinema", label: "Séries & Doramas", icon: "📺", aliases: ["ccinema", "series", "novelas"],
+    intro: "Séries, doramas e animes episódicos do Megacine. Baixa com yt-dlp.",
+    commands: [
+      ["megacine <nome>", "escolhe temporada e episódio"],
+    ],
+  },
+  {
     key: "protecao", label: "Proteção", icon: "🛡️", aliases: ["cprot", "seguranca"],
     intro: "Admin: use 1 para ativar e 0 para desativar.",
     commands: [
