@@ -195,9 +195,15 @@ prefixos, silenciados e restrições) e o `.env` em um arquivo compactado. Para
 sincronizar com um repositório GitHub, configure no ambiente, nunca no código:
 
 ```sh
-O backup usa o repositório `yanikuaite-commits/Kakashi` e as configurações ficam
-em `src/config.js`.
+GITHUB_TOKEN=ghp_...                 # token com escopo `repo` (ou use `.set-github-token`)
+GITHUB_REPOSITORY=dono/repo-privado  # destino do backup (padrão: `yanikuaite-commits/Servidor-`)
+GITHUB_BRANCH=main                   # opcional
+GITHUB_BACKUP_PATH=backups/kakashi-database.tar.gz  # opcional
 ```
+
+O destino por padrão é `yanikuaite-commits/Servidor-`, um repositório privado
+separado do código: assim o histórico do projeto não guarda cada versão do
+arquivo para sempre.
 
 Use `.backup` para salvar os dados e `.restore` para restaurar. O repositório
 deve permanecer privado, pois o backup inclui as variáveis secretas do `.env`.

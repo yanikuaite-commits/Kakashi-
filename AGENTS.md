@@ -416,14 +416,25 @@ What goes into the archive, and what does not:
 
 Destination: with `GITHUB_TOKEN` set it uploads to
 `GITHUB_REPOSITORY`/`GITHUB_BACKUP_PATH` (`backups/kakashi-database.tar.gz` on
-`main`, all fixed in `src/config.js`); without it the archive stays local in
-`/tmp`. There is no scheduler — only the owner command triggers it.
+`main`). The default repository is `yanikuaite-commits/Servidor-`, a private
+repo kept apart from the code so the project history does not accumulate one
+copy of the archive per backup; `GITHUB_REPOSITORY` overrides it. Without a
+token the archive stays local in `/tmp`. There is no scheduler — only the owner
+command triggers it.
 
-The upload does not check whether the destination repository is private, by
-explicit owner decision. The archive carries the `.env` (and the session when
-`.backup sessao` is used), so a public destination publishes secrets, and the
-GitHub commit history keeps the blob after deletion. Keep `GITHUB_REPOSITORY`
-pointing at a private repository.
+The upload **refuses a public destination** (`assertBackupDestinationIsPrivate`
+→ `publicDestinationError`): it reads the repository and aborts before sending.
+The archive carries the `.env` (and the session when `.backup sessao` is used),
+so a public destination would publish secrets, and the GitHub commit history
+keeps the blob after deletion. `GITHUB_BACKUP_ALLOW_PUBLIC=true` overrides the
+refusal for an owner who accepts the risk. Keep `GITHUB_REPOSITORY` pointing at
+a private repository.
+
+A note on the refusal's blind spot: a token that cannot *read* the repository
+(no `repo` scope) gets a 404, which the guard reports as a failure to reach the
+repository rather than as "public". The send is still aborted, so the failure is
+on the safe side, but a `404 Not Found` while the destination is private usually
+means the token lacks scope, not that the repo is missing.
 
 `.delete-backup` (`deleteRemoteBackup`) removes the remote file on request.
 Deleting does not undo a publication: the commit history keeps the blob, so

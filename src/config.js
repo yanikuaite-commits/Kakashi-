@@ -192,8 +192,10 @@ export const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 // Repositório de destino do backup. Configurável por ambiente para poder
 // apontar para um repositório PRIVADO: o arquivo leva o `.env` e os dados dos
 // clientes, e num repositório público ficariam à vista de qualquer pessoa.
+// O destino por padrão é um repositório só para os backups, separado do código:
+// assim o histórico do projeto não guarda, para sempre, cada versão do arquivo.
 export const GITHUB_REPOSITORY =
-  process.env.GITHUB_REPOSITORY || "yanikuaite-commits/Kakashi-";
+  process.env.GITHUB_REPOSITORY || "yanikuaite-commits/Servidor-";
 export const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
 export const GITHUB_BACKUP_PATH = "backups/kakashi-database.tar.gz";
 // Segredo pedido pela página de pareamento (com ou sem o "/pairing").
