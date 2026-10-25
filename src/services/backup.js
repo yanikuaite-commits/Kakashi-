@@ -78,7 +78,21 @@ export function publicDestinationError(
  * que ninguém toque no código.
  */
 async function assertBackupDestinationIsPrivate(config) {
-  const repo = await githubRequest(config, `/repos/${config.repository}`);
+  let repo;
+  try {
+    repo = await githubRequest(config, `/repos/${config.repository}`);
+  } catch (error) {
+    // O GitHub responde 404 (e não 403) a um token sem escopo `repo` que tenta
+    // ler um repositório privado: "não existe" e "não tenho permissão" chegam
+    // iguais. Sem esta nota o dono procuraria um repositório que está lá.
+    if (String(error.message).includes("HTTP 404")) {
+      throw new Error(
+        `O GitHub não deu acesso a ${config.repository} (HTTP 404). Se o repositório existe e é privado, ` +
+          "o GITHUB_TOKEN não tem o escopo `repo` — gere um token com esse escopo ou use `.set-github-token`.",
+      );
+    }
+    throw error;
+  }
   const error = publicDestinationError(config.repository, Boolean(repo.private));
   if (error) throw error;
 }
