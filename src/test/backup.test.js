@@ -145,3 +145,34 @@ test("restauro sobre um projeto com sessão já instalada não a apaga", async (
     await fs.rm(target, { recursive: true, force: true });
   }
 });
+
+test("backup para repositório público é recusado", async () => {
+  const { publicDestinationError } = await import("../services/backup.js");
+  const error = publicDestinationError("dono/repo", false, { allowPublic: false });
+  assert.ok(error, "um repositório público não pode receber o backup");
+  assert.match(error.message, /PÚBLICO/);
+  assert.match(error.message, /privado/, "a mensagem deve indicar a saída");
+});
+
+test("backup para repositório privado é permitido", async () => {
+  const { publicDestinationError } = await import("../services/backup.js");
+  assert.equal(publicDestinationError("dono/repo", true, { allowPublic: false }), null);
+});
+
+test("GITHUB_BACKUP_ALLOW_PUBLIC=true assume o risco de propósito", async () => {
+  const { publicDestinationError } = await import("../services/backup.js");
+  assert.equal(publicDestinationError("dono/repo", false, { allowPublic: true }), null);
+});
+
+test("sem GITHUB_BACKUP_ALLOW_PUBLIC o destino público é recusado", async () => {
+  const { publicDestinationError } = await import("../services/backup.js");
+  const anterior = process.env.GITHUB_BACKUP_ALLOW_PUBLIC;
+  delete process.env.GITHUB_BACKUP_ALLOW_PUBLIC;
+  try {
+    // Sem a opção explícita, o padrão é proteger: a leitura do ambiente
+    // acontece na chamada, por isso o teste não precisa de reiniciar o módulo.
+    assert.ok(publicDestinationError("dono/repo", false));
+  } finally {
+    if (anterior !== undefined) process.env.GITHUB_BACKUP_ALLOW_PUBLIC = anterior;
+  }
+});

@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PREFIX, SPIDER_API_TOKEN } from "../config.js";
+import { PREFIX, GITHUB_TOKEN, SPIDER_API_TOKEN } from "../config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -597,6 +597,31 @@ export function getSpiderApiToken() {
   const config = readJSON(filename, {});
 
   return config.spider_api_token || SPIDER_API_TOKEN;
+}
+
+/**
+ * Token do GitHub para o backup remoto.
+ *
+ * Mesmo padrão do token da Spider: guardado em `database/config.json`, que não
+ * é versionado. O valor do ambiente tem prioridade, para quem prefere configurar
+ * pelos segredos do host em vez de pelo WhatsApp.
+ */
+export function setGithubToken(token) {
+  const filename = CONFIG_FILE;
+
+  const config = readJSON(filename, {});
+
+  config.github_token = token;
+
+  writeJSON(filename, config, {});
+}
+
+export function getGithubToken() {
+  const filename = CONFIG_FILE;
+
+  const config = readJSON(filename, {});
+
+  return config.github_token || GITHUB_TOKEN;
 }
 
 /**

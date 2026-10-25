@@ -6,3 +6,9 @@ bin/yt-dlp.exe
 # Sessão do WhatsApp (chaves privadas do pareamento). Cada instalação cria a
 # sua em tempo de execução; ela não deve ir para o repositório.
 assets/auth/
+
+# Configuração de execução: guarda os tokens definidos por `.set-github-token` e
+# `.set-spider-api-token`. O bot cria o ficheiro vazio no primeiro acesso, por
+# isso ele não precisa de ser versionado — e não pode, senão o token que o dono
+# define pelo WhatsApp acaba publicado no repositório.
+database/config.json

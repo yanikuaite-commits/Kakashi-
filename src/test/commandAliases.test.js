@@ -22,6 +22,7 @@ test("comandos com espaços, acentos, hífen e sem prefixo preservam argumentos"
     [".anti link 1", "anti-link", "1"],
     ["bot on", "bot-state", ""],
     ["set spider api token exemplo", "set-spider-api-token", "exemplo"],
+    ["set github token exemplo_token", "set-github-token", "exemplo_token"],
   ]) {
     const parsed = extract(text);
     const resolved = await findCommandInMessage(parsed.commandName, parsed.fullArgs);

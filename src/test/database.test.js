@@ -437,6 +437,12 @@ describe("Database Functions", () => {
       const token = database.getSpiderApiToken();
       assert.strictEqual(token, testToken);
     });
+
+    it("should set and get GitHub token for the backup", () => {
+      const testToken = "test_github_token_" + Date.now();
+      database.setGithubToken(testToken);
+      assert.strictEqual(database.getGithubToken(), testToken);
+    });
   });
 
   describe("Group Restrictions", () => {

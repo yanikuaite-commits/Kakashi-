@@ -107,16 +107,19 @@ export const DEVELOPER_MODE = false;
 // Chave da OpenAI para o comando de suporte
 export const OPENAI_API_KEY = "";
 
-// Configuracoes do projeto e APIs. Este projeto foi solicitado sem uso de .env.
-export const HF_TOKEN = "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";
+// Configuracoes do projeto e APIs.
+// Segredos NÃO ficam versionados: este repositório é público e o GitHub revoga
+// sozinho qualquer token que encontre num ficheiro de repo público (foi o que
+// aconteceu aos valores que aqui estavam). Defina-os nos segredos do host.
+export const HF_TOKEN = process.env.HF_TOKEN || "";
 
 // ==========================================================================
 // GROQ (IA do bot: chat e transcrição)
 // ==========================================================================
 // Crie a sua chave em: https://console.groq.com/keys
-// A chave fica em branco aqui para você preencher. Se você definir GROQ_API_KEY
-// no ambiente do bot, o valor do ambiente tem prioridade sobre este.
-export const GROQ_API_KEY = "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";
+// O valor vem do ambiente: sem `GROQ_API_KEY` definido, o chat e a transcrição
+// ficam indisponíveis e o bot avisa em vez de falhar com uma chave inválida.
+export const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 
 export const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 export const GROQ_CHAT_URL = `${GROQ_BASE_URL}/chat/completions`;
@@ -147,11 +150,10 @@ export const GROQ_SUPPORT_VISION = false;
 // GOOGLE GEMINI (o que a Groq não faz: gerar imagem)
 // ==========================================================================
 // Crie a sua chave em: https://aistudio.google.com/apikey
-// Deixe em branco aqui para preencher depois; se você definir GEMINI_API_KEY
-// no ambiente do bot, o valor do ambiente tem prioridade.
+// O valor vem do ambiente (o mesmo motivo do HF_TOKEN/GROQ_API_KEY).
 // IMPORTANTE: a geração de IMAGEM não tem free tier na Google (exige billing
 // ativado na conta).
-export const GEMINI_API_KEY = "AQ.Ab8RN6LurSB7uP0Kt-uaCJnEeJJLkwZMqsFS85XeD_kyXP3rzA";
+export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 
@@ -169,9 +171,19 @@ export const GEMINI_IMAGE_TIMEOUT_MS = 60 * 1000;
 // Limite de upload do free tier: 25 MB.
 export const GROQ_TRANSCRIPTION_MODEL = "whisper-large-v3-turbo";
 export const GROQ_TRANSCRIPTION_LANGUAGE = "pt";
-export const GITHUB_TOKEN = "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";
-export const GITHUB_REPOSITORY = "yanikuaite-commits/Kakashi-";
-export const GITHUB_BRANCH = "main";
+// Token do GitHub para o backup remoto. Lê do AMBIENTE e não tem valor fixo
+// aqui de propósito: o repositório é público e o GitHub revoga sozinho qualquer
+// token que encontre num ficheiro versionado (foi o que aconteceu ao valor que
+// aqui estava, o que fazia o `.backup` responder HTTP 401). Defina
+// `GITHUB_TOKEN` nos segredos do host — ou use `.set-github-token` no WhatsApp,
+// que guarda o valor em `database/config.json` (não versionado).
+export const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
+// Repositório de destino do backup. Configurável por ambiente para poder
+// apontar para um repositório PRIVADO: o arquivo leva o `.env` e os dados dos
+// clientes, e num repositório público ficariam à vista de qualquer pessoa.
+export const GITHUB_REPOSITORY =
+  process.env.GITHUB_REPOSITORY || "yanikuaite-commits/Kakashi-";
+export const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
 export const GITHUB_BACKUP_PATH = "backups/kakashi-database.tar.gz";
 // Segredo pedido pela página de pareamento (com ou sem o "/pairing").
 // Você pode trocar o valor aqui ou definir PAIRING_SECRET no ambiente do bot
