@@ -92,7 +92,7 @@ pareamento** — o bot volta a pedir o número. Monte um volume persistente para
 | `database/` | créditos, assinaturas, pagamentos pendentes, avisos, prefixos |
 | `assets/auth/baileys/` | o pareamento do WhatsApp |
 
-Cada host monta volumes num caminho próprio (o Cloady usa `/data`, por exemplo).
+Cada host monta volumes num caminho próprio (consulte o painel do seu host).
 Em vez de alterar o código, aponte as variáveis de ambiente para onde o volume
 está montado:
 

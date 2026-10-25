@@ -175,7 +175,7 @@ visible to the user:
 
 Both paths are configurable **because each host mounts its volume at a different
 path**. `src/config.js` reads `DATABASE_DIR` / `AUTH_DIR` and falls back to the
-repository paths, so a host that mounts `/data` only needs
+repository paths, so a host that mounts its volume at `/data` only needs
 `DATABASE_DIR=/data` — no code change.
 
 - `src/utils/database.js` and `src/connection.js` run `mkdirSync(..., { recursive: true })`
