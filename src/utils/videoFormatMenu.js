@@ -87,6 +87,22 @@ function pendingKey(chatId, ownerId) {
   return `${chatId}:${ownerId}`;
 }
 
+/**
+ * true se há uma escolha de qualidade à espera deste utilizador neste chat.
+ *
+ * O fluxo guiado consulta isto antes de consumir um número: com uma lista de
+ * qualidade aberta, "1" é a qualidade 1 e não a opção 1 do menu. Sem a guarda, o
+ * número era gasto pelo fluxo guiado e a qualidade nunca era escolhida.
+ *
+ * @param {string} chatId
+ * @param {string} ownerId
+ * @returns {boolean}
+ */
+export function hasPendingVideoFormat(chatId, ownerId) {
+  if (!chatId || !ownerId) return false;
+  return pendingFormats.has(pendingKey(chatId, ownerId));
+}
+
 function sanitizeName(value) {
   return String(value || "")
     .replace(/[\r\n*_`@]/g, "")
@@ -168,6 +184,7 @@ export async function startVideoFormatMenu({
   url = "",
   channelUrl,
   onFinished,
+  textOnly = false,
 }) {
   const ownerId = getOwnerId(chatId, ownerLid);
   if (!ownerId) {
@@ -193,6 +210,8 @@ export async function startVideoFormatMenu({
       artist: artist || "",
       duration: duration || "",
     },
+    // Guardado para o reenvio da lista ("vfmt:menu") sair também em texto.
+    textOnly: Boolean(textOnly),
     onFinished,
   };
 
@@ -230,6 +249,7 @@ export async function startVideoFormatMenu({
     content: formatListMessage(caption),
     fallbackText: numberedFallback(),
     sendReply,
+    textOnly,
     onSendError: (error) =>
       errorLog(`Erro ao enviar a lista de qualidade do vídeo: ${error.message}`),
   });
@@ -318,6 +338,7 @@ export async function handleVideoFormatReply({
       content: formatListMessage(caption),
       fallbackText: numberedFallback(),
       sendReply,
+      textOnly: Boolean(pending.textOnly),
       onSendError: (error) =>
         errorLog(`Erro ao reenviar a lista de qualidade: ${error.message}`),
     });

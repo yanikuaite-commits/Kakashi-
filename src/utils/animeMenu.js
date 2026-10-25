@@ -203,6 +203,7 @@ function ensureSession({
   ownerName,
   sendReply,
   senderLids = [],
+  textOnly = false,
 }) {
   const key = animeSessionKey(chatId, ownerId);
   let session = sessoesAnime.get(key);
@@ -231,12 +232,20 @@ function ensureSession({
       audioVersions: [],
       audioVersion: "",
       pendingName: "",
+      // Linhas do último card: um número respondido vale a linha nessa posição
+      // (modo texto e fallback, sem botões).
+      lastRows: [],
+      // Modo texto (prefixo `!`): os cards saem como texto numerado.
+      textOnly: Boolean(textOnly),
       cleanupTimer: null,
     };
     sessoesAnime.set(key, session);
   } else {
     if (sendReply) session.sendReply = sendReply;
     if (ownerName) session.ownerName = sanitizeName(ownerName);
+    // Abrir com `!anime` mantém o modo texto; abrir com `.anime` volta aos
+    // botões (a intenção mais recente ganha).
+    session.textOnly = Boolean(textOnly);
     // Alarga as identidades conhecidas do autor (nunca as reduz).
     for (const identidade of identidades) {
       session.identidades.add(identidade);
@@ -299,9 +308,16 @@ async function sendCard({
     },
     fallbackText: numberedFallback(options, fallbackPrompt || "Responde com o número 👇"),
     sendReply: session.sendReply,
+    // Modo texto (`!`): entrega o texto numerado em vez do card.
+    textOnly: Boolean(session.textOnly),
     onSendError: (error) =>
       errorLog(`[anime] falha ao enviar card: ${error.message}`),
   });
+
+  // Guarda as linhas do último card para o modo texto: um número respondido
+  // vale a linha nessa posição. Sem isto o anime só aceitava tokens (o fallback
+  // numerado era enviado, mas nunca registado) — os números não funcionavam.
+  if (sent) session.lastRows = rows;
 
   if (!sent) {
     dropSession(session);
@@ -326,6 +342,7 @@ export async function startAnimeFlow({
   sendReply,
   senderLids = [],
   nome = "",
+  textOnly = false,
 }) {
   const ownerId = getOwnerId(chatId, ownerLid);
   if (!ownerId) {
@@ -341,6 +358,7 @@ export async function startAnimeFlow({
     ownerName,
     sendReply,
     senderLids,
+    textOnly,
   });
 
   if (nome) {
@@ -1269,13 +1287,12 @@ export async function handleAnimeReply({
   sendVideoFromFile,
   prefix = "",
 }) {
-  const value = String(text || "").trim();
+  let value = String(text || "").trim();
   if (!value) return false;
 
-  const isAnimeToken = ANIME_TOKEN_PREFIXES.some((token) =>
-    value.startsWith(token),
-  );
-  const isCancel = value === CANCEL_TOKEN;
+  const isAnimeToken = () =>
+    ANIME_TOKEN_PREFIXES.some((token) => value.startsWith(token));
+  let isCancel = value === CANCEL_TOKEN;
 
   const senderJids = [senderLid, ...senderLids].filter(Boolean);
   const ownerId = getOwnerId(chatId, senderLid);
@@ -1287,8 +1304,27 @@ export async function handleAnimeReply({
   const doChat =
     own || findSessionInChat(chatId, senderJids) || findSessionInChat(chatId);
 
+  // Escolha por NÚMERO: vale a linha nessa posição do último card enviado. É o
+  // que torna o menu de animes utilizável no modo texto (`!`) e no fallback,
+  // onde não há botões para tocar — a linha guardada traz o token que o resto
+  // do handler já sabe tratar, pelo que não há lógica duplicada por passo.
+  // Resolve-se ANTES do cancelamento: "3" pode ser a linha do Cancelar. Só o
+  // autor da sessão converte (o número de outro membro não mexe neste menu).
+  if (
+    !isAnimeToken() &&
+    /^\d{1,3}$/.test(value) &&
+    doChat?.lastRows?.length &&
+    isSessionOwner(doChat, ...senderJids)
+  ) {
+    const linha = doChat.lastRows[Number(value) - 1];
+    if (linha?.id) {
+      value = String(linha.id);
+      isCancel = value === CANCEL_TOKEN;
+    }
+  }
+
   // Um token de anime sem sessão (menu expirado) merece aviso claro.
-  if (isAnimeToken && !doChat) {
+  if (isAnimeToken() && !doChat) {
     await sendReply(
       "⏳ Este menu de animes expirou. Envia .menu para recomeçar.",
     ).catch(() => {});
@@ -1325,7 +1361,7 @@ export async function handleAnimeReply({
     }
   }
 
-  if (isAnimeToken) {
+  if (isAnimeToken()) {
     if (sendReply) sessao.sendReply = sendReply;
 
     const candIndex = animeTokenIndex(value, "anm:an:");

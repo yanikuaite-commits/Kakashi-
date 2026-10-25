@@ -184,6 +184,10 @@ apaga o arquivo após enviar. `baixar` e `download` aceitam URLs de vídeos de
 plataformas suportadas (inclusive `!baixar` e `!download`). Todos os comandos
 funcionam com o prefixo configurado (padrão `.`) ou sem prefixo; nomes com hífen
 também aceitam espaços, como `play video`, `anti link` e `set prefix`.
+O prefixo `!` é o **modo texto**: o comando corre normalmente, mas os menus saem
+como texto numerado em vez de cards interativos. Use-o em clientes que não
+mostram botões (o iOS, por exemplo): `!menu`, `!play video <termo>` e
+`!anime <termo>`. A escolha é feita respondendo com o número, como no fallback.
 A pesquisa por texto no YouTube usa `youtube-search-api`
 e envia até cinco resultados em mensagens individuais: uma imagem de thumbnail
 e uma mensagem com título, duração e link para cada vídeo. Use `yt <termo>`;
@@ -273,6 +277,8 @@ Regras do fluxo:
 - Link inválido avisa e **mantém** o estado (basta reenviar).
 - Fallback sem botões: o mesmo conteúdo em texto numerado (1, 2, 3…) é aceite;
   o formato usado em cada envio é registado no console (`[fluxo] ...`).
+- Modo texto: abrir o fluxo com `!menu` (ou qualquer `!comando`) salta os cards e
+  entrega logo o texto numerado — para clientes que não renderizam botões.
 - Categorias **Dono** (só dono) e **Administração/Proteção** (admin ou dono)
   só aparecem para quem tem permissão.
 

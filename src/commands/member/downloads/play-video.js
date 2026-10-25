@@ -30,6 +30,7 @@ export default {
     sendErrorReply,
     remoteJid,
     userLid,
+    textOnly,
   }) => {
     if (!fullArgs.length) {
       throw new InvalidParameterError(
@@ -57,6 +58,7 @@ export default {
           duration: resolved.match?.duration,
           thumbnail: resolved.match?.thumbnail,
           url: resolved.match?.url || source.match(/https?:\/\/\S+/)?.[0] || "",
+          textOnly,
         });
         return;
       }

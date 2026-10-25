@@ -922,5 +922,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
     sendWaitReply,
     sendWarningReact,
     sendWarningReply,
+    // Modo texto: o prefixo `!` pede respostas em texto (clientes sem botões).
+    textOnly: prefix === "!",
   };
 }

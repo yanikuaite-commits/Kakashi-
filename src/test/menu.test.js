@@ -47,6 +47,33 @@ test("todos os submenus mantêm a mesma foto e uma legenda utilizável", async (
   );
 });
 
+test("`!menu` (modo texto) entrega o menu numerado sem card", async () => {
+  const cards = [];
+  const replies = [];
+  const socket = {
+    sendMessage: async (_chatId, content) => {
+      cards.push(content);
+    },
+  };
+
+  await command.handle({
+    socket,
+    remoteJid: chatId,
+    fullArgs: "",
+    userLid: "membro@lid",
+    webMessage: { pushName: "Membro" },
+    sendSuccessReact: async () => {},
+    sendReply: async (text) => replies.push(text),
+    sendImageFromFile: async () => {},
+    textOnly: true,
+  });
+
+  assert.deepEqual(cards, [], "o modo texto não envia o card interativo");
+  assert.equal(replies.length, 1);
+  assert.match(replies[0], /1\. 🌐 Geral/);
+  assert.match(replies[0], /Responde com o número 👇/);
+});
+
 test("cada comando apresentado no menu pode ser resolvido pelo bot", async () => {
   const imports = await readCommandImports();
   const available = new Set(Object.values(imports)

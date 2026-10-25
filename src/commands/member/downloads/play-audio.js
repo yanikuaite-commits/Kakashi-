@@ -21,6 +21,7 @@ export default {
     userLid,
     sendSuccessReact,
     sendReply,
+    textOnly,
   }) => {
     if (!fullArgs.length) {
       throw new InvalidParameterError(
@@ -63,6 +64,7 @@ export default {
         mimetype: data.mimetype,
       },
       url,
+      textOnly,
     });
   },
 };

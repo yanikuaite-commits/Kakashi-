@@ -24,6 +24,7 @@ export default {
     remoteJid,
     userLid,
     sendReply,
+    textOnly,
   }) => {
     if (!isVideo) {
       throw new InvalidParameterError(
@@ -51,6 +52,7 @@ export default {
         artist: "",
         mimetype: "audio/mpeg",
       },
+      textOnly,
     });
 
     fs.unlinkSync(videoPath);

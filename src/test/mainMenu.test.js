@@ -320,6 +320,41 @@ test("fallbacks: card → lista clássica → texto numerado", async () => {
   assert.match(replies.at(-1).text, /2\. 🆘 Suporte/);
 });
 
+test("modo texto (prefixo !) abre o menu direto em texto numerado", async () => {
+  const ambiente = criarAmbiente();
+  const cardsAntes = ambiente.cards.length;
+
+  const sent = await abrirMenu(ambiente, { textOnly: true });
+  assert.equal(sent, true);
+
+  // Nenhum card interativo: o cliente iOS não o renderiza.
+  assert.equal(
+    ambiente.cards.length,
+    cardsAntes,
+    "modo texto não deve tentar enviar o card",
+  );
+  assert.equal(ambiente.replies.length, 1);
+  assert.match(ambiente.replies[0].text, /1\. 🌐 Geral/);
+  assert.match(ambiente.replies[0].text, /Responde com o número 👇/);
+
+  // O número abre a categoria (a lista numerada do modo texto navega).
+  assert.equal(
+    await handleGuidedFlow({
+      socket: ambiente.socket,
+      chatId: GROUP,
+      senderId: "membro@lid",
+      text: "1",
+      commonFunctions: {},
+      sendReply: ambiente.sendReply,
+      dispatch: async () => {},
+    }),
+    true,
+  );
+  assert.equal(ambiente.cards.length, cardsAntes, "a categoria também sai em texto");
+  assert.match(ambiente.replies.at(-1).text, /1\. 🏓 Ping/);
+  assert.match(ambiente.replies.at(-1).text, /2\. 🆘 Suporte/);
+});
+
 test("escolher uma categoria da lista abre as funções dela", async () => {
   const ambiente = criarAmbiente();
   await abrirMenu(ambiente);

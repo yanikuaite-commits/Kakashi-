@@ -12,6 +12,7 @@ import {
   sendInteractiveWithFallback,
   singleSelectButton,
   singleSelectList,
+  textOnlyBody,
   urlButton,
 } from "../utils/interactive.js";
 import { RODAPE, withFooter } from "../utils/formatMessage.js";
@@ -233,6 +234,82 @@ test("menus interativos só aceitam o autor e fallback numérico preserva o ID",
     handled: false,
     selectedId: menuText,
   });
+});
+
+test("modo texto (prefixo !) envia o texto sem tentar o card", async () => {
+  const tentativas = [];
+  const replies = [];
+
+  const sent = await sendInteractiveWithFallback({
+    socket: {
+      sendMessage: async (_chatId, content) => {
+        tentativas.push(content);
+      },
+    },
+    chatId: "texto-only@g.us",
+    ownerId: "autor",
+    content: {
+      text: "card",
+      interactiveButtons: [singleSelectButton("Abrir", [
+        { title: "Opções", rows: [{ id: "kmenu:1", title: "Um" }] },
+      ])],
+    },
+    fallbackText: numberedFallback([
+      { number: "1", title: "Um" },
+      { number: "2", title: "Dois" },
+    ]),
+    fallbackActions: [
+      { number: "1", id: "kmenu:1" },
+      { number: "2", id: "kmenu:2" },
+    ],
+    sendReply: async (text) => replies.push(text),
+    textOnly: true,
+  });
+
+  assert.equal(sent, true);
+  assert.deepEqual(tentativas, [], "não gasta uma mensagem num card que o cliente não abre");
+  assert.equal(replies.length, 1);
+  // O aviso de falha do card não faz sentido quando o texto foi pedido.
+  assert.doesNotMatch(replies[0], /Não consegui abrir o menu interativo/);
+  assert.match(replies[0], /1\. Um/);
+  assert.match(replies[0], /2\. Dois/);
+  assert.match(replies[0], /Responde apenas com o número/);
+
+  // A escolha por número funciona tal como no fallback.
+  const escolha = await handleInteractiveMenuReply({
+    chatId: "texto-only@g.us",
+    senderId: "autor",
+    text: "1",
+    sendReply: async (text) => replies.push(text),
+  });
+  assert.deepEqual(escolha, { handled: false, selectedId: "kmenu:1" });
+});
+
+test("modo texto sem ownerId ainda entrega a lista numerada", async () => {
+  const replies = [];
+  const sent = await sendInteractiveWithFallback({
+    socket: { sendMessage: async () => {} },
+    chatId: "texto-sem-dono@g.us",
+    content: { text: "card" },
+    fallbackText: numberedFallback([{ number: "1", title: "Único" }]),
+    sendReply: async (text) => replies.push(text),
+    textOnly: true,
+  });
+
+  assert.equal(sent, true);
+  assert.equal(replies.length, 1);
+  assert.match(replies[0], /1\. Único/);
+  assert.doesNotMatch(replies[0], /Não consegui abrir o menu interativo/);
+});
+
+test("textOnlyBody só remove o aviso do card", () => {
+  assert.equal(textOnlyBody("1. Um\n\nEscolhe 👇"), "1. Um\n\nEscolhe 👇");
+  assert.equal(
+    textOnlyBody("Não consegui abrir o menu interativo 😕\n\n1. Um\n\nEscolhe 👇"),
+    "1. Um\n\nEscolhe 👇",
+  );
+  assert.equal(textOnlyBody(""), "");
+  assert.equal(textOnlyBody(undefined), "");
 });
 
 test("token consumido não pode ser reutilizado depois do menu", async () => {

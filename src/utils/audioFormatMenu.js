@@ -69,6 +69,21 @@ function pendingKey(chatId, ownerLid) {
   return `${chatId}:${ownerLid || "sem-lid"}`;
 }
 
+/**
+ * true se há uma escolha de formato de áudio à espera deste utilizador.
+ *
+ * Espelha `hasPendingVideoFormat`: o fluxo guiado não pode consumir o número
+ * quando o menu de formato está aberto, senão a escolha nunca chega aqui.
+ *
+ * @param {string} chatId
+ * @param {string} ownerId
+ * @returns {boolean}
+ */
+export function hasPendingAudioFormat(chatId, ownerId) {
+  if (!chatId || !ownerId) return false;
+  return pendingFormats.has(pendingKey(chatId, ownerId));
+}
+
 function sanitizeName(value) {
   return String(value || "")
     .replace(/[\r\n*_`@]/g, "")
@@ -195,6 +210,7 @@ export async function startAudioFormatMenu({
   payload,
   url = "",
   onFinished,
+  textOnly = false,
 }) {
   const ownerId = getOwnerId(chatId, ownerLid);
   if (!ownerId) {
@@ -219,6 +235,7 @@ export async function startAudioFormatMenu({
     sendReply,
     kind: "payload",
     payload: normalizePayload(payload),
+    textOnly: Boolean(textOnly),
     onFinished,
   };
 
@@ -249,6 +266,7 @@ export async function startAudioFormatMenu({
     ),
     fallbackText: numberedFallback(),
     sendReply,
+    textOnly: Boolean(pending.textOnly),
     onSendError: (error) =>
       errorLog(`Erro ao enviar a lista de formato do áudio: ${error.message}`),
   });
@@ -272,6 +290,7 @@ export async function startAudioSourceMenu({
   source,
   jid,
   onFinished,
+  textOnly = false,
 }) {
   const ownerId = getOwnerId(chatId, ownerLid);
   if (!ownerId) {
@@ -296,6 +315,7 @@ export async function startAudioSourceMenu({
     source,
     jid,
     payload: null,
+    textOnly: Boolean(textOnly),
     onFinished,
   };
 
@@ -325,6 +345,7 @@ export async function startAudioSourceMenu({
     ),
     fallbackText: numberedFallback(),
     sendReply,
+    textOnly: Boolean(pending.textOnly),
     onSendError: (error) =>
       errorLog(`Erro ao enviar a lista de formato do áudio: ${error.message}`),
   });
@@ -476,6 +497,7 @@ export async function handleAudioFormatReply({
       ),
       fallbackText: numberedFallback(),
       sendReply,
+      textOnly: Boolean(pending.textOnly),
       onSendError: (error) =>
         errorLog(`Erro ao reenviar a lista de formato: ${error.message}`),
     });

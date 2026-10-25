@@ -288,6 +288,7 @@ export async function sendMainMenu(socket, chatId, ctx = {}) {
     permissions,
     timestamp = webMessage?.messageTimestamp,
     now = Date.now(),
+    textOnly = false,
   } = ctx;
 
   const session = await openGuidedSession({
@@ -298,6 +299,7 @@ export async function sendMainMenu(socket, chatId, ctx = {}) {
     sendReply,
     permissions,
     webMessage,
+    textOnly,
   });
 
   if (!session) {
@@ -325,6 +327,34 @@ export async function sendMainMenu(socket, chatId, ctx = {}) {
 
   const interactiveButtons = buildMainMenuButtons({ categories: categorias });
   const mentions = session.ownerId !== chatId ? [session.ownerId] : undefined;
+
+  // Modo texto (prefixo `!`): vai DIRETO ao texto com as categorias numeradas.
+  // Enviar o card a um cliente que não o renderiza gastaria uma mensagem inútil
+  // e deixaria o utilizador sem forma de escolher.
+  const sendTextMenu = async () => {
+    try {
+      await sendReply(
+        buildTextFallback({
+          body,
+          categorias,
+          ownerNumber: MAIN_MENU_OWNER_NUMBER,
+          channelUrl: MAIN_MENU_CHANNEL_URL,
+        }),
+        mentions,
+      );
+      session.cardFallback = true;
+      registerGuidedOptions(session, options);
+      infoLog("[menu] modo texto enviado");
+      return true;
+    } catch (error) {
+      errorLog(`[menu] falha no modo texto: ${error.message || error}`);
+      return false;
+    }
+  };
+
+  if (textOnly) {
+    return sendTextMenu();
+  }
 
   const cards = [];
   const imagem = loadMainMenuImage();
@@ -394,23 +424,5 @@ export async function sendMainMenu(socket, chatId, ctx = {}) {
   }
 
   // Último recurso: mesmo visual em texto + categorias numeradas.
-  try {
-    await sendReply(
-      buildTextFallback({
-        body,
-        categorias,
-        ownerNumber: MAIN_MENU_OWNER_NUMBER,
-        channelUrl: MAIN_MENU_CHANNEL_URL,
-      }),
-      mentions,
-    );
-    session.cardFallback = true;
-    registerGuidedOptions(session, options);
-    infoLog("[menu] fallback em texto enviado");
-    return true;
-  } catch (error) {
-    errorLog(`[menu] falha no fallback em texto: ${error.message || error}`);
-  }
-
-  return false;
+  return sendTextMenu();
 }

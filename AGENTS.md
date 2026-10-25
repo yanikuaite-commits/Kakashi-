@@ -367,6 +367,34 @@ Owner category (`dono`) rules:
 `handleAnimeReply` runs BEFORE `handleGuidedFlow` in the message middleware, so
 the anime session owns the name typed after `.menu → Animes`.
 
+### Text mode (prefix `!`)
+
+Some clients do not render interactive messages at all (iOS, for example): the
+card is delivered but shows nothing the user can tap. The `!` prefix is the way
+out — it invokes the command exactly like `.` does, and asks for the TEXT
+version of every menu.
+
+- `dynamicCommand` sets `textOnly: prefix === "!"` on the invocation, and
+  `loadCommonFunctions` exposes the same value to every command. There is no
+  separate `!`-only command set: `!menu`, `!play video x` and `!anime x` are the
+  same commands
+- `sendInteractiveWithFallback({ textOnly })` skips the card entirely and goes
+  straight to `numberedFallback`. The numeric actions are still registered, so
+  answering `1` works exactly as in the fallback — the difference is only that
+  the card message is never spent
+- `textOnlyBody()` strips the "Não consegui abrir o menu interativo 😕" notice,
+  which only makes sense when the card was actually attempted and failed
+- the flag lives in the session (`session.textOnly` in `flow.js`, the same in
+  `animeMenu.js` and the format menus) so the whole flow stays in text mode. The
+  most recent intent wins: opening with `.menu` turns the buttons back on
+- numeric answers are resolved against `session.lastRows` (the rows of the last
+  card sent), so "3" means the third row. A number outside the range is not
+  consumed and the message continues through the normal flow
+- with a format menu open (video quality / audio format) `handleGuidedFlow`
+  refuses the number and lets it reach the format menu: with a quality list on
+  screen, "1" is the first quality, not option 1 of the card
+- `src/@types/index.d.ts` documents `textOnly` in `CommandHandleProps`
+
 ## ANTI_PAYMENT
 
 Two entry points punish a payment message:
