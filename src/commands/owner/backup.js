@@ -17,14 +17,26 @@ export default {
         : "Criando backup dos dados...",
     );
 
-    const result = await createBackup({ includeAuth });
-    const destino = result.github
-      ? `no GitHub em ${result.destination}`
-      : `localmente em ${result.archivePath}`;
-    const sessao = result.includesSession
-      ? "\n⚠️ Este backup inclui a SESSÃO do WhatsApp (chaves privadas): quem tiver o ficheiro fala pelo número do bot."
-      : "\nA sessão do WhatsApp não foi incluída. Para a incluir, use o comando com `sessao` no fim.";
+    try {
+      const result = await createBackup({ includeAuth });
+      const destino = result.github
+        ? `no GitHub em ${result.destination}`
+        : `localmente em ${result.archivePath}`;
+      const sessao = result.includesSession
+        ? "\n⚠️ Este backup inclui a SESSÃO do WhatsApp (chaves privadas): quem tiver o ficheiro fala pelo número do bot."
+        : "\nA sessão do WhatsApp não foi incluída. Para a incluir, use o comando com `sessao` no fim.";
 
-    await sendSuccessReply(`Backup salvo ${destino}.${sessao}`);
+      await sendSuccessReply(`Backup salvo ${destino}.${sessao}`);
+    } catch (error) {
+      // O envio remoto pode falhar (token inválido, repositório público) sem
+      // que o arquivo local se perca: sem esta nota o dono pensava que não
+      // tinha backup nenhum.
+      if (error.archivePath) {
+        throw new Error(
+          `${error.message} O backup local ficou em ${error.archivePath}.`,
+        );
+      }
+      throw error;
+    }
   },
 };

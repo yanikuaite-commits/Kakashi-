@@ -9,14 +9,16 @@ import {
   GITHUB_BACKUP_PATH,
   GITHUB_BRANCH,
   GITHUB_REPOSITORY,
-  GITHUB_TOKEN,
 } from "../config.js";
+import { getGithubToken } from "../utils/database.js";
 
 const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(new URL("../..", import.meta.url).pathname);
 
 function githubConfig() {
-  const token = GITHUB_TOKEN;
+  // Lido em tempo de execução (não na importação) para o token definido pelo
+  // `.set-github-token` valer já no backup seguinte, sem reiniciar o bot.
+  const token = getGithubToken();
   const repository = GITHUB_REPOSITORY;
   if (!token || !repository?.includes("/")) return null;
   return {
@@ -39,6 +41,46 @@ async function githubRequest(config, endpoint, options = {}) {
   });
   if (!response.ok) throw new Error(`GitHub retornou HTTP ${response.status}.`);
   return response.status === 204 ? null : response.json();
+}
+
+/**
+ * Decide se o envio deve ser recusado por o destino ser público.
+ *
+ * Separado da chamada de rede para poder ser testado sem falar com o GitHub
+ * (mesmo padrão de `backupEntries` e `applyArchive`).
+ *
+ * @param {string} repository
+ * @param {boolean} isPrivate
+ * @param {{allowPublic?: boolean}} [options]
+ * @returns {Error|null} o erro a lançar, ou `null` se o envio for permitido
+ */
+export function publicDestinationError(
+  repository,
+  isPrivate,
+  { allowPublic = process.env.GITHUB_BACKUP_ALLOW_PUBLIC === "true" } = {},
+) {
+  if (isPrivate || allowPublic) return null;
+  return new Error(
+    `O repositório ${repository} é PÚBLICO e o backup leva o .env e os dados dos clientes. ` +
+      "Use um repositório privado (GITHUB_REPOSITORY) ou, se souber o risco, defina GITHUB_BACKUP_ALLOW_PUBLIC=true.",
+  );
+}
+
+/**
+ * Recusa enviar o backup para um repositório público.
+ *
+ * O arquivo leva o `.env` (segredos) e o `database/` (créditos, pagamentos
+ * pendentes e os LIDs dos clientes). Num repositório público isso fica à vista
+ * de qualquer pessoa, e um ficheiro publicado continua acessível no histórico
+ * de commits mesmo depois de apagado — apagar não desfaz a exposição.
+ *
+ * Verificado a cada envio porque a visibilidade do repositório pode mudar sem
+ * que ninguém toque no código.
+ */
+async function assertBackupDestinationIsPrivate(config) {
+  const repo = await githubRequest(config, `/repos/${config.repository}`);
+  const error = publicDestinationError(config.repository, Boolean(repo.private));
+  if (error) throw error;
 }
 
 /**
@@ -131,6 +173,7 @@ export async function createBackup({ includeAuth = false } = {}) {
   try {
     const config = githubConfig();
     if (!config) return { archivePath, github: false, includesSession };
+    await assertBackupDestinationIsPrivate(config);
     const content = (await fs.readFile(archivePath)).toString("base64");
     const endpoint = `/repos/${config.repository}/contents/${config.path}`;
     let sha;
@@ -151,7 +194,10 @@ export async function createBackup({ includeAuth = false } = {}) {
     });
     return { archivePath, github: true, destination: `${config.repository}/${config.path}`, includesSession };
   } catch (error) {
-    await fs.rm(archivePath, { force: true });
+    // O arquivo local é um backup válido mesmo quando o envio remoto falha
+    // (token expirado, sem rede, repositório público). Apagá-lo deixaria o dono
+    // sem backup nenhum — foi o que acontecia no erro HTTP 401.
+    error.archivePath = archivePath;
     throw error;
   }
 }

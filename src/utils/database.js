@@ -6,7 +6,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { DATABASE_DIR, PREFIX, SPIDER_API_TOKEN } from "../config.js";
+import { DATABASE_DIR, PREFIX, GITHUB_TOKEN, SPIDER_API_TOKEN } from "../config.js";
 
 const databasePath = DATABASE_DIR;
 
@@ -600,6 +600,32 @@ export function getSpiderApiToken() {
   const config = readJSON(filename, {});
 
   return config.spider_api_token || SPIDER_API_TOKEN;
+}
+
+/**
+ * Token do GitHub para o backup remoto.
+ *
+ * Mesmo padrão do token da Spider: o valor definido pelo `.set-github-token`
+ * (guardado em `database/config.json`, que não é versionado) tem prioridade, e
+ * `GITHUB_TOKEN` do ambiente serve de valor inicial. Assim o que o dono define
+ * pelo WhatsApp não é silenciosamente substituído pelo ambiente.
+ */
+export function setGithubToken(token) {
+  const filename = CONFIG_FILE;
+
+  const config = readJSON(filename, {});
+
+  config.github_token = token;
+
+  writeJSON(filename, config, {});
+}
+
+export function getGithubToken() {
+  const filename = CONFIG_FILE;
+
+  const config = readJSON(filename, {});
+
+  return config.github_token || GITHUB_TOKEN;
 }
 
 /**

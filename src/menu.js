@@ -133,6 +133,7 @@ export const MENU_CATEGORIES = [
       ["private-whitelist add <lid>", "autorizar no privado"],
       ["set-menu-image", "responda a uma imagem"],
       ["set-prefix <símbolo>"], ["set-spider-api-token <token>"],
+      ["set-github-token <token>", "token do backup no GitHub"],
       ["on"], ["off"], ["exec <código>"],
     ],
   },

@@ -50,7 +50,22 @@ Nós não prestamos suporte gratuíto caso você tenha adquirido esta base com t
 Este bot sempre foi e sempre será **gratuíto**.
 Caso você tenha pago para utilizar este bot, do jeito que ele está hoje, saiba que você **foi enganado**.
 Nós não temos vínculo nenhum com terceiros e não nos responsabilizamos por isso, também não prestamos suporte nessas condições.
-Os downloads, conversões, imagens de texto e IA de texto usam ferramentas gratuitas. A IA (chat, suporte e transcrição) usa a API da Groq e precisa da chave gratuita `GROQ_API_KEY` (`src/config.js`). A geração de imagem (`.flux` e `.ia-sticker`) usa a chave `GEMINI_API_KEY` da Google quando ela está preenchida; sem a chave, ou quando a chamada falha (billing desativado ou quota), esses dois comandos caem automaticamente no serviço gratuito de antes (Pollinations). O `.tts` segue no TTS gratuito do Google Tradutor. Atenção: gerar imagem na Google exige billing ativado na conta — sem billing o free tier responde 429 com limite 0 nos modelos de imagem.
+Os downloads, conversões, imagens de texto e IA de texto usam ferramentas gratuitas. A IA (chat, suporte e transcrição) usa a API da Groq e precisa da chave gratuita `GROQ_API_KEY`. A geração de imagem (`.flux` e `.ia-sticker`) usa a chave `GEMINI_API_KEY` da Google quando ela está preenchida; sem a chave, ou quando a chamada falha (billing desativado ou quota), esses dois comandos caem automaticamente no serviço gratuito de antes (Pollinations). O `.tts` segue no TTS gratuito do Google Tradutor. Atenção: gerar imagem na Google exige billing ativado na conta — sem billing o free tier responde 429 com limite 0 nos modelos de imagem.
+
+### Segredos
+
+As chaves **não** ficam no código. Defina-as como variáveis de ambiente (ou nos
+segredos do host): `GROQ_API_KEY`, `GEMINI_API_KEY`, `HF_TOKEN`, `GITHUB_TOKEN`,
+`SPIDER_API_TOKEN` e `PAIRING_SECRET`. Sem a chave, o comando responde com uma
+mensagem clara em vez de falhar.
+
+Isto não é só organização: este repositório é **público**, e o GitHub revoga
+sozinho qualquer token que encontre num ficheiro versionado de um repositório
+público. Foi o que aconteceu ao token que estava em `src/config.js` — o `.backup`
+passou a responder HTTP 401 porque a credencial já tinha sido revogada. O
+`GITHUB_TOKEN` também pode ser definido pelo WhatsApp com `.set-github-token`, e
+o token da Spider com `.set-spider-api-token` (ambos ficam em
+`database/config.json`, que não é versionado).
 
 ## Migração gratuita no Termux
 
@@ -196,8 +211,9 @@ que venha dentro do arquivo, para não substituir as chaves do bot em execução
 Use `.restore sessao` apenas quando quiser mesmo trocar a sessão.
 
 Mantenha o repositório de destino privado: o arquivo leva o `.env`, e um
-repositório público publica esses segredos. O bot não bloqueia o envio — a
-escolha do repositório é sua. Para apagar o arquivo remoto, use
+repositório público publica esses segredos. O bot recusa o envio quando o
+destino é público — use um repositório privado ou, se souber o risco, defina
+`GITHUB_BACKUP_ALLOW_PUBLIC=true`. Para apagar o arquivo remoto, use
 `.delete-backup`.
 
 Os downloads por link usam a API do GenDownload via `axios`. Configure

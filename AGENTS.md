@@ -1036,6 +1036,14 @@ Agents working in this repository should follow these rules:
 - when supporting users, stay read-only unless explicitly asked to change code
 - when support needs extra context, load only the relevant sections or files
 - never expose the values of `OPENAI_API_KEY`, `LINKER_API_KEY`, or `SPIDER_API_TOKEN`
+- never put a secret value in a versioned file: this repository is **public**, and
+  GitHub auto-revokes any token it finds in a public repo (that is what killed the
+  `GITHUB_TOKEN` in `src/config.js` and made `.backup` answer HTTP 401). Read
+  secrets from the environment, or from `database/config.json` via
+  `.set-github-token` / `.set-spider-api-token` — that file is now gitignored
+- the backup carries the `.env` and the customer data in `database/`, so it must
+  never be sent to a public repository. `src/services/backup.js` refuses it; do
+  not remove that guard
 
 ## SKILLS
 
