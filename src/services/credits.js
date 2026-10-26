@@ -342,6 +342,61 @@ export function addCredits(jid, amount, { note = "", now = Date.now() } = {}) {
 }
 
 /**
+ * Remove créditos de um usuário (ação do dono, tipicamente uma punição).
+ *
+ * A ordem é a mesma de `chargeCredits` — gasta o diário primeiro e só depois os
+ * recarregados. Isso tem uma consequência que o dono precisa de saber: os
+ * créditos do dia voltam no reset das 00h00, por isso remover até ao limite do
+ * diário não é uma perda definitiva. Uma remoção duradoura tem de chegar aos
+ * recarregados.
+ *
+ * Por omissão é estrito: pedir mais do que o saldo não remove nada, em vez de
+ * zerar a conta em silêncio. `allowPartial` existe para o modo "tudo", onde
+ * remover o que resta é exatamente o objetivo.
+ *
+ * @param {string} jid
+ * @param {number} amount
+ * @param {{ note?: string, allowPartial?: boolean, now?: number }} [options]
+ * @returns {{ ok: boolean, removed: number, reason?: string, balance: number, account: object }}
+ */
+export function removeCredits(
+  jid,
+  amount,
+  { note = "", allowPartial = false, now = Date.now() } = {},
+) {
+  const account = getAccount(jid, now);
+  const credits = Math.max(0, Math.ceil(Number(amount) || 0));
+  const balance = accountBalance(account);
+
+  if (!credits) {
+    return { ok: false, removed: 0, reason: "valor inválido", balance, account };
+  }
+
+  if (balance < credits && !allowPartial) {
+    return { ok: false, removed: 0, reason: "saldo insuficiente", balance, account };
+  }
+
+  const removed = Math.min(credits, balance);
+  const fromDaily = Math.min(Math.max(0, account.dailyCredits), removed);
+
+  account.dailyCredits -= fromDaily;
+  account.paidCredits -= removed - fromDaily;
+
+  // Registo do que saiu, para uma reclamação de "os meus créditos
+  // desapareceram" ter resposta.
+  account.adjustments = [
+    {
+      removed,
+      note: String(note || "").slice(0, 80),
+      at: new Date(now).toISOString(),
+    },
+    ...(Array.isArray(account.adjustments) ? account.adjustments : []),
+  ].slice(0, 5);
+
+  return { ok: true, removed, balance, account: saveAccount(account) };
+}
+
+/**
  * Contexto da requisição: permite cobrar créditos dentro de serviços
  * (downloads, por exemplo) sem passar o jid por todas as camadas.
  */

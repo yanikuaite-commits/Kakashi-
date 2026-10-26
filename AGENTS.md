@@ -156,6 +156,9 @@ Important files:
 | `group-restrictions.json` | restrictions by message type |
 | `credits.json` | per-user credit accounts (daily + recharged) |
 | `rate-limit.json` | per-user anti-flood counters (`day`, `count`, `lastCommandAt`) |
+| `blacklist.json` | globally banned users (`bannedAt`, `motivo`, `expiresAt`, `bannedBy`) |
+| `activity.json` | command counters, known users and the audit events of the panel |
+| `system-samples.json` | RAM/CPU/disk samples that feed the panel charts |
 
 Mandatory rule:
 
@@ -163,6 +166,14 @@ Mandatory rule:
 - always use `src/utils/database.js`
 
 This keeps persistence behavior consistent and avoids duplicated parsing logic.
+
+`readJSON` validates the shape of what it reads against the caller's default and
+rewrites the file when it does not match. Pass the default **as a value**
+(`{}`, `[]`), never serialized: `JSON.stringify({})` writes the string `"{}"`,
+`JSON.parse` then returns a string, and assigning a key to it throws
+`Cannot create property ... on string '{}'`. That is exactly how `mute` broke in
+production, on a host whose `muted.json` was created from the bad default. The
+same guard covers a truncated file, which used to make every later read throw.
 
 ### Persistence on ephemeral hosts
 
@@ -194,6 +205,28 @@ repository paths, so a host that mounts its volume at `/data` only needs
 - `ANIME_DOCUMENT_LIMIT_MB` (300) assumes ~2x the media size on disk (the
   download plus the Baileys encrypted copy). The Cloady free tier gives 5 GB of
   SSD; check it before raising the limit.
+
+### Automatic backup
+
+`startBackupScheduler()` (`src/services/backup.js`) runs `createBackup()` every
+`BACKUP_INTERVAL_HOURS` (default 2). It is started in `src/index.js` next to
+`startRechargeSweeper`, so it only exists while the bot is connected.
+
+- the automatic backup is always `includeAuth: false`: an unattended archive must
+  never carry the WhatsApp private keys. The owner asks for those with
+  `.backup sessao`
+- `BACKUP_INTERVAL_HOURS=0` (or any non-positive/invalid value) disables the
+  cycle; the backup goes back to manual only
+- the last run is recorded in `database/backup-state.json` (`lastBackupAt`,
+  `lastBackupOk`, `lastBackupError`). The state is what stops a redeploy from
+  committing a backup on every restart: a run happens at boot only when the
+  interval has already elapsed. A failed run is also recorded, so a broken token
+  does not retry on every boot
+- failures are logged and swallowed: the cycle must never crash the bot or
+  interrupt the WhatsApp connection
+- `shouldBackupNow()` and `backupIntervalMs()` are pure and exported for tests,
+  and `startBackupScheduler({ runBackup })` takes an injectable runner, so the
+  scheduling is exercised without uploading anything to GitHub
 
 ## TABLES_AND_PRICING
 
@@ -344,6 +377,29 @@ Every member command checks the balance before running, not only at the end:
   failed download is refunded with `refundCredits`, because nobody pays for an
   episode that never arrived
 - the owner (`OWNER_LID`) never pays, in commands or in the anime flow
+
+## OWNER_CREDIT_ADJUSTMENTS
+
+Two owner commands move a member's balance by hand, and they are the mirror of
+each other:
+
+- `${prefix}recarregar <créditos> @usuario` adds credits after a cash payment;
+  the amount lands in `paidCredits`, which never expire
+- `${prefix}remover-creditos <créditos|tudo> @usuario` removes credits
+  (`removeCredits` in `src/services/credits.js`)
+
+`removeCredits` spends the daily credits first and only then the recharged ones,
+the same order as `chargeCredits`. The owner must know the consequence: the
+daily part comes back at the 00h00 reset, so removing within the daily allowance
+is not a permanent loss. A lasting removal has to reach `paidCredits`.
+
+It is strict by default — asking for more than the balance removes nothing
+instead of silently emptying the account. `allowPartial` exists for the `tudo`
+shortcut, where removing whatever is left is the goal. Every removal is recorded
+in `account.adjustments`, so a "my credits vanished" complaint has an answer.
+
+Both commands are `owner`-scoped, so `checkPermission` blocks a common member:
+without that barrier any member could empty another's balance.
 
 ## RATE_LIMIT_AND_DOWNLOAD_QUEUE
 
@@ -567,6 +623,12 @@ Media sending must stream, never buffer: use `mediaUploadFromFile()` from
 The Baileys path encrypts chunk by chunk, so a 350 MB episode costs ~65 MB of
 RSS as a stream against ~351 MB as a buffer. The Render `starter` plan has
 512 MB, so buffering a large episode gets the process killed by OOM.
+
+Sent files carry the search title, not a fixed name: build it with
+`safeMediaFileName()` (same module) instead of hardcoding `"anime.mp4"` /
+`"megacine.mp4"`, otherwise every episode lands as the same indistinguishable
+file. Only documents can be named — the WhatsApp `VideoMessage` proto has no
+filename field, so a video sent as video carries no name at all.
 
 ### Animes (meusanimes + animegg + anitube + animeheaven + animesonlinehd + anikoto + providers via @consumet/extensions)
 
@@ -986,6 +1048,40 @@ command is `src/commands/member/downloads/megacine.js` (aliases `serie`, `series
   therefore uses `MEGACINE_PLAYLIST_TIMEOUT_MS` (60 s), not `MEGACINE_TIMEOUT_MS`.
 - a non-owner message while a menu is open is ignored in SILENCE (same rule as the
   anime flow), so group chatter does not turn into bot replies.
+
+### Painel de administração (`.painel`)
+
+`src/commands/owner/painel.js` renders an admin dashboard **inside WhatsApp** —
+there is no web page and no second authentication path. The "tabs" are a
+nativeFlow list whose rows map to owner commands (`.painel-sistema`,
+`.painel-graficos`, ...), so opening a tab is an ordinary command dispatch and
+inherits the existing `owner` permission check. Adding a web UI would mean a new
+server and a new login to protect; the owner's WhatsApp already *is* the
+authenticated channel.
+
+- `src/services/dashboard.js` holds the metrics: RAM/CPU/disk via `node:os` and
+  `fs.statfsSync`, uptime, version, database size/integrity, backup state,
+  text charts (`sparkline`, `barra`) and the alert thresholds (RAM 80%, CPU 75%,
+  disk 85%). A metric the host cannot provide comes back `null` and the panel
+  prints `n/d` — never an invented number.
+- `src/services/blacklist.js` is the global ban list. Different from `muted`
+  (per group), a banned user is ignored everywhere, group or private. A
+  temporary ban (`1h`, `1d`, `7d`, `30d`) expires on read, with no sweeper: the
+  same choice the subscriptions make, because a cleanup process that may not run
+  cannot be trusted to enforce an expiry.
+- `src/services/activity.js` records command counters, known users and the audit
+  events (commands, bans, backups, denied access). The lists are capped
+  (`MAX_EVENTS`, `MAX_USERS`, `MAX_COMMANDS`) because this file goes into the
+  backup every 2 hours and cannot grow forever.
+- `startSystemSampler()` (in `src/services/dashboard.js`, wired in
+  `src/index.js` next to `startBackupScheduler()`) takes a RAM/CPU sample every
+  5 minutes and keeps 24h, which is what the charts plot. The first sample is
+  immediate so the chart is not empty right after a deploy.
+- `CPU` is the one metric that cannot be read instantly: `os.cpus()` returns
+  accumulated times, so the percentage is the delta between two reads and the
+  first call returns `null`.
+- the activity/blacklist JSON files are **gitignored**: they hold real user LIDs,
+  and versioning them would publish who uses the bot and who was banned.
 
 ### Media Services
 

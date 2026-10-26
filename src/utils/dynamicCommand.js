@@ -35,6 +35,12 @@ import {
 } from "../services/credits.js";
 import { badMacHandler } from "./badMacHandler.js";
 import { withDownloadNotifier } from "../services/downloadQueue.js";
+import { isBanned } from "../services/blacklist.js";
+import {
+  recordCommandUsage,
+  recordEvent,
+  recordEventThrottled,
+} from "../services/activity.js";
 import {
   checkRateLimit,
   isRateLimited,
@@ -81,6 +87,21 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   // é reconhecido também pelo próprio JID da conversa (ver OWNER_PRIVATE_ALL).
   const isOwner =
     isBotOwner({ userLid }) || (isPrivate && isOwnerInPrivateChat(webMessage));
+
+  // Blacklist global: quem está banido não é atendido em lado nenhum. O dono
+  // fica de fora para não se trancar fora do próprio bot (e para poder
+  // desbanir quem banir por engano).
+  if (!isOwner && isBanned(userLid || remoteJid)) {
+    const alvo = userLid || remoteJid;
+    recordEventThrottled({
+      chave: `banido:${alvo}`,
+      tipo: "acesso-negado",
+      usuario: alvo,
+      acao: "mensagem de usuário banido",
+      resultado: "bloqueado",
+    });
+    return;
+  }
 
   if (!isOwner && !isBotEnabled()) {
     return;
@@ -308,6 +329,15 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     registerCommandUse(accountId);
   }
 
+  // Estatísticas do painel: também só o que foi autorizado. Registar antes das
+  // verificações encheria o top de comandos com tentativas recusadas.
+  recordCommandUsage({
+    comando: command.name,
+    usuario: accountId || "dono",
+    nome: webMessage?.pushName || "",
+    grupo: activeGroup ? remoteJid : "",
+  });
+
   try {
     await withCreditsContext(accountId, () =>
       withDownloadNotifier(
@@ -325,6 +355,13 @@ export async function dynamicCommand(paramsHandler, startProcess) {
       ),
     );
   } catch (error) {
+    recordEvent({
+      tipo: "erro",
+      usuario: accountId || "dono",
+      acao: `comando ${command.name}: ${error.message}`,
+      resultado: "erro",
+    });
+
     if (chargedCredits > 0 && accountId) {
       refundCredits(accountId, chargedCredits);
     }

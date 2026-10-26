@@ -5,12 +5,14 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   AUTH_DIR,
+  BACKUP_INTERVAL_HOURS,
   DATABASE_DIR,
   GITHUB_BACKUP_PATH,
   GITHUB_BRANCH,
   GITHUB_REPOSITORY,
 } from "../config.js";
-import { getGithubToken } from "../utils/database.js";
+import { getGithubToken, readBackupState, saveBackupState } from "../utils/database.js";
+import { errorLog, infoLog } from "../utils/logger.js";
 
 const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(new URL("../..", import.meta.url).pathname);
@@ -214,6 +216,112 @@ export async function createBackup({ includeAuth = false } = {}) {
     error.archivePath = archivePath;
     throw error;
   }
+}
+
+/**
+ * Intervalo do backup automático em milissegundos.
+ *
+ * `0` (ou um valor inválido/negativo) significa "desligado": é o que permite
+ * desligar o ciclo sem mexer no código.
+ *
+ * @param {number|string} horas
+ * @returns {number} 0 quando desligado
+ */
+export function backupIntervalMs(horas = BACKUP_INTERVAL_HOURS) {
+  const valor = Number(horas);
+  return Number.isFinite(valor) && valor > 0 ? valor * 60 * 60 * 1000 : 0;
+}
+
+/**
+ * Já passou o intervalo desde o último backup?
+ *
+ * A decisão é separada do temporizador para poder ser testada sem esperar 2
+ * horas (mesmo padrão de `backupEntries` e `publicDestinationError`).
+ *
+ * Um `lastBackupAt` ausente ou ilegível conta como "nunca houve backup", para
+ * uma instalação nova fazer o primeiro backup logo no arranque.
+ *
+ * @param {{lastBackupAt?: string, intervalMs: number, now?: number}} options
+ * @returns {boolean}
+ */
+export function shouldBackupNow({ lastBackupAt, intervalMs, now = Date.now() }) {
+  if (!intervalMs) return false;
+  const ultimo = Date.parse(lastBackupAt || "") || 0;
+  return now - ultimo >= intervalMs;
+}
+
+/**
+ * Backup automático a cada `BACKUP_INTERVAL_HOURS` (2h por padrão).
+ *
+ * Não envia a sessão do Baileys (`includeAuth: false`): um backup desatendido
+ * que carregasse as chaves privadas do número ficaria no repositório sem
+ * ninguém a saber. Quem precisar da sessão usa `.backup sessao`.
+ *
+ * Falhas são registadas e engolidas — este ciclo nunca pode derrubar o bot nem
+ * interromper a ligação do WhatsApp. O arquivo local sobrevive à falha de envio
+ * (ver `createBackup`), portanto uma falha de rede ainda deixa o backup no
+ * disco.
+ *
+ * `runBackup` é injetável para os testes exercitarem o agendamento sem fazer um
+ * upload real para o GitHub.
+ *
+ * @param {{runBackup?: typeof createBackup}} [options]
+ * @returns {NodeJS.Timeout|null} o temporizador, ou `null` se estiver desligado
+ */
+export function startBackupScheduler({ runBackup = createBackup } = {}) {
+  const intervalMs = backupIntervalMs();
+
+  if (!intervalMs) {
+    infoLog("[backup] automático desligado (BACKUP_INTERVAL_HOURS=0).");
+    return null;
+  }
+
+  const correr = async (motivo) => {
+    try {
+      const resultado = await runBackup({ includeAuth: false });
+      saveBackupState({
+        lastBackupAt: new Date().toISOString(),
+        lastBackupOk: true,
+        lastBackupError: "",
+        lastDestination: resultado.github ? resultado.destination : resultado.archivePath,
+      });
+      infoLog(
+        `[backup] ${motivo}: salvo ${resultado.github ? `no GitHub (${resultado.destination})` : `localmente (${resultado.archivePath})`}.`,
+      );
+    } catch (error) {
+      // O estado é gravado mesmo em falha: assim o próximo ciclo espera o
+      // intervalo inteiro em vez de tentar de novo a cada arranque.
+      try {
+        saveBackupState({
+          lastBackupAt: new Date().toISOString(),
+          lastBackupOk: false,
+          lastBackupError: String(error.message || error).slice(0, 200),
+        });
+      } catch (stateError) {
+        errorLog(`[backup] não foi possível gravar o estado: ${stateError.message}`);
+      }
+      errorLog(`[backup] ${motivo} falhou: ${error.message}`);
+    }
+  };
+
+  const state = readBackupState();
+
+  if (shouldBackupNow({ lastBackupAt: state.lastBackupAt, intervalMs })) {
+    // Primeiro ciclo depois de um restart com o intervalo já vencido: corre
+    // agora, para não ficar até 2h sem backup por causa de um deploy.
+    correr("backup inicial").catch(() => {});
+  } else {
+    const decorrido = Date.now() - (Date.parse(state.lastBackupAt || "") || 0);
+    const faltam = Math.ceil((intervalMs - decorrido) / 60000);
+    infoLog(
+      `[backup] último backup há ${Math.floor(decorrido / 60000)} min; o próximo é dentro de ~${faltam} min.`,
+    );
+  }
+
+  const timer = setInterval(() => correr("backup periódico").catch(() => {}), intervalMs);
+  timer.unref?.();
+
+  return timer;
 }
 
 /**

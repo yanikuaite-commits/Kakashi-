@@ -84,6 +84,7 @@ import { errorLog, infoLog } from "./logger.js";
 import {
   animeTooLargeMessage,
   decideAnimeSend,
+  safeMediaFileName,
 } from "./mediaSend.js";
 
 export const ANIME_TTL_MS = INTERACTIVE_MENU_TTL_MS;
@@ -1215,6 +1216,9 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
         ? `${audioTrackLabel(session.audioVersion, session.provider, ANIME_PT_DUB_PROVIDERS)} · ${source.label}`
         : source.label,
     });
+    const nomeArquivo = safeMediaFileName(
+      `${animeTitulo} — Ep. ${episode?.number ?? "?"}`,
+    );
 
     if (acao === "cancel") {
       infoLog(`[anime] cancelado: ${tamanhoMB.toFixed(1)} MB acima do limite`);
@@ -1227,7 +1231,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
       await socket.sendMessage(session.chatId, {
         document: mediaUploadFromFile(result.filePath),
         mimetype: "video/mp4",
-        fileName: "anime.mp4",
+        fileName: nomeArquivo,
         caption,
       });
     } else {

@@ -24,6 +24,7 @@ import {
   minutesUntilDailyReset,
   mozambiqueClock,
   refundCredits,
+  removeCredits,
   withCreditsContext,
 } from "../services/credits.js";
 import { downloadByCommand } from "../services/downloader.js";
@@ -436,5 +437,170 @@ test("download real cobra créditos extras de mídia longa no contexto do usuár
     else process.env.GENDOWNLOAD_API_URL = previousApiUrl;
     server.close();
     await once(server, "close");
+  }
+});
+
+test("remoção gasta o diário primeiro e chega aos recarregados", () => {
+  const jid = testJid("remove");
+
+  // Saldo: 30 do dia + 10 recarregados.
+  addCredits(jid, 10, { note: "pix", now: middayInMozambique });
+
+  const parcial = removeCredits(jid, 12, { note: "punição", now: middayInMozambique });
+  assert.equal(parcial.ok, true);
+  assert.equal(parcial.removed, 12);
+  assert.equal(getAccount(jid, middayInMozambique).dailyCredits, DAILY_FREE_CREDITS - 12);
+  assert.equal(
+    getAccount(jid, middayInMozambique).paidCredits,
+    10,
+    "dentro do diário, os recarregados ficam intactos",
+  );
+
+  // 40 pedidos com 28 de saldo: estrito, não remove nada.
+  const exagerado = removeCredits(jid, 40, { now: middayInMozambique });
+  assert.equal(exagerado.ok, false);
+  assert.equal(exagerado.reason, "saldo insuficiente");
+  assert.equal(exagerado.removed, 0);
+  assert.equal(
+    accountBalance(getAccount(jid, middayInMozambique)),
+    DAILY_FREE_CREDITS - 12 + 10,
+  );
+
+  // Remover mais do que resta no diário passa a tocar nos recarregados.
+  const fundo = removeCredits(jid, 25, { now: middayInMozambique });
+  assert.equal(fundo.removed, 25);
+  assert.equal(getAccount(jid, middayInMozambique).dailyCredits, 0);
+  assert.equal(
+    getAccount(jid, middayInMozambique).paidCredits,
+    10 - (25 - (DAILY_FREE_CREDITS - 12)),
+  );
+
+  // O registo fica na conta (mais recente primeiro), para uma reclamação de
+  // "os meus créditos desapareceram" ter resposta.
+  const registos = getAccount(jid, middayInMozambique).adjustments;
+  assert.equal(registos[0].removed, 25);
+  assert.equal(registos[1].removed, 12);
+  assert.equal(registos[1].note, "punição");
+});
+
+test("remoção parcial esvazia o que resta sem falhar", () => {
+  const jid = testJid("remove-tudo");
+
+  addCredits(jid, 7, { now: middayInMozambique });
+  const saldo = accountBalance(getAccount(jid, middayInMozambique));
+
+  const tudo = removeCredits(jid, saldo + 100, {
+    allowPartial: true,
+    now: middayInMozambique,
+  });
+
+  assert.equal(tudo.ok, true);
+  assert.equal(tudo.removed, saldo, "remove exatamente o que existia");
+  assert.equal(accountBalance(getAccount(jid, middayInMozambique)), 0);
+});
+
+test("remoção com valor inválido não mexe no saldo", () => {
+  const jid = testJid("remove-invalido");
+
+  const antes = accountBalance(getAccount(jid, middayInMozambique));
+  const zero = removeCredits(jid, 0, { now: middayInMozambique });
+
+  assert.equal(zero.ok, false);
+  assert.equal(zero.reason, "valor inválido");
+  assert.equal(accountBalance(getAccount(jid, middayInMozambique)), antes);
+});
+
+test("o diário removido volta no reset das 00h00 e os recarregados não", () => {
+  const jid = testJid("remove-reset");
+
+  addCredits(jid, 20, { note: "pix", now: middayInMozambique });
+  // 50 remove os 30 do dia e 20 dos recarregados.
+  const resultado = removeCredits(jid, 50, { now: middayInMozambique });
+
+  assert.equal(resultado.removed, 50);
+  assert.equal(accountBalance(getAccount(jid, middayInMozambique)), 0);
+
+  // Passou a meia-noite: os diários renovam, os recarregados ficaram a zero.
+  const depois = getAccount(jid, afterMidnightInMozambique);
+  assert.equal(depois.dailyCredits, DAILY_FREE_CREDITS);
+  assert.equal(depois.paidCredits, 0);
+});
+
+test("dono remove créditos pelo comando e o usuário fica sem saldo", async () => {
+  const remoteJid = `credits-remove-${runId}@g.us`;
+  const memberJid = "258841119999@lid";
+  const mention = `@${memberJid.split("@")[0]}`;
+
+  activateGroup(remoteJid);
+  setBotEnabled(true);
+
+  try {
+    addCredits(memberJid, 40, { note: "pix" });
+    const antes = accountBalance(getAccount(memberJid));
+    assert.equal(antes, DAILY_FREE_CREDITS + 40);
+
+    const remocao = await runCommand(
+      OWNER_LID,
+      remoteJid,
+      `.remover-creditos 25 ${mention}`,
+    );
+    assert.match(remocao.text, /Créditos removidos/);
+    assert.equal(accountBalance(getAccount(memberJid)), antes - 25);
+
+    // O saldo removido do diário não pode reaparecer como recarregado.
+    assert.equal(getAccount(memberJid).dailyCredits, DAILY_FREE_CREDITS - 25);
+    assert.equal(getAccount(memberJid).paidCredits, 40);
+
+    // "tudo" esvazia a conta.
+    const tudo = await runCommand(OWNER_LID, remoteJid, `.remover-creditos tudo ${mention}`);
+    assert.match(tudo.text, /Créditos removidos/);
+    assert.equal(accountBalance(getAccount(memberJid)), 0);
+
+    // "tudo" numa conta já vazia diz isso, em vez do genérico "valor inválido".
+    const vazio = await runCommand(OWNER_LID, remoteJid, `.remover-creditos tudo ${mention}`);
+    assert.match(vazio.text, /já está sem créditos/i);
+
+    // O usuário sem saldo fica bloqueado.
+    const blocked = await runCommand(memberJid, remoteJid, ".dado 3");
+    assert.match(blocked.text, /créditos acabaram/i);
+
+    // Pedidos inválidos têm resposta clara e não mexem no saldo.
+    const noUser = await runCommand(OWNER_LID, remoteJid, ".remover-creditos 10");
+    assert.match(noUser.text, /Mencione o usuário/);
+
+    const noAmount = await runCommand(OWNER_LID, remoteJid, `.remover-creditos ${mention}`);
+    assert.match(noAmount.text, /quantos créditos/i);
+
+    // Pedir mais do que existe não zera a conta em silêncio.
+    addCredits(memberJid, 5, { note: "pix" });
+    const exagerado = await runCommand(
+      OWNER_LID,
+      remoteJid,
+      `.remover-creditos 999 ${mention}`,
+    );
+    assert.match(exagerado.text, /saldo insuficiente/i);
+    assert.equal(accountBalance(getAccount(memberJid)), 5);
+
+    // O dono não tem saldo para remover de si próprio.
+    const dono = await runCommand(
+      OWNER_LID,
+      remoteJid,
+      `.remover-creditos 10 @${OWNER_LID.split("@")[0]}`,
+    );
+    assert.match(dono.text, /não tem saldo/i);
+
+    // Um membro comum não pode usar o comando: sem esta barreira, qualquer um
+    // esvaziaria a conta de outro.
+    addCredits(memberJid, 30, { note: "pix" });
+    const saldoMembro = accountBalance(getAccount(memberJid));
+    const invasor = await runCommand(
+      memberJid,
+      remoteJid,
+      `.remover-creditos 30 @${OWNER_LID.split("@")[0]}`,
+    );
+    assert.match(invasor.text, /não tem permissão/i);
+    assert.equal(accountBalance(getAccount(memberJid)), saldoMembro);
+  } finally {
+    activateGroup(remoteJid);
   }
 });

@@ -195,6 +195,40 @@ function normalizePayload(payload) {
 }
 
 /**
+ * Entrega o MP3 como DOCUMENTO com o título no nome do ficheiro.
+ *
+ * É a entrega da opção `fmt:docname` sem passar pelo menu: o `.play` de música
+ * manda sempre neste formato. Escolher a cada pedido era um passo inútil — o
+ * formato com título é o que serve para guardar, e o menu obrigava a esperar
+ * por uma resposta que ia ser sempre a mesma.
+ *
+ * @returns {Promise<string>} o nome usado (útil para a mensagem de confirmação)
+ */
+export async function sendAudioAsTitledDocument({
+  filePath,
+  fileName,
+  title,
+  artist,
+  thumbnail,
+  mimetype,
+  sendAudioDocumentFromFile,
+}) {
+  const named = safeAudioFileName(title || fileName);
+
+  await sendAudioDocumentFromFile(
+    filePath,
+    named,
+    title,
+    artist,
+    thumbnail,
+    true,
+    mimetype || "audio/mpeg",
+  );
+
+  return named;
+}
+
+/**
  * Guarda o MP3 baixado como pendência e envia a LISTA de formatos
  * (single_select, sem quick_reply). Cai na resposta numerada em texto se o
  * envio da lista falhar.
@@ -384,16 +418,15 @@ async function deliverFormat(pending, choice, helpers) {
       );
       break;
     case "fmt:docname": {
-      const named = safeAudioFileName(title || fileName);
-      await helpers.sendAudioDocumentFromFile(
+      await sendAudioAsTitledDocument({
         filePath,
-        named,
+        fileName,
         title,
         artist,
         thumbnail,
-        true,
-        "audio/mpeg",
-      );
+        mimetype: "audio/mpeg",
+        sendAudioDocumentFromFile: helpers.sendAudioDocumentFromFile,
+      });
       break;
     }
     default:
