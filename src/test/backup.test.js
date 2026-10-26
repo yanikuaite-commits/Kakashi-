@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { DATABASE_DIR } from "../config.js";
 import { backupEntries } from "../services/backup.js";
 
 const execFileAsync = promisify(execFile);
@@ -174,5 +175,189 @@ test("sem GITHUB_BACKUP_ALLOW_PUBLIC o destino público é recusado", async () =
     assert.ok(publicDestinationError("dono/repo", false));
   } finally {
     if (anterior !== undefined) process.env.GITHUB_BACKUP_ALLOW_PUBLIC = anterior;
+  }
+});
+
+/* ════════════ BACKUP AUTOMÁTICO (a cada 2h) ════════════ */
+
+test("o intervalo padrão é de 2 horas", async () => {
+  const { backupIntervalMs } = await import("../services/backup.js");
+  const { BACKUP_INTERVAL_HOURS } = await import("../config.js");
+  assert.equal(BACKUP_INTERVAL_HOURS, 2);
+  assert.equal(backupIntervalMs(), 2 * 60 * 60 * 1000);
+});
+
+test("BACKUP_INTERVAL_HOURS=0 desliga o agendamento", async () => {
+  const { backupIntervalMs } = await import("../services/backup.js");
+  assert.equal(backupIntervalMs(0), 0);
+  assert.equal(backupIntervalMs("0"), 0);
+  assert.equal(backupIntervalMs(-1), 0, "um valor negativo não faz sentido: desliga");
+  assert.equal(backupIntervalMs("abc"), 0, "um valor inválido desliga em vez de rebentar");
+
+  // Num subprocesso: `BACKUP_INTERVAL_HOURS` é lida na importação do config,
+  // e chamar o agendador aqui dentro com o valor padrão faria um backup REAL.
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `const { startBackupScheduler } = await import(${JSON.stringify(
+        new URL("../services/backup.js", import.meta.url).href,
+      )});
+       process.stdout.write("RESULT=" + String(startBackupScheduler()));`,
+    ],
+    { env: { ...process.env, BACKUP_INTERVAL_HOURS: "0" } },
+  );
+  // O subprocesso também escreve o log; a linha do resultado é a última.
+  assert.match(
+    stdout.trimEnd(),
+    /RESULT=null$/,
+    "desligado devolve null e não agenda nada",
+  );
+});
+
+test("só faz backup quando o intervalo já passou", async () => {
+  const { shouldBackupNow } = await import("../services/backup.js");
+  const agora = Date.now();
+  const intervalo = 2 * 60 * 60 * 1000;
+  const haUmaHora = new Date(agora - 60 * 60 * 1000).toISOString();
+  const haTresHoras = new Date(agora - 3 * 60 * 60 * 1000).toISOString();
+
+  assert.equal(
+    shouldBackupNow({ lastBackupAt: haUmaHora, intervalMs: intervalo, now: agora }),
+    false,
+    "uma hora depois ainda não é hora de fazer backup",
+  );
+  assert.equal(
+    shouldBackupNow({ lastBackupAt: haTresHoras, intervalMs: intervalo, now: agora }),
+    true,
+    "três horas depois o intervalo de 2h já passou",
+  );
+});
+
+test("sem backup anterior faz um no arranque; com intervalo desligado nunca", async () => {
+  const { shouldBackupNow } = await import("../services/backup.js");
+  const intervalo = 2 * 60 * 60 * 1000;
+  assert.equal(
+    shouldBackupNow({ lastBackupAt: undefined, intervalMs: intervalo }),
+    true,
+    "instalação nova deve fazer o primeiro backup",
+  );
+  assert.equal(
+    shouldBackupNow({ lastBackupAt: "data-ilegivel", intervalMs: intervalo }),
+    true,
+    "um estado corrompido conta como 'nunca houve backup'",
+  );
+  assert.equal(
+    shouldBackupNow({ lastBackupAt: undefined, intervalMs: 0 }),
+    false,
+    "desligado não faz backup nenhum",
+  );
+});
+
+test("o agendador grava o estado e não envia a sessão do WhatsApp", async () => {
+  const { startBackupScheduler } = await import("../services/backup.js");
+  const database = await import("../utils/database.js");
+  const stateFile = path.join(DATABASE_DIR, "backup-state.json");
+  const anterior = await fs.readFile(stateFile, "utf8").catch(() => null);
+
+  const chamadas = [];
+  let timer = null;
+
+  try {
+    await fs.rm(stateFile, { force: true });
+
+    timer = startBackupScheduler({
+      runBackup: async (options) => {
+        chamadas.push(options);
+        return { github: true, destination: "dono/repo/backups/kakashi.tar.gz" };
+      },
+    });
+
+    // O backup inicial corre fora do temporizador; dá-lhe tempo de terminar.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    assert.equal(chamadas.length, 1, "sem backup anterior, corre logo um no arranque");
+    assert.equal(
+      chamadas[0].includeAuth,
+      false,
+      "um backup automático NUNCA pode levar as chaves privadas do número",
+    );
+
+    const state = database.readBackupState();
+    assert.equal(state.lastBackupOk, true);
+    assert.equal(state.lastDestination, "dono/repo/backups/kakashi.tar.gz");
+    assert.ok(Date.parse(state.lastBackupAt), "o estado guarda quando foi o último backup");
+  } finally {
+    if (timer) clearInterval(timer);
+    if (anterior === null) await fs.rm(stateFile, { force: true });
+    else await fs.writeFile(stateFile, anterior);
+  }
+});
+
+test("uma falha no backup é registada e não derruba o agendador", async () => {
+  const { startBackupScheduler } = await import("../services/backup.js");
+  const database = await import("../utils/database.js");
+  const stateFile = path.join(DATABASE_DIR, "backup-state.json");
+  const anterior = await fs.readFile(stateFile, "utf8").catch(() => null);
+
+  let timer = null;
+
+  try {
+    await fs.rm(stateFile, { force: true });
+
+    timer = startBackupScheduler({
+      runBackup: async () => {
+        throw new Error("GitHub retornou HTTP 401.");
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const state = database.readBackupState();
+    assert.equal(state.lastBackupOk, false, "a falha fica registada para o dono ver");
+    assert.match(state.lastBackupError, /401/);
+    assert.ok(
+      Date.parse(state.lastBackupAt),
+      "mesmo em falha o horário é gravado, para não repetir a cada arranque",
+    );
+  } finally {
+    if (timer) clearInterval(timer);
+    if (anterior === null) await fs.rm(stateFile, { force: true });
+    else await fs.writeFile(stateFile, anterior);
+  }
+});
+
+test("um restart recente não dispara um backup imediato", async () => {
+  const { startBackupScheduler } = await import("../services/backup.js");
+  const database = await import("../utils/database.js");
+  const stateFile = path.join(DATABASE_DIR, "backup-state.json");
+  const anterior = await fs.readFile(stateFile, "utf8").catch(() => null);
+
+  const chamadas = [];
+  let timer = null;
+
+  try {
+    // Simula um backup feito agora mesmo: o bot acabou de arrancar.
+    database.saveBackupState({ lastBackupAt: new Date().toISOString() });
+
+    timer = startBackupScheduler({
+      runBackup: async (options) => {
+        chamadas.push(options);
+        return { github: true, destination: "dono/repo/backups/kakashi.tar.gz" };
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    assert.equal(
+      chamadas.length,
+      0,
+      "um deploy não pode gerar um commit de backup a cada arranque",
+    );
+  } finally {
+    if (timer) clearInterval(timer);
+    if (anterior === null) await fs.rm(stateFile, { force: true });
+    else await fs.writeFile(stateFile, anterior);
   }
 });

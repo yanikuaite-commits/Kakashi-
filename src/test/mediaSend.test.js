@@ -8,6 +8,7 @@ import {
   decideGeneralSend,
   decideYouTubeSend,
   mediaUploadFromFile,
+  safeMediaFileName,
   toMegabytes,
 } from "../utils/mediaSend.js";
 
@@ -79,4 +80,40 @@ test("mediaUploadFromFile devolve um stream, não um Buffer carregado", async ()
 
   payload.stream.destroy();
   await rm(dir, { recursive: true, force: true });
+});
+
+test("safeMediaFileName usa o título da pesquisa como nome do ficheiro", () => {
+  assert.equal(
+    safeMediaFileName("The Boys — T1 Ep. 1"),
+    "The Boys — T1 Ep. 1.mp4",
+  );
+  assert.equal(safeMediaFileName("Kaiju Girls"), "Kaiju Girls.mp4");
+});
+
+test("safeMediaFileName tira caracteres que o sistema de ficheiros recusa", () => {
+  // "/" e ":" não podem existir num nome; sem limpeza o ficheiro nem se grava.
+  assert.equal(
+    safeMediaFileName('Rato: A Vida/1 <final>?*"|'),
+    "Rato- A Vida-1 -final.mp4",
+  );
+});
+
+test("safeMediaFileName nunca devolve nome vazio", () => {
+  assert.equal(safeMediaFileName(""), "video.mp4");
+  assert.equal(safeMediaFileName(null), "video.mp4");
+  assert.equal(safeMediaFileName("   "), "video.mp4");
+  assert.equal(safeMediaFileName("///"), "video.mp4");
+  assert.equal(safeMediaFileName("..."), "video.mp4");
+});
+
+test("safeMediaFileName respeita o teto de comprimento", () => {
+  const nome = safeMediaFileName("A".repeat(500));
+
+  // 120 caracteres + ".mp4" — nomes longos de séries são truncados, não rejeitados.
+  assert.equal(nome.length, 124);
+  assert.ok(nome.endsWith(".mp4"));
+});
+
+test("safeMediaFileName aceita outra extensão", () => {
+  assert.equal(safeMediaFileName("Áudio", "mp3"), "Áudio.mp3");
 });

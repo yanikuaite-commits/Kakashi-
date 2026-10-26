@@ -47,7 +47,7 @@ import {
   refundCredits,
   withCreditsContext,
 } from "../services/credits.js";
-import { mediaUploadFromFile } from "./mediaSend.js";
+import { mediaUploadFromFile, safeMediaFileName } from "./mediaSend.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
   EPISODES_PER_PAGE,
@@ -556,6 +556,7 @@ async function downloadAndSend({ socket, session, episodeIndex, sendVideoFromFil
     session.seasons.length === 1 && session.episodes.length === 1
       ? titulo
       : `${titulo} — T${session.seasonNumber} Ep. ${episode.number}`;
+  const nomeArquivo = safeMediaFileName(rotulo);
 
   session.stage = "baixando";
 
@@ -679,7 +680,7 @@ async function downloadAndSend({ socket, session, episodeIndex, sendVideoFromFil
       await socket.sendMessage(session.chatId, {
         document: mediaUploadFromFile(result.filePath),
         mimetype: "video/mp4",
-        fileName: "megacine.mp4",
+        fileName: nomeArquivo,
         caption,
       });
     } else {

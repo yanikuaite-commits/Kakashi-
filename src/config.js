@@ -198,6 +198,16 @@ export const GITHUB_REPOSITORY =
   process.env.GITHUB_REPOSITORY || "yanikuaite-commits/Servidor-";
 export const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
 export const GITHUB_BACKUP_PATH = "backups/kakashi-database.tar.gz";
+// Intervalo do backup automático, em horas. 0 (ou inválido) desliga o
+// agendamento e o backup volta a ser só por `.backup`.
+//
+// O ciclo é longo de propósito: cada envio faz um commit no repositório de
+// backups, e o arquivo leva o `.env` e o `database/` inteiros. Duas horas é
+// frequente o bastante para não perder dados e raro o bastante para não encher
+// o histórico do repositório.
+export const BACKUP_INTERVAL_HOURS = Number(
+  process.env.BACKUP_INTERVAL_HOURS ?? 2,
+);
 // Segredo pedido pela página de pareamento (com ou sem o "/pairing").
 // Você pode trocar o valor aqui ou definir PAIRING_SECRET no ambiente do bot
 // (variável de ambiente do Render, por exemplo); o ambiente tem prioridade.

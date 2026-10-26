@@ -2,7 +2,7 @@ import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
 import { downloadByCommand } from "../../../services/downloader.js";
 import { downloadingMessage } from "../../../services/download-message.js";
-import { startAudioFormatMenu } from "../../../utils/audioFormatMenu.js";
+import { sendAudioAsTitledDocument } from "../../../utils/audioFormatMenu.js";
 import fs from "node:fs/promises";
 
 export default {
@@ -14,14 +14,11 @@ export default {
    * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */
   handle: async ({
-    socket,
     fullArgs,
     webMessage,
-    remoteJid,
-    userLid,
     sendSuccessReact,
     sendReply,
-    textOnly,
+    sendAudioDocumentFromFile,
   }) => {
     if (!fullArgs.length) {
       throw new InvalidParameterError(
@@ -44,27 +41,23 @@ export default {
       throw error;
     }
 
-    // Link direto (quando o pedido já era uma URL, o match vem sem url).
-    const url = data.url || fullArgs.match(/https?:\/\/\S+/)?.[0] || "";
-
-    await startAudioFormatMenu({
-      socket,
-      chatId: remoteJid,
-      ownerLid: userLid,
-      ownerName: webMessage?.pushName,
-      sendReply,
-      payload: {
+    // Entrega direta, sem menu de formato: o documento com o título no nome do
+    // ficheiro é o formato útil para guardar, e o menu só obrigava a esperar
+    // por uma resposta que seria sempre a mesma ("4").
+    try {
+      await sendAudioAsTitledDocument({
         filePath: data.filePath,
         fileName: data.fileName,
         title: data.title,
         artist: data.artist,
-        duration: data.duration,
-        platform: /youtube\.com|youtu\.be/i.test(url) ? "YouTube" : "Link direto",
         thumbnail: data.thumbnail,
-        mimetype: data.mimetype,
-      },
-      url,
-      textOnly,
-    });
+        mimetype: "audio/mpeg",
+        sendAudioDocumentFromFile,
+      });
+    } finally {
+      // O temporário sai sempre: o envio já leu o ficheiro para memória, e
+      // deixá-lo no disco só ocupava espaço até ao próximo pedido.
+      if (data?.filePath) await fs.rm(data.filePath, { force: true }).catch(() => {});
+    }
   },
 };

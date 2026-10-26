@@ -357,6 +357,38 @@ describe("Database Functions", () => {
         mutedData[testGroupId]?.filter((id) => id === testMemberId).length || 0;
       assert.strictEqual(count, 1);
     });
+
+    it("should recover a muted file that holds the string '{}'", () => {
+      // Regressão de produção: o valor padrão era gravado já serializado, o
+      // ficheiro ficava com a string `"{}"` e o `mute` rebentava com
+      // "Cannot create property '<id>' on string '{}'" para sempre.
+      const mutedFile = path.resolve(testDatabasePath, "muted.json");
+      fs.writeFileSync(mutedFile, JSON.stringify(JSON.stringify({})));
+
+      database.muteMember(testGroupId, testMemberId);
+
+      assert.strictEqual(
+        database.checkIfMemberIsMuted(testGroupId, testMemberId),
+        true
+      );
+      assert.strictEqual(
+        typeof JSON.parse(fs.readFileSync(mutedFile, "utf8")),
+        "object",
+        "o ficheiro tem de ficar com um objeto, não com uma string"
+      );
+    });
+
+    it("should recover a truncated muted file", () => {
+      const mutedFile = path.resolve(testDatabasePath, "muted.json");
+      fs.writeFileSync(mutedFile, '{"101010101@g.us":');
+
+      database.muteMember(testGroupId, testMemberId);
+
+      assert.strictEqual(
+        database.checkIfMemberIsMuted(testGroupId, testMemberId),
+        true
+      );
+    });
   });
 
   describe("Only Admins", () => {

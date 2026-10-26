@@ -12,3 +12,15 @@ assets/auth/
 # isso ele não precisa de ser versionado — e não pode, senão o token que o dono
 # define pelo WhatsApp acaba publicado no repositório.
 database/config.json
+
+# Estado de execução: nasce em tempo de execução e só faz sentido na instalação
+# que o criou. O `activity.json` e o `blacklist.json` guardam LIDs de usuários
+# reais — versioná-los publicaria quem usa o bot e quem foi banido.
+database/activity.json
+database/blacklist.json
+database/system-samples.json
+database/backup-state.json
+database/credits.json
+database/subscriptions.json
+database/pending-recharges.json
+database/rate-limit.json

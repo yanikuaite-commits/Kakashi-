@@ -73,6 +73,8 @@
  */
 import { connect } from "./connection.js";
 import { load } from "./loader.js";
+import { startBackupScheduler } from "./services/backup.js";
+import { startSystemSampler } from "./services/dashboard.js";
 import { startPairingServer } from "./services/pairing-server.js";
 import { badMacHandler } from "./utils/badMacHandler.js";
 import { startRechargeSweeper } from "./utils/paymentFlow.js";
@@ -129,6 +131,8 @@ async function startBot() {
 
     load(socket);
     startRechargeSweeper(socket);
+    startBackupScheduler();
+    startSystemSampler();
 
     setInterval(() => {
       const currentStats = badMacHandler.getStats();

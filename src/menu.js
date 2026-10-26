@@ -136,6 +136,7 @@ export const MENU_CATEGORIES = [
       ["restore", "dados (a sessão só com restore sessao)"],
       ["delete-backup", "apaga o backup do GitHub"], ["get-group-id"],
       ["recarregar <créditos> @usuario", "adicionar créditos após pagamento"],
+      ["remover-creditos <créditos|tudo> @usuario", "remover créditos"],
       ["block-command <nome>"], ["unblock-command <nome>"], ["blocked-commands"],
       ["private-whitelist add <lid>", "autorizar no privado"],
       ["set-menu-image", "responda a uma imagem"],

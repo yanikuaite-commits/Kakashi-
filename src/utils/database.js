@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DATABASE_DIR, PREFIX, GITHUB_TOKEN, SPIDER_API_TOKEN } from "../config.js";
+import { infoLog } from "./logger.js";
 
 const databasePath = DATABASE_DIR;
 
@@ -32,11 +33,15 @@ const RESTRICTED_MESSAGES_FILE = "restricted-messages";
 const WELCOME_GROUPS_FILE = "welcome-groups";
 const BOT_STATE_FILE = "bot-state";
 const PRIVATE_WHITELIST_FILE = "private-whitelist";
+const BACKUP_STATE_FILE = "backup-state";
 const BLOCKED_COMMANDS_FILE = "blocked-commands";
 const CREDITS_FILE = "credits";
 const SUBSCRIPTIONS_FILE = "subscriptions";
 const PENDING_RECHARGES_FILE = "pending-recharges";
 const RATE_LIMIT_FILE = "rate-limit";
+const BLACKLIST_FILE = "blacklist";
+const ACTIVITY_FILE = "activity";
+const SYSTEM_SAMPLES_FILE = "system-samples";
 
 function createIfNotExists(fullPath, formatIfNotExists = []) {
   if (!fs.existsSync(fullPath)) {
@@ -44,12 +49,56 @@ function createIfNotExists(fullPath, formatIfNotExists = []) {
   }
 }
 
+/** O valor lido tem a forma esperada pelo chamador? */
+function hasExpectedShape(value, fallback) {
+  if (Array.isArray(fallback)) {
+    return Array.isArray(value);
+  }
+
+  return (
+    typeof fallback === "object" &&
+    fallback !== null &&
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
 function readJSON(jsonFile, formatIfNotExists = []) {
   const fullPath = path.resolve(databasePath, `${jsonFile}.json`);
 
   createIfNotExists(fullPath, formatIfNotExists);
 
-  return JSON.parse(fs.readFileSync(fullPath, "utf8"));
+  const raw = fs.readFileSync(fullPath, "utf8");
+
+  let parsed;
+
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Ficheiro truncado (escrita interrompida, disco cheio). O conteúdo não é
+    // recuperável, mas deixá-lo lá faz TODA a leitura seguinte rebentar: o bot
+    // fica inutilizável até alguém apagar o ficheiro à mão.
+    infoLog(`[database] ${jsonFile}.json ilegível; a repor o valor padrão`);
+    writeJSON(jsonFile, formatIfNotExists, formatIfNotExists);
+    return formatIfNotExists;
+  }
+
+  // Auto-reparo: um ficheiro com a forma errada é reescrito com o padrão.
+  //
+  // Aconteceu em produção com `muted.json`: o valor padrão foi gravado já
+  // serializado (`JSON.stringify({})` como default), o ficheiro ficou com a
+  // string `"{}"` e `JSON.parse` devolvia uma string. A partir daí, atribuir uma
+  // chave rebentava com "Cannot create property ... on string '{}'" e o `mute`
+  // nunca funcionava. Só corrigir a chamada não bastava: o ficheiro corrompido
+  // continuava em disco, por isso a leitura repara-o.
+  if (!hasExpectedShape(parsed, formatIfNotExists)) {
+    infoLog(`[database] ${jsonFile}.json com forma inesperada; a repor o padrão`);
+    writeJSON(jsonFile, formatIfNotExists, formatIfNotExists);
+    return formatIfNotExists;
+  }
+
+  return parsed;
 }
 
 function writeJSON(jsonFile, data, formatIfNotExists = []) {
@@ -394,7 +443,7 @@ export function isActiveAutoStickerGroup(groupId) {
 export function muteMember(groupId, memberId) {
   const filename = MUTE_FILE;
 
-  const mutedMembers = readJSON(filename, JSON.stringify({}));
+  const mutedMembers = readJSON(filename, {});
 
   if (!mutedMembers[groupId]) {
     mutedMembers[groupId] = [];
@@ -410,7 +459,7 @@ export function muteMember(groupId, memberId) {
 export function unmuteMember(groupId, memberId) {
   const filename = MUTE_FILE;
 
-  const mutedMembers = readJSON(filename, JSON.stringify({}));
+  const mutedMembers = readJSON(filename, {});
 
   if (!mutedMembers[groupId]) {
     return;
@@ -428,7 +477,7 @@ export function unmuteMember(groupId, memberId) {
 export function checkIfMemberIsMuted(groupId, memberId) {
   const filename = MUTE_FILE;
 
-  const mutedMembers = readJSON(filename, JSON.stringify({}));
+  const mutedMembers = readJSON(filename, {});
 
   if (!mutedMembers[groupId]) {
     return false;
@@ -674,4 +723,71 @@ export function readRateLimits() {
 
 export function saveRateLimits(limits) {
   writeJSON(RATE_LIMIT_FILE, limits, {});
+}
+
+/**
+ * Estado do backup automático (quando foi o último, e como correu).
+ *
+ * Fica em disco para o agendador saber se o intervalo já passou quando o bot
+ * reinicia. Sem isto, cada restart disparava um backup imediato: num host que
+ * reinicia a cada deploy isso seria um commit por deploy.
+ */
+export function readBackupState() {
+  return readJSON(BACKUP_STATE_FILE, {});
+}
+
+export function saveBackupState(state) {
+  writeJSON(BACKUP_STATE_FILE, state, {});
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * PAINEL DE ADMINISTRAÇÃO
+ *
+ * Os acessores abaixo servem o `.painel`. Nenhum comando lê estes ficheiros
+ * diretamente: a persistência passa toda por aqui (regra do projeto).
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Blacklist global de usuários.
+ *
+ * Forma: `{ "<jid>": { bannedAt, motivo, expiresAt|null, bannedBy } }`.
+ * `expiresAt` nulo = permanente. A regra de negócio fica em
+ * `src/services/blacklist.js`.
+ */
+export function readBlacklist() {
+  return readJSON(BLACKLIST_FILE, {});
+}
+
+export function saveBlacklist(entries) {
+  writeJSON(BLACKLIST_FILE, entries, {});
+}
+
+/**
+ * Registo de atividade: comandos usados, usuários ativos e auditoria do dono.
+ *
+ * Forma: `{ commands: { "<nome>": { count, lastAt } }, users: { "<jid>":
+ * { count, lastAt, name } }, events: [ { at, tipo, usuario, acao, resultado } ] }`.
+ * Os eventos são uma lista limitada (as ações mais recentes), não um histórico
+ * infinito: o ficheiro tem de continuar pequeno para o backup não crescer.
+ */
+export function readActivity() {
+  return readJSON(ACTIVITY_FILE, {});
+}
+
+export function saveActivity(activity) {
+  writeJSON(ACTIVITY_FILE, activity, {});
+}
+
+/**
+ * Amostras de uso do sistema (RAM/CPU) para os gráficos do painel.
+ *
+ * Cada amostra é `{ at, ramPct, cpuPct, diskPct }`. O painel mostra as últimas
+ * 24h, por isso a lista é podada em `src/services/dashboard.js`.
+ */
+export function readSystemSamples() {
+  return readJSON(SYSTEM_SAMPLES_FILE, []);
+}
+
+export function saveSystemSamples(samples) {
+  writeJSON(SYSTEM_SAMPLES_FILE, samples, []);
 }

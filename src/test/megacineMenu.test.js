@@ -607,3 +607,29 @@ test("os nomes do config usados pelo menu existem todos", async () => {
     );
   }
 });
+
+test("o envio usa o título como nome do ficheiro, não um nome fixo", async () => {
+  // Regressão: o envio como documento trazia `fileName: "megacine.mp4"`, por isso
+  // todos os episódios chegavam com o mesmo nome e o destinatário não conseguia
+  // distingui-los. O título da pesquisa tem de alimentar o nome.
+  const fs = await import("node:fs");
+
+  for (const ficheiro of ["../utils/megacineMenu.js", "../utils/animeMenu.js"]) {
+    const fonte = fs.readFileSync(new URL(ficheiro, import.meta.url), "utf8");
+    const envios = [...fonte.matchAll(/fileName:\s*([^,\n]+)/g)].map((m) => m[1].trim());
+
+    assert.ok(envios.length > 0, `${ficheiro} envia documentos com nome`);
+
+    for (const valor of envios) {
+      assert.ok(
+        !/^["']/.test(valor),
+        `${ficheiro} não pode fixar o nome do ficheiro (encontrado ${valor})`,
+      );
+      assert.match(
+        valor,
+        /safeMediaFileName|nomeArquivo/,
+        `${ficheiro} tem de construir o nome a partir do título (encontrado ${valor})`,
+      );
+    }
+  }
+});

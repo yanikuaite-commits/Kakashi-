@@ -48,6 +48,42 @@ export function toMegabytes(bytes) {
 }
 
 /**
+ * Nome do ficheiro a partir do título da pesquisa.
+ *
+ * Um download nomeado "megacine.mp4" chega ao destinatário sem qualquer
+ * relação com o que pediu: quem guarda vários episódios fica com ficheiros
+ * indistinguíveis. O nome passa a ser o título (com a temporada/episódio quando
+ * existe).
+ *
+ * Só tem efeito em DOCUMENTOS: o proto `VideoMessage` do WhatsApp não tem campo
+ * de nome, por isso um vídeo enviado como vídeo não pode trazer nome nenhum.
+ *
+ * @param {string} base título já legível (ex.: "The Boys — T1 Ep. 1")
+ * @param {string} [extension]
+ * @param {{fallback?: string, maxLength?: number}} [options]
+ * @returns {string}
+ */
+export function safeMediaFileName(
+  base,
+  extension = "mp4",
+  { fallback = "video", maxLength = 120 } = {},
+) {
+  const limpo = String(base ?? "")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .slice(0, maxLength)
+    // As pontas ficam sujas quando o título começa ou acaba num carácter
+    // inválido (ex.: "Rato: ...|" → "Rato- ...-").
+    .replace(/^[-\s.]+|[-\s.]+$/g, "");
+
+  // Um nome só com separadores ("---", "...") não identifica nada: fica o
+  // fallback em vez de um ficheiro anónimo.
+  const util = /[\p{L}\p{N}]/u.test(limpo) ? limpo : "";
+
+  return `${util || fallback}.${extension}`;
+}
+
+/**
  * Decide o envio do YouTube: documento se passar de 100 MB, senão vídeo.
  *
  * @param {number} bytes
