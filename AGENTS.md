@@ -167,6 +167,63 @@ Mandatory rule:
 
 This keeps persistence behavior consistent and avoids duplicated parsing logic.
 
+### Remote mirror (optional, durable): Turso or MongoDB
+
+The JSON files above are the **read cache**; a remote store is the **durable
+target**. `src/services/remoteStore.js` picks the active driver (Turso first,
+then Mongo), `src/services/turso.js` and `src/services/mongo.js` are the
+drivers, and `src/utils/database.js` owns the mirror (`initDatabase`,
+`flushRemoteState`).
+
+- the 69 exported functions stay **synchronous** — that is deliberate. 69 files
+  import this module, so making them async would be a large, risky refactor for
+  no gain. Writes go to disk immediately and are mirrored to Mongo on a debounce
+  (`MONGODB_FLUSH_DEBOUNCE_MS`), batched with `bulkWrite`
+- one entry per state file, so the mapping with `database/*.json` is 1:1: a
+  Mongo document in the `state` collection (`_id` = file name, `data` = value)
+  or a `kakashi_state` row (name/data/updated_at) in Turso
+- `initDatabase()` runs at boot and **restores from the remote before anything
+  reads state**; on a first run with an empty remote it pushes the local files up
+- the **session** (`assets/auth/baileys/`) is mirrored too, as the `session`
+  entry (gzip+base64 of the whole folder, ~160 KB): `src/services/sessionStore.js`
+  pushes it every `SESSION_SYNC_INTERVAL_MINUTES` and on shutdown, and
+  `initDatabase` restores it before `connect()`, so an ephemeral-disk host does
+  not force a re-pair. It holds the number's PRIVATE KEYS: the remote token is
+  effectively access to the WhatsApp account
+- **backups** live in the `kakashi_backups` table (one row per backup, with
+  retention), not as a GitHub commit, when `BACKUP_TARGET=turso` (default).
+  `.backup` flushes the pending mirror first so the archive includes the latest
+  writes. A Turso backup sits in the SAME database as the data: it undoes an
+  accidental delete, it does NOT survive losing the database
+- `.apagar-dados confirmar` wipes remote **and** disk, because wiping only one
+  side lets the other restore it at boot; `config` is kept on both sides since
+  it holds the destination credentials
+- to add a destination, implement the driver interface documented in
+  `src/services/remoteStore.js` and register it there; `database.js` never needs
+  to know which one is active
+- **the bot must never die because of the remote store.** No credentials,
+  unreachable server or bad token all fall back to plain JSON. A failed write
+  keeps the file name in the pending queue and retries
+  (`MONGODB_FLUSH_RETRY_MS`), and the flush reconnects first if the link
+  dropped; the local disk value is never lost
+- shutdown flushes the pending queue, otherwise the last write of a session is
+  lost on restart
+- credentials are secrets: env vars (`TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN`,
+  `MONGODB_URI`) or the same keys in `database/config.json` (not versioned).
+  Never in `src/config.js`
+- **Turso's console shows a `turso://` URL, which `@libsql/client` REJECTS**
+  (`URL_SCHEME_NOT_SUPPORTED`; it accepts only `libsql:`, `wss:`, `ws:`,
+  `https:`, `http:`, `file:`). `src/services/turso.js` rewrites `turso://` to
+  `libsql://`, so pasting the console URL works
+- `npm run migrate:remote` (`--dry-run` to preview) uploads existing JSON state
+  to whichever driver is active
+- `config.json` IS mirrored (it holds the tokens the owner sets over WhatsApp,
+  which must survive a deploy) but `mongodb_uri`, `turso_url` and
+  `turso_auth_token` are stripped before it leaves: copying the database
+  credential into the database itself would turn read access into full access.
+  They live only in the environment or the local file, and the boot restore
+  re-adds the local ones so they are never lost
+
 `readJSON` validates the shape of what it reads against the caller's default and
 rewrites the file when it does not match. Pass the default **as a value**
 (`{}`, `[]`), never serialized: `JSON.stringify({})` writes the string `"{}"`,

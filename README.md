@@ -122,6 +122,168 @@ montar (vazio) funciona à primeira.
 No Cloady os volumes sobrevivem a start, stop e redeploy; só são destruídos se
 apagar a aplicação. **Nunca apague a app para a renomear** — isso apaga os dados.
 
+#### Persistência no Turso (opcional, recomendada)
+
+O **Turso** é SQLite na nuvem. Para este bot é a opção mais simples: **não tem
+lista de IPs permitidos** (no Pterodactyl o IP é dinâmico e o Atlas obrigaria a
+abrir `0.0.0.0/0`), e o estado é uma tabela que se lê e edita pelo painel web ou
+por `turso db shell`.
+
+Ativar:
+
+1. Crie uma conta em [turso.tech](https://turso.tech) (plano grátis) e instale a
+   CLI, ou use o painel web.
+2. Crie a base de dados: `turso db create kakashi`.
+3. Copie a URL: `turso db show kakashi --url`.
+4. Crie um token de leitura e escrita: `turso db tokens create kakashi`.
+
+Depois aponte as credenciais por **uma** destas vias:
+
+| Via | Como | Quando usar |
+| --- | --- | --- |
+| Variável de ambiente | `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` | O host permite variáveis |
+| `database/config.json` | `"turso_url"` e `"turso_auth_token"` | O host não permite variáveis (ex.: Pterodactyl sem editar o egg) |
+
+> ⚠️ A consola do Turso mostra a URL com o esquema `turso://`. O cliente oficial
+> (`@libsql/client`) **rejeita** esse esquema com `URL_SCHEME_NOT_SUPPORTED` — só
+> aceita `libsql:`, `wss:`, `ws:`, `https:`, `http:` e `file:`. O bot traduz
+> `turso://` → `libsql://` automaticamente, por isso colar a URL da consola
+> funciona na mesma.
+
+`database/config.json` **não é versionado**, por isso o token não vai para o Git.
+O `config.json` é espelhado na base (é onde ficam os tokens definidos pelo
+WhatsApp, que devem sobreviver a um deploy), mas `turso_auth_token`, `turso_url` e
+`mongodb_uri` são **removidas antes de sair**: a credencial da base nunca é
+gravada dentro dela própria, para que um acesso de leitura não se torne acesso
+total.
+
+#### Persistência no MongoDB (opcional, alternativa)
+
+O volume resolve o problema no host, mas depende do host: nem todo o painel
+oferece volumes, e um volume mal montado perde os dados na mesma. Com o
+**MongoDB Atlas** (plano M0, grátis) o estado fica fora do host e sobrevive a
+qualquer deploy, além de poder ser consultado e editado pelo **telemóvel**, no
+Data Explorer.
+
+Como funciona: o `database/` continua a ser a cache de leitura (é o que os
+comandos leem, de forma síncrona) e o Mongo passa a ser o destino durável. Cada
+alteração é gravada no Mongo pouco depois de acontecer, e no arranque o estado é
+**restaurado do Mongo** — é isso que faz os créditos e as assinaturas
+sobreviverem a um deploy.
+
+Ativar:
+
+1. Crie uma conta em [mongodb.com](https://www.mongodb.com/cloud/atlas/register)
+   e um cluster **M0** (grátis).
+2. Em **Database Access**, crie um utilizador com permissão de leitura e
+   escrita. Esta password não é o login da sua conta Atlas.
+3. Em **Network Access**, libere o IP do host. Num host com IP dinâmico
+   (Pterodactyl, VPS residencial) use `0.0.0.0/0`; a password forte é a
+   proteção.
+4. Em **Database → Connect → Drivers**, copie a URI e substitua `<password>`.
+
+Depois, aponte a URI por **uma** destas vias:
+
+| Via | Como | Quando usar |
+| --- | --- | --- |
+| Variável de ambiente | `MONGODB_URI` no painel do host | O host permite variáveis |
+| `database/config.json` | chave `"mongodb_uri": "..."` | O host não permite variáveis (ex.: Pterodactyl sem editar o egg) |
+
+`database/config.json` **não é versionado**, por isso a URI (que contém a
+password) não vai para o Git. **Nunca** coloque a URI em `src/config.js`.
+
+O `config.json` é espelhado no Mongo (é onde ficam os tokens definidos pelo
+WhatsApp, que devem sobreviver a um deploy), mas a `mongodb_uri` é **removida
+antes de sair**: a password da base de dados nunca é gravada dentro dela
+própria, para que um acesso de leitura à base não se torne acesso total.
+
+#### Backups no Turso (com histórico)
+
+Com o Turso configurado, os backups passam a viver na mesma base, na tabela
+`kakashi_backups` — **uma linha por backup**, não um commit. Isso traz três
+coisas que o envio para o GitHub não dava:
+
+- **histórico**: cada backup fica guardado, e a retenção apaga os mais antigos
+  (`BACKUP_RETENTION`, 24 por padrão);
+- **restauro por id**: `.restore` recupera o último (ou um escolhido);
+- **custo baixo**: uma linha, não um commit no histórico do repositório.
+
+Por isso o intervalo padrão é **1 hora** (`BACKUP_INTERVAL_HOURS=1`) e o destino
+padrão é o Turso (`BACKUP_TARGET=turso`).
+
+> ⚠️ **Nota honesta:** um backup no Turso vive na MESMA base que os dados. Isso
+> serve para desfazer uma eliminação acidental, mas **não protege de perder a
+> base**: se o Turso desaparecer, o original e a cópia vão juntos. Para uma cópia
+> independente, use `BACKUP_TARGET=github` (envia para um repositório privado)
+> ou os dois em instalações diferentes.
+
+| Comando | O que faz |
+| --- | --- |
+| `.backup` | Cria um backup agora e força a gravação do que estava na fila |
+| `.backup sessao` | O mesmo, incluindo a sessão do WhatsApp |
+| `.restore` | Restaura o backup mais recente |
+| `.restore sessao` | O mesmo, substituindo a sessão |
+| `.delete-backup` | Apaga o **histórico de backups** do Turso |
+| `.delete-backup github` | Apaga o backup do GitHub |
+| `.apagar-dados confirmar` | Apaga os **dados** (Turso **e** disco) |
+| `.apagar-dados confirmar sessao` | O mesmo, apagando também a sessão |
+
+⚠️ `.delete-backup` apaga o histórico de backups; `.apagar-dados` apaga os dados
+atuais. São coisas diferentes: apagar o histórico não mexe nos dados.
+
+#### A sessão do WhatsApp sobrevive aos deploys
+
+Num host de disco efémero (Render, Cloady, Fly, Railway) a sessão do Baileys
+(`assets/auth/baileys/`) desaparecia a cada deploy, obrigando a re-parear o
+número. Com o Turso configurado, a sessão é espelhada na tabela de estado
+(entrada `session`, comprimida) a cada `SESSION_SYNC_INTERVAL_MINUTES` (15 por
+padrão) e no encerramento. No arranque, o bot restaura-a **antes** de ligar ao
+WhatsApp, portanto arranca já autenticado.
+
+> 🔑 A sessão são as **chaves privadas do número**: quem tiver o blob fala pelo
+> WhatsApp do bot. O token do Turso passa a ser uma credencial de acesso ao
+> próprio número — mantenha-o só no ambiente do host e nunca o partilhe.
+
+Por padrão a sessão **não** entra nos backups automáticos
+(`BACKUP_INCLUDE_SESSION=false`): um backup desatendido com a chave privada
+ficaria guardado sem ninguém dar por isso, e um restauro por engano podia
+substituí-la. Para um restauro de catástrofe auto-suficiente, ligue-o.
+
+| Variável | Padrão | O que faz |
+| --- | --- | --- |
+| `BACKUP_TARGET` | `turso` | Destino dos backups: `turso` ou `github` |
+| `BACKUP_INTERVAL_HOURS` | `1` | Intervalo do backup automático (0 desliga) |
+| `BACKUP_RETENTION` | `24` | Quantos backups manter no Turso |
+| `BACKUP_INCLUDE_SESSION` | `false` | Incluir a sessão nos backups automáticos |
+| `SESSION_SYNC_INTERVAL_MINUTES` | `15` | Intervalo do espelho da sessão |
+
+Se já tem estado em `database/*.json`, suba-o antes do primeiro arranque:
+
+```sh
+npm run migrate:remote              # grava o estado atual no destino ativo
+npm run migrate:remote -- --dry-run # só mostra o que seria gravado
+```
+
+O script deteta sozinho se o destino é o Turso ou o Mongo (o Turso tem
+prioridade quando ambos estão configurados).
+
+Variáveis relacionadas:
+
+| Variável | Padrão | Para que serve |
+| --- | --- | --- |
+| `TURSO_DATABASE_URL` | (vazio) | URL do Turso. Tem prioridade sobre o Mongo |
+| `TURSO_AUTH_TOKEN` | (vazio) | Token de leitura e escrita do Turso |
+| `TURSO_TABLE` | `kakashi_state` | Tabela com uma linha por ficheiro de estado |
+| `MONGODB_URI` | (vazio) | URI do Atlas. Vazio desativa o Mongo (volta ao JSON) |
+| `MONGODB_DB` | `kakashi` | Nome da base de dados |
+| `MONGODB_STATE_COLLECTION` | `state` | Coleção com um documento por ficheiro de estado |
+| `MONGODB_FLUSH_DEBOUNCE_MS` | `1000` | Agrupa escritas em rajada num só pedido |
+| `MONGODB_FLUSH_RETRY_MS` | `30000` | Nova tentativa depois de uma falha de rede |
+
+Sem nenhuma destas variáveis, nada muda: o bot comporta-se exatamente como antes
+e grava só em `database/`. Se o destino estiver inacessível, o bot **continua a
+funcionar** com os dados locais e sincroniza quando a ligação voltar.
+
 ### Downloads no Render (yt-dlp)
 
 A imagem Docker (veja `Dockerfile` e `render.yaml`) já instala **ffmpeg** e o

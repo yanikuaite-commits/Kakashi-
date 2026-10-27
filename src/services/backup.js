@@ -5,7 +5,10 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   AUTH_DIR,
+  BACKUP_INCLUDE_SESSION,
   BACKUP_INTERVAL_HOURS,
+  BACKUP_RETENTION,
+  BACKUP_TARGET,
   DATABASE_DIR,
   GITHUB_BACKUP_PATH,
   GITHUB_BRANCH,
@@ -13,6 +16,13 @@ import {
 } from "../config.js";
 import { getGithubToken, readBackupState, saveBackupState } from "../utils/database.js";
 import { errorLog, infoLog } from "../utils/logger.js";
+import { getActiveDriver } from "./remoteStore.js";
+import {
+  deleteBackups as deleteTursoBackups,
+  listBackups as listTursoBackups,
+  readBackup as readTursoBackup,
+  saveBackup as saveTursoBackup,
+} from "./turso.js";
 
 const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(new URL("../..", import.meta.url).pathname);
@@ -186,6 +196,13 @@ async function createArchive({ includeAuth = false } = {}) {
 export async function createBackup({ includeAuth = false } = {}) {
   const { archivePath, entries } = await createArchive({ includeAuth });
   const includesSession = entries.includes("assets/auth/baileys");
+
+  // Destino Turso: o arquivo fica numa linha da tabela, com histórico e poda.
+  // Verificado antes do GitHub para o destino configurado mandar.
+  if (BACKUP_TARGET === "turso") {
+    return uploadToTurso({ archivePath, includesSession });
+  }
+
   try {
     const config = githubConfig();
     if (!config) return { archivePath, github: false, includesSession };
@@ -216,6 +233,115 @@ export async function createBackup({ includeAuth = false } = {}) {
     error.archivePath = archivePath;
     throw error;
   }
+}
+
+/** Descrição legível do destino de um backup, para o log e as respostas. */
+export function destinationLabel(resultado) {
+  if (resultado.turso) {
+    return `no Turso (${resultado.destination})`;
+  }
+
+  if (resultado.github) {
+    return `no GitHub (${resultado.destination})`;
+  }
+
+  return `localmente (${resultado.archivePath})`;
+}
+
+/**
+ * Guarda o arquivo no Turso.
+ *
+ * Diferente do envio para o GitHub, aqui cada backup é uma LINHA: há histórico
+ * completo e a poda (`BACKUP_RETENTION`) limita o crescimento. É o que permite
+ * desfazer uma eliminação acidental sem depender de um repositório.
+ *
+ * @param {{archivePath: string, includesSession: boolean}} options
+ * @returns {Promise<{archivePath: string, turso: boolean, destination?: string, includesSession: boolean, pruned?: number}>}
+ */
+async function uploadToTurso({ archivePath, includesSession }) {
+  const driver = getActiveDriver();
+
+  if (!driver) {
+    // Sem destino, o arquivo local continua a ser um backup válido.
+    return { archivePath, turso: false, github: false, includesSession };
+  }
+
+  try {
+    const data = (await fs.readFile(archivePath)).toString("base64");
+    const { id, pruned } = await saveTursoBackup({
+      data,
+      includesSession,
+      retention: BACKUP_RETENTION,
+    });
+
+    return {
+      archivePath,
+      turso: true,
+      github: false,
+      destination: `turso:${id}`,
+      includesSession,
+      pruned,
+    };
+  } catch (error) {
+    // Mantém o arquivo local: sem isto o dono ficava sem backup nenhum quando
+    // a rede falha (mesmo critério do envio para o GitHub).
+    error.archivePath = archivePath;
+    throw error;
+  }
+}
+
+/**
+ * Restaura os dados a partir de um backup guardado no Turso.
+ *
+ * A sessão do WhatsApp que o arquivo trouxer é DESCARTADA, a não ser que o dono
+ * a autorize (mesma regra do restauro pelo GitHub): restaurar a sessão de um
+ * backup substitui as chaves privadas por outras, e um arquivo antigo ligaria o
+ * bot a uma sessão que já não é a sua.
+ *
+ * @param {{id?: number, includeAuth?: boolean}} [options]
+ * @returns {Promise<{destination: string, includesSession: boolean, createdAt: string}>}
+ */
+export async function restoreBackupFromTurso({ id = 0, includeAuth = false } = {}) {
+  const registro = await readTursoBackup({ id });
+
+  if (!registro) {
+    throw new Error("Não existe backup no Turso para restaurar.");
+  }
+
+  const archivePath = path.join(os.tmpdir(), `kakashi-restore-${Date.now()}.tar.gz`);
+
+  try {
+    await fs.writeFile(archivePath, Buffer.from(registro.data, "base64"));
+
+    const { includesSession } = await applyArchive(archivePath, { includeAuth });
+
+    return {
+      destination: `turso:${registro.id}`,
+      includesSession,
+      createdAt: registro.createdAt,
+    };
+  } finally {
+    await fs.rm(archivePath, { force: true });
+  }
+}
+
+/**
+ * Lista os backups guardados no Turso (mais recente primeiro).
+ *
+ * @returns {Promise<Array<{id: number, createdAt: string, includesSession: boolean, size: number}>>}
+ */
+export async function listTursoBackupHistory() {
+  return listTursoBackups();
+}
+
+/**
+ * Apaga backups do Turso.
+ *
+ * @param {{id?: number}} [options]
+ * @returns {Promise<number>} quantos foram apagados
+ */
+export async function deleteTursoBackupHistory({ id = 0 } = {}) {
+  return deleteTursoBackups({ id });
 }
 
 /**
@@ -278,15 +404,19 @@ export function startBackupScheduler({ runBackup = createBackup } = {}) {
 
   const correr = async (motivo) => {
     try {
-      const resultado = await runBackup({ includeAuth: false });
+      const resultado = await runBackup({
+        includeAuth: BACKUP_INCLUDE_SESSION,
+      });
       saveBackupState({
         lastBackupAt: new Date().toISOString(),
         lastBackupOk: true,
         lastBackupError: "",
-        lastDestination: resultado.github ? resultado.destination : resultado.archivePath,
+        lastDestination: resultado.destination || resultado.archivePath,
       });
       infoLog(
-        `[backup] ${motivo}: salvo ${resultado.github ? `no GitHub (${resultado.destination})` : `localmente (${resultado.archivePath})`}.`,
+        `[backup] ${motivo}: salvo ${destinationLabel(resultado)}` +
+          (resultado.pruned ? ` (${resultado.pruned} antigo(s) apagado(s))` : "") +
+          ".",
       );
     } catch (error) {
       // O estado é gravado mesmo em falha: assim o próximo ciclo espera o

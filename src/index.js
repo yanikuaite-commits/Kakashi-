@@ -75,8 +75,11 @@ import { connect } from "./connection.js";
 import { load } from "./loader.js";
 import { startBackupScheduler } from "./services/backup.js";
 import { startSystemSampler } from "./services/dashboard.js";
+import { close } from "./services/remoteStore.js";
+import { startSessionSync, syncSession } from "./services/sessionStore.js";
 import { startPairingServer } from "./services/pairing-server.js";
 import { badMacHandler } from "./utils/badMacHandler.js";
+import { flushRemoteState, initDatabase } from "./utils/database.js";
 import { startRechargeSweeper } from "./utils/paymentFlow.js";
 import {
   bannerLog,
@@ -112,6 +115,35 @@ process.on("unhandledRejection", (reason) => {
   errorLog(`Promessa rejeitada não tratada:`, reason);
 });
 
+/**
+ * Encerramento limpo: grava o que ainda esteja pendente no Mongo antes de sair.
+ *
+ * Sem isto, uma alteração feita no último segundo (um crédito, um prefixo)
+ * ficava só na fila e perdia-se no restart — exatamente o que o Mongo veio
+ * resolver. O `once` evita repetir o flush se dois sinais chegarem seguidos.
+ */
+async function shutdown(signal) {
+  infoLog(`[shutdown] sinal ${signal}; a gravar o estado pendente...`);
+
+  try {
+    // A sessão primeiro: é o que evita re-parear o número no arranque seguinte,
+    // e o Baileys pode ter escrito ficheiros depois do último ciclo periódico.
+    await syncSession();
+    await flushRemoteState();
+    await close();
+  } catch (error) {
+    warningLog(`[shutdown] falha ao gravar: ${error.message}`);
+  }
+
+  process.exit(0);
+}
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    void shutdown(signal);
+  });
+}
+
 async function startBot() {
   try {
     process.setMaxListeners(1500);
@@ -119,6 +151,11 @@ async function startBot() {
     bannerLog();
     infoLog("Iniciando meus componentes internos...");
     startPairingServer();
+
+    // Antes de qualquer leitura de estado: com o Mongo configurado, é ele que
+    // repõe créditos, assinaturas e prefixos que um deploy tenha apagado. Sem
+    // Mongo (ou com a ligação em baixo) segue-se o disco, como antes.
+    await initDatabase();
 
     const stats = badMacHandler.getStats();
     if (stats.errorCount > 0) {
@@ -133,6 +170,12 @@ async function startBot() {
     startRechargeSweeper(socket);
     startBackupScheduler();
     startSystemSampler();
+    // A sessão é espelhada depois de o socket existir: o Baileys já reescreveu
+    // os ficheiros com o estado mais recente, e assim o que fica guardado é o
+    // que ele acabou de validar. Sem isto, um host de disco efémero obrigava a
+    // re-parear o número a cada deploy.
+    startSessionSync();
+    void syncSession();
 
     setInterval(() => {
       const currentStats = badMacHandler.getStats();

@@ -10,7 +10,8 @@
     "test:all": "node --test --test-concurrency=1",
     "patch:baileys": "node ./scripts/patch-baileys.mjs",
     "setup:ytdlp": "node ./scripts/setup-ytdlp.mjs",
-    "postinstall": "node ./scripts/patch-baileys.mjs"
+    "postinstall": "node ./scripts/patch-baileys.mjs",
+    "migrate:remote": "node ./scripts/migrate-to-remote.mjs"
   },
   "engines": {
     "node": ">=22.8.0"
@@ -21,12 +22,14 @@
   "dependencies": {
     "@cacheable/node-cache": "^3.0.0",
     "@consumet/extensions": "^1.8.8",
+    "@libsql/client": "^0.18.0",
     "axios": "^1.14.0",
     "baileys": "7.0.0-rc14",
     "canvas": "^3.2.0",
     "correios-brasil": "^3.0.6",
     "fluent-ffmpeg": "^2.1.3",
     "jimp": "^1.6.0",
+    "mongodb": "^7.7.0",
     "node-cache": "^5.1.2",
     "node-webpmux": "^3.2.1",
     "openai": "^6.33.0",
