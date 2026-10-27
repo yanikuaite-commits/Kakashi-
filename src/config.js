@@ -201,13 +201,55 @@ export const GITHUB_BACKUP_PATH = "backups/kakashi-database.tar.gz";
 // Intervalo do backup automático, em horas. 0 (ou inválido) desliga o
 // agendamento e o backup volta a ser só por `.backup`.
 //
-// O ciclo é longo de propósito: cada envio faz um commit no repositório de
-// backups, e o arquivo leva o `.env` e o `database/` inteiros. Duas horas é
-// frequente o bastante para não perder dados e raro o bastante para não encher
-// o histórico do repositório.
+// Uma hora é o padrão: com o destino no Turso cada backup é uma linha, não um
+// commit, por isso a frequência não enche histórico nenhum. A retenção
+// (`BACKUP_RETENTION`) é que limita o crescimento.
 export const BACKUP_INTERVAL_HOURS = Number(
-  process.env.BACKUP_INTERVAL_HOURS ?? 2,
+  process.env.BACKUP_INTERVAL_HOURS ?? 1,
 );
+// Onde os backups são guardados.
+//
+// `turso` (padrão) guarda cada backup como uma linha na base — barato e sem
+// depender do GitHub. `github` mantém o comportamento antigo (um commit por
+// backup num repositório privado).
+//
+// Nota honesta: com o destino no Turso, o backup vive na MESMA base que os
+// dados. Isso serve para desfazer uma eliminação acidental (há versões
+// anteriores no histórico), mas NÃO protege de perder a base: se a base
+// desaparecer, o original e a cópia desaparecem juntos. Para uma cópia
+// independente, use `github` (ou os dois, alternando).
+export const BACKUP_TARGET = (
+  process.env.BACKUP_TARGET || "turso"
+).toLowerCase();
+// Quantos backups manter no Turso. Cada backup é uma linha com o arquivo
+// comprimido (~200 KB com sessão, ~2 KB só com dados), portanto 24 ocupam
+// alguns megabytes no máximo. Os mais antigos são apagados depois de cada
+// backup novo, para a tabela não crescer sem fim.
+export const BACKUP_RETENTION = Math.max(
+  1,
+  Number(process.env.BACKUP_RETENTION || 24),
+);
+// Incluir a sessão do WhatsApp nos backups automáticos.
+//
+// Desligado por padrão: a sessão são as chaves privadas do número, e um backup
+// desatendido que as levasse ficaria guardado sem ninguém dar por isso. O
+// arquivo de backup é um ponto-no-tempo que pode ser restaurado por engano.
+//
+// A sessão é guardada à parte, no espelho contínuo (`SESSION_SYNC_*`), que é o
+// que a faz sobreviver aos deploys. Ligar isto acrescenta-a também ao histórico
+// de backups, para um restauro de catástrofe ser auto-suficiente.
+export const BACKUP_INCLUDE_SESSION =
+  String(process.env.BACKUP_INCLUDE_SESSION || "false").toLowerCase() ===
+  "true";
+// A sessão do Baileys vive em milhares de ficheiros pequenos que o WhatsApp
+// reescreve constantemente. Espelhá-la a cada escrita martelaria o Turso, por
+// isso é guardada por intervalo (e no encerramento, onde não se perde nada).
+export const SESSION_SYNC_INTERVAL_MINUTES = Math.max(
+  1,
+  Number(process.env.SESSION_SYNC_INTERVAL_MINUTES || 15),
+);
+// Nome da entrada da sessão na tabela de estado (não é um `database/*.json`).
+export const SESSION_STATE_NAME = "session";
 // Segredo pedido pela página de pareamento (com ou sem o "/pairing").
 // Você pode trocar o valor aqui ou definir PAIRING_SECRET no ambiente do bot
 // (variável de ambiente do Render, por exemplo); o ambiente tem prioridade.
@@ -431,6 +473,62 @@ export const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || "";
 export const YTDLP_CONCURRENT_FRAGMENTS = Number(
   process.env.YTDLP_CONCURRENT_FRAGMENTS || 4,
 );
+
+// ==========================================================================
+// MONGODB (persistência durável; opcional)
+// ==========================================================================
+// Com `MONGODB_URI` definido, o estado (créditos, assinaturas, banimentos,
+// prefixos, ...) passa a ser gravado no MongoDB Atlas em vez de só no disco do
+// host — que em Render/Cloady/Fly/Railway é efémero e apagava tudo a cada
+// deploy. Sem a variável, o bot mantém o comportamento antigo (JSON em disco),
+// por isso a migração é reversível por configuração, sem reverter código.
+//
+// A URI contém a password: defina-a por variável de ambiente ou em
+// `database/config.json` (não versionado). NUNCA em ficheiro versionado.
+export const MONGODB_URI = process.env.MONGODB_URI || "";
+export const MONGODB_DB = process.env.MONGODB_DB || "kakashi";
+// Coleção única com um documento por ficheiro de estado: o mapeamento é 1:1 com
+// os `database/*.json` atuais, o que torna a migração e o diagnóstico simples.
+export const MONGODB_STATE_COLLECTION =
+  process.env.MONGODB_STATE_COLLECTION || "state";
+// Tempo máximo à espera de um servidor do Atlas antes de desistir. Curto de
+// propósito: o arranque do bot não pode ficar pendurado por causa do banco.
+export const MONGODB_SERVER_SELECTION_TIMEOUT_MS = Number(
+  process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS || 5000,
+);
+// Atraso entre a alteração em memória e a gravação no Mongo. Agrupa rajadas de
+// escritas (o anti-flood e os créditos escrevem em sequência) num só pedido,
+// reduzindo round-trips e o risco de throttling no plano M0.
+export const MONGODB_FLUSH_DEBOUNCE_MS = Number(
+  process.env.MONGODB_FLUSH_DEBOUNCE_MS || 1000,
+);
+// Intervalo entre tentativas quando a gravação falha (rede em baixo). O flush
+// volta a tentar sozinho, para que uma queda temporária não deixe dados por
+// sincronizar até ao próximo restart.
+export const MONGODB_FLUSH_RETRY_MS = Number(
+  process.env.MONGODB_FLUSH_RETRY_MS || 30000,
+);
+
+// ==========================================================================
+// TURSO (SQLite na nuvem; alternativa ao MongoDB)
+// ==========================================================================
+// O Turso é SQLite na nuvem. Vantagem prática sobre o Atlas: NÃO tem lista de
+// IPs permitidos, o que no Pterodactyl (IP dinâmico) obrigava a abrir
+// `0.0.0.0/0`. O estado fica numa tabela que se lê pelo painel ou por
+// `turso db shell`.
+//
+// A consola do Turso mostra a URL com o esquema `turso://`, mas o cliente
+// oficial (@libsql/client) REJEITA esse esquema com "URL_SCHEME_NOT_SUPPORTED":
+// só aceita `libsql:`, `wss:`, `ws:`, `https:`, `http:` e `file:`.
+// `src/services/turso.js` traduz `turso://` → `libsql://` automaticamente, por
+// isso colar a URL da consola funciona na mesma.
+export const TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL || "";
+export const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN || "";
+// Tabela com uma linha por ficheiro de estado (name/data/updated_at).
+export const TURSO_TABLE = process.env.TURSO_TABLE || "kakashi_state";
+// Tabela dos backups: uma linha por backup (histórico ponto-no-tempo).
+export const TURSO_BACKUP_TABLE =
+  process.env.TURSO_BACKUP_TABLE || "kakashi_backups";
 
 // ==========================================================================
 // ANIMES (fontes de streaming via @consumet/extensions, em processo)

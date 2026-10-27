@@ -6,8 +6,21 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { DATABASE_DIR, PREFIX, GITHUB_TOKEN, SPIDER_API_TOKEN } from "../config.js";
-import { infoLog } from "./logger.js";
+import {
+  DATABASE_DIR,
+  MONGODB_FLUSH_DEBOUNCE_MS,
+  MONGODB_FLUSH_RETRY_MS,
+  PREFIX,
+  SESSION_STATE_NAME,
+  GITHUB_TOKEN,
+  SPIDER_API_TOKEN,
+} from "../config.js";
+import {
+  getActiveDriver,
+  isRemoteEnabled,
+} from "../services/remoteStore.js";
+import { restoreSession } from "../services/sessionStore.js";
+import { infoLog, warningLog } from "./logger.js";
 
 const databasePath = DATABASE_DIR;
 
@@ -107,6 +120,320 @@ function writeJSON(jsonFile, data, formatIfNotExists = []) {
   createIfNotExists(fullPath, formatIfNotExists);
 
   fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), "utf8");
+
+  scheduleRemoteFlush(jsonFile);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * ESPELHO REMOTO (MongoDB ou Turso)
+ *
+ * O disco continua a ser a cache de leitura (é o que os 69 chamadores síncronos
+ * e os testes leem), e um destino remoto passa a ser durável: sem isto, um
+ * deploy num host de disco efémero apagava créditos, assinaturas e pareamento.
+ *
+ * Qual destino está ativo é decidido em `src/services/remoteStore.js`, por isso
+ * este ficheiro não sabe se grava no Mongo ou no Turso.
+ *
+ * As escritas são agrupadas (debounce) porque o anti-flood e os créditos
+ * escrevem em rajada; um pedido por escrita multiplicaria round-trips.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** Nomes de ficheiro com alterações ainda não gravadas. */
+const pendingFlush = new Set();
+let flushTimer = null;
+let flushRunning = null;
+let lastFlushError = null;
+
+/** Erro da última gravação (null quando correu bem). */
+export function getLastFlushError() {
+  return lastFlushError;
+}
+
+/** Há alterações à espera de gravação? */
+export function hasPendingFlush() {
+  return pendingFlush.size > 0;
+}
+
+function scheduleRemoteFlush(jsonFile) {
+  // Regista sempre que haja destino configurado, mesmo com a ligação em baixo:
+  // uma alteração feita durante uma queda de rede tem de chegar ao destino
+  // quando a ligação voltar. Se só registasse com a ligação de pé, tudo o que
+  // fosse escrito durante a queda perdia-se em silêncio no deploy seguinte —
+  // exatamente o problema que o destino remoto veio resolver.
+  if (!isRemoteEnabled()) {
+    return;
+  }
+
+  pendingFlush.add(jsonFile);
+
+  if (flushTimer) {
+    return;
+  }
+
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    void flushRemoteState();
+  }, MONGODB_FLUSH_DEBOUNCE_MS);
+
+  // O timer não deve segurar o processo aberto.
+  flushTimer.unref?.();
+}
+
+/**
+ * Grava no destino remoto todas as alterações pendentes.
+ *
+ * Nunca lança: uma falha de rede não pode derrubar o bot nem perder a alteração
+ * local (o ficheiro em disco já tem o valor novo, e o nome volta à fila).
+ *
+ * @returns {Promise<boolean>} `true` quando não ficou nada pendente.
+ */
+export async function flushRemoteState() {
+  const driver = getActiveDriver();
+
+  if (!driver) {
+    return true;
+  }
+
+  // Uma gravação em curso é reaproveitada: dois flushes concorrentes não devem
+  // escrever o mesmo estado ao mesmo tempo.
+  if (flushRunning) {
+    return flushRunning;
+  }
+
+  if (!pendingFlush.size) {
+    return true;
+  }
+
+  // A ligação caiu (ou nunca se estabeleceu): tenta recuperar antes de
+  // desistir, para que uma queda temporária não deixe dados por sincronizar.
+  if (!driver.isConnected() && !(await driver.connect())) {
+    scheduleFlushRetry();
+
+    return false;
+  }
+
+  const names = [...pendingFlush];
+  pendingFlush.clear();
+
+  flushRunning = (async () => {
+    try {
+      await driver.writeMany(
+        names.map((name) => ({
+          name,
+          data: readJSONForRemote(name),
+        })),
+      );
+
+      lastFlushError = null;
+
+      return true;
+    } catch (error) {
+      lastFlushError = error;
+
+      warningLog(
+        `[database] gravação remota falhou (${error.message}); a manter os dados locais`,
+      );
+
+      // Devolve os nomes à fila e tenta de novo mais tarde.
+      for (const name of names) {
+        pendingFlush.add(name);
+      }
+
+      scheduleFlushRetry();
+
+      return false;
+    } finally {
+      flushRunning = null;
+    }
+  })();
+
+  return flushRunning;
+}
+
+/** Agenda uma nova tentativa de gravação depois de uma falha. */
+function scheduleFlushRetry() {
+  if (flushTimer) {
+    return;
+  }
+
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    void flushRemoteState();
+  }, MONGODB_FLUSH_RETRY_MS);
+
+  flushTimer.unref?.();
+}
+
+/** Lê o ficheiro de disco para envio remoto (sem recursão/auto-reparo). */
+function readJSONForRemote(jsonFile) {
+  try {
+    const fullPath = path.resolve(databasePath, `${jsonFile}.json`);
+    const raw = fs.readFileSync(fullPath, "utf8");
+
+    return sanitizeForRemote(jsonFile, JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lê o ficheiro de disco tal como está, sem limpeza.
+ *
+ * Usado para recuperar segredos locais durante o restore: eles nunca vão para o
+ * destino remoto, por isso a única cópia é a do disco.
+ */
+function readJSONFromDiskLocal(jsonFile) {
+  try {
+    const fullPath = path.resolve(databasePath, `${jsonFile}.json`);
+    const raw = fs.readFileSync(fullPath, "utf8");
+
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remove do que vai para o destino remoto o que nunca deve lá estar.
+ *
+ * `config.json` é espelhado porque guarda tokens que o dono define pelo
+ * WhatsApp (`github_token`, `spider_api_token`) e que devem sobreviver a um
+ * deploy. As exceções são as credenciais do próprio destino
+ * (`mongodb_uri`, `turso_url`, `turso_auth_token`): copiar a password da base
+ * de dados para dentro dela própria transformaria um acesso de leitura num
+ * acesso total, e vazaria a credencial em qualquer export.
+ */
+function sanitizeForRemote(jsonFile, value) {
+  if (jsonFile !== "config" || !value || typeof value !== "object") {
+    return value;
+  }
+
+  const {
+    mongodb_uri: _uriMongo,
+    turso_url: _urlTurso,
+    turso_auth_token: _tokenTurso,
+    ...rest
+  } = value;
+
+  return rest;
+}
+
+/** Credenciais locais que o restore não pode perder (nunca vão para remoto). */
+const LOCAL_ONLY_SECRETS = [
+  "mongodb_uri",
+  "turso_url",
+  "turso_auth_token",
+];
+
+/**
+ * Carrega o estado durável e liga o espelho.
+ *
+ * Ordem: liga ao destino → escreve no disco cada estado que exista lá (o
+ * destino é a fonte de verdade, porque sobrevive aos deploys) → envia para o
+ * destino os ficheiros que só existam no disco (primeira execução).
+ *
+ * Nunca lança: sem destino configurado, ou com a ligação em baixo, o bot
+ * arranca e serve-se do disco, exatamente como antes.
+ *
+ * @returns {Promise<boolean>} `true` quando o espelho está ativo.
+ */
+export async function initDatabase() {
+  const driver = getActiveDriver();
+
+  if (!driver) {
+    return false;
+  }
+
+  const client = await driver.connect();
+
+  if (!client) {
+    return false;
+  }
+
+  try {
+    const entries = await driver.readAll();
+    const restored = [];
+
+    for (const { name, data } of entries) {
+      if (data === null || data === undefined) {
+        continue;
+      }
+
+      // A sessão do WhatsApp não é um `database/*.json`: é um blob com os
+      // ficheiros de `assets/auth/baileys/`. Restaurá-la ANTES do `connect()`
+      // (o `initDatabase` corre primeiro) é o que faz o bot arrancar já
+      // autenticado, sem pedir um novo pareamento a cada deploy.
+      if (name === SESSION_STATE_NAME) {
+        if (restoreSession(data)) {
+          restored.push(name);
+        }
+
+        continue;
+      }
+
+      let value = data;
+
+      // O `config.json` restaurado não pode trazer de volta credenciais do
+      // destino: o documento remoto não as tem (ver `sanitizeForRemote`), e o
+      // ficheiro local é quem as guarda. Sem isto, um restore apagava-as e o bot
+      // perdia a ligação no arranque seguinte.
+      if (name === "config") {
+        const local = readJSONFromDiskLocal(name);
+
+        if (local && typeof local === "object") {
+          const preservados = {};
+
+          for (const key of LOCAL_ONLY_SECRETS) {
+            if (local[key]) {
+              preservados[key] = local[key];
+            }
+          }
+
+          value = { ...value, ...preservados };
+        }
+      }
+
+      // Escreve direto no disco: `writeJSON` marcaria o nome como pendente e
+      // provocaria um flush imediato do que acabámos de ler.
+      const fullPath = path.resolve(databasePath, `${name}.json`);
+
+      fs.writeFileSync(fullPath, JSON.stringify(value, null, 2), "utf8");
+
+      restored.push(name);
+    }
+
+    // Primeira execução com o destino vazio: sobe o que já existe em disco.
+    // O `config.json` também é enviado (é assim que os tokens definidos pelo
+    // dono sobrevivem a um deploy); as credenciais são removidas por
+    // `sanitizeForRemote` antes de sair.
+    const localFiles = fs
+      .readdirSync(databasePath)
+      .filter((entry) => entry.endsWith(".json"))
+      .map((entry) => entry.replace(/\.json$/, ""));
+
+    for (const name of localFiles) {
+      if (!restored.includes(name)) {
+        pendingFlush.add(name);
+      }
+    }
+
+    infoLog(
+      `[database] ${driver.name} ativo: ${restored.length} estado(s) restaurado(s)` +
+        (pendingFlush.size ? `, ${pendingFlush.size} para enviar` : ""),
+    );
+
+    if (pendingFlush.size) {
+      await flushRemoteState();
+    }
+
+    return true;
+  } catch (error) {
+    warningLog(
+      `[database] carga inicial do ${driver.name} falhou (${error.message}); a usar o disco`,
+    );
+
+    return false;
+  }
 }
 
 export function setAfkMember(groupId, memberId, reason) {

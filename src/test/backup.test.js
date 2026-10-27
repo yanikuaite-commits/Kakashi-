@@ -180,11 +180,30 @@ test("sem GITHUB_BACKUP_ALLOW_PUBLIC o destino público é recusado", async () =
 
 /* ════════════ BACKUP AUTOMÁTICO (a cada 2h) ════════════ */
 
-test("o intervalo padrão é de 2 horas", async () => {
+test("o intervalo padrão é de 1 hora", async () => {
   const { backupIntervalMs } = await import("../services/backup.js");
   const { BACKUP_INTERVAL_HOURS } = await import("../config.js");
-  assert.equal(BACKUP_INTERVAL_HOURS, 2);
-  assert.equal(backupIntervalMs(), 2 * 60 * 60 * 1000);
+  assert.equal(BACKUP_INTERVAL_HOURS, 1);
+  assert.equal(backupIntervalMs(), 1 * 60 * 60 * 1000);
+});
+
+test("o destino padrão dos backups é o Turso", async () => {
+  const { BACKUP_TARGET } = await import("../config.js");
+  assert.equal(BACKUP_TARGET, "turso");
+});
+
+test("a retenção padrão guarda 24 backups", async () => {
+  const { BACKUP_RETENTION } = await import("../config.js");
+  assert.equal(BACKUP_RETENTION, 24);
+});
+
+test("a sessão fica fora dos backups automáticos por padrão", async () => {
+  const { BACKUP_INCLUDE_SESSION } = await import("../config.js");
+  assert.equal(
+    BACKUP_INCLUDE_SESSION,
+    false,
+    "um backup desatendido com a chave privada do número ficaria guardado sem ninguém dar por isso",
+  );
 });
 
 test("BACKUP_INTERVAL_HOURS=0 desliga o agendamento", async () => {
