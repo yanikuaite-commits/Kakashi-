@@ -48,6 +48,7 @@ import {
   withCreditsContext,
 } from "../services/credits.js";
 import { mediaUploadFromFile, safeMediaFileName } from "./mediaSend.js";
+import { prepareImageForWhatsApp, withPreparedVideo } from "../services/mediaPrepare.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
   EPISODES_PER_PAGE,
@@ -238,7 +239,7 @@ function buildEpisodeRows(episodes = [], page = 0) {
   });
 }
 
-async function sendCard({ socket, session, text, title, rows, fallbackPrompt }) {
+async function sendCard({ socket, session, text, title, rows, fallbackPrompt, image = null }) {
   const sections = [{ title: title || "Megacine", rows }];
   const options = rows.map((row, index) => ({
     number: String(index + 1),
@@ -252,24 +253,39 @@ async function sendCard({ socket, session, text, title, rows, fallbackPrompt }) 
   const dono = ownerButton();
   if (dono) buttons.push(dono);
 
-  const sent = await sendInteractiveWithFallback({
-    socket,
-    chatId: session.chatId,
-    content: {
-      text,
-      footer: RODAPE,
-      interactiveButtons: buttons,
-      viewOnce: true,
-    },
-    fallbackText: numberedFallback(
-      options,
-      fallbackPrompt || "Responde com o número 👇",
-    ),
-    sendReply: session.sendReply,
-    textOnly: Boolean(session.textOnly),
-    onSendError: (error) =>
-      errorLog(`[megacine] falha ao enviar card: ${error.message}`),
-  });
+  const sent = await (async () => {
+    // A capa do Megacine vem em WebP, que o WhatsApp não renderiza (e o jimp do
+    // Baileys não descodifica): é convertida antes de sair — ver
+    // `mediaPrepare.js`. O ficheiro convertido é temporário.
+    const capa = await prepareImageForWhatsApp(image);
+
+    try {
+      return await sendInteractiveWithFallback({
+        socket,
+        chatId: session.chatId,
+        content: {
+          // Com capa o corpo tem de ir em `caption`: com `text` o baileys
+          // constrói uma mensagem de texto e descarta a imagem do cabeçalho.
+          ...(capa.image ? { caption: text, image: { url: capa.image } } : { text }),
+          footer: RODAPE,
+          interactiveButtons: buttons,
+          viewOnce: true,
+        },
+        fallbackText: numberedFallback(
+          options,
+          fallbackPrompt || "Responde com o número 👇",
+        ),
+        sendReply: session.sendReply,
+        textOnly: Boolean(session.textOnly),
+        onSendError: (error) =>
+          errorLog(`[megacine] falha ao enviar card: ${error.message}`),
+      });
+    } finally {
+      if (capa.temporary) {
+        await fs.promises.rm(capa.image, { force: true }).catch(() => {});
+      }
+    }
+  })();
 
   // Guarda as linhas do último card: no modo texto um número respondido vale a
   // linha nessa posição, sem lógica duplicada por passo.
@@ -377,6 +393,9 @@ async function searchAndSendResults({ socket, session, termo }) {
       `Escolhe o título que queres ver.`,
     title: "Resultados",
     rows,
+    // Capa do primeiro resultado: mostra de que título se trata antes de o
+    // utilizador escolher da lista.
+    image: session.candidates[0]?.image || null,
   });
 }
 
@@ -456,6 +475,9 @@ async function chooseCandidate({ socket, session, index }) {
       `📺 Escolhe a temporada que queres ver.`,
     title: "Temporadas",
     rows,
+    // Capa do título escolhido: confirma visualmente que abriu o título certo
+    // antes de listar as temporadas.
+    image: candidato.image || null,
   });
 }
 
@@ -516,6 +538,8 @@ async function sendEpisodePage({ socket, session, page }) {
       `Escolhe o episódio para baixar.`,
     title: "Episódios",
     rows,
+    // Mesma capa do passo anterior: a lista continua a confirmar o título aberto.
+    image: session.title?.image || null,
   });
 }
 
@@ -684,16 +708,20 @@ async function downloadAndSend({ socket, session, episodeIndex, sendVideoFromFil
         caption,
       });
     } else {
-      infoLog(`[megacine] enviando como vídeo (${tamanhoMB.toFixed(1)} MB)`);
-      if (typeof sendVideoFromFile === "function") {
-        await sendVideoFromFile(result.filePath, caption);
-      } else {
-        await socket.sendMessage(session.chatId, {
-          video: mediaUploadFromFile(result.filePath),
-          mimetype: "video/mp4",
-          caption,
-        });
-      }
+      // Sem o `moov` no início o WhatsApp responde "vídeo não está disponível":
+      // o `withPreparedVideo` remuxa/transcode e apaga o temporário no fim.
+      await withPreparedVideo(result.filePath, async (filePath) => {
+        infoLog(`[megacine] enviando como vídeo (${tamanhoMB.toFixed(1)} MB)`);
+        if (typeof sendVideoFromFile === "function") {
+          await sendVideoFromFile(filePath, caption);
+        } else {
+          await socket.sendMessage(session.chatId, {
+            video: mediaUploadFromFile(filePath),
+            mimetype: "video/mp4",
+            caption,
+          });
+        }
+      });
     }
   } catch (error) {
     errorLog(`[megacine] falha no download: ${error.message}`);

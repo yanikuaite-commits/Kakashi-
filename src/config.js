@@ -473,6 +473,16 @@ export const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || "";
 export const YTDLP_CONCURRENT_FRAGMENTS = Number(
   process.env.YTDLP_CONCURRENT_FRAGMENTS || 4,
 );
+// Remux/transcode do vídeo antes de o enviar como VÍDEO (≤ 100 MB): põe o
+// índice (`moov`) antes dos dados e garante H.264, sem o que o WhatsApp responde
+// "vídeo não está disponível". Só corre quando o ficheiro não está já em H.264
+// com `moov` no início. Desligável por VIDEO_FIX_ENABLED=false.
+export const VIDEO_FIX_ENABLED = process.env.VIDEO_FIX_ENABLED !== "false";
+// Teto de tempo de uma conversão. Um episódio AV1 de 80 MB em 480p fica na casa
+// dos 30-60s; 5 min dá folga sem prender o download para sempre.
+export const VIDEO_FIX_TIMEOUT_MS = Number(
+  process.env.VIDEO_FIX_TIMEOUT_MS || 5 * 60 * 1000,
+);
 
 // ==========================================================================
 // MONGODB (persistência durável; opcional)
