@@ -8,6 +8,7 @@
  * @author Dev Gui
  */
 import { decideGeneralSend, decideYouTubeSend, mediaUploadFromFile } from "./mediaSend.js";
+import { withPreparedVideo } from "../services/mediaPrepare.js";
 
 /**
  * Envia o resultado de um download.
@@ -45,14 +46,18 @@ export async function sendMediaByRule({
   }
 
   if (typeof sendVideoFromFile === "function") {
-    await sendVideoFromFile(result.filePath, caption);
+    await withPreparedVideo(result.filePath, (filePath) =>
+      sendVideoFromFile(filePath, caption),
+    );
     return "video";
   }
 
-  await socket.sendMessage(chatId, {
-    video: mediaUploadFromFile(result.filePath),
-    mimetype: "video/mp4",
-    caption,
-  });
+  await withPreparedVideo(result.filePath, (filePath) =>
+    socket.sendMessage(chatId, {
+      video: mediaUploadFromFile(filePath),
+      mimetype: "video/mp4",
+      caption,
+    }),
+  );
   return "video";
 }

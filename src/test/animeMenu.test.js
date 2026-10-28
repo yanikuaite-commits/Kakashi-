@@ -1286,7 +1286,13 @@ test("com correspondência exata, segue direto sem lista de candidatos", async (
     assert.ok(sessao.episodes.length > 0, "os episódios foram carregados");
 
     const card = enviados[enviados.length - 1];
-    assert.equal(card.image, undefined, "sem ambiguidade o card não leva capa");
+    // A capa passou a acompanhar TODOS os passos da pesquisa: mesmo sem
+    // ambiguidade, a imagem é o que confirma que o título aberto é o pedido.
+    assert.equal(
+      card.image?.url,
+      "https://meusanimes.blog/wp-content/uploads/2025/04/yLZS.jpg",
+      "o card leva a capa do título, sem o sufixo de miniatura",
+    );
   } finally {
     delete globalThis.fetch;
   }

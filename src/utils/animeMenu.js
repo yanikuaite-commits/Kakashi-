@@ -49,6 +49,7 @@ import {
   withCreditsContext,
 } from "../services/credits.js";
 import { mediaUploadFromFile } from "./mediaSend.js";
+import { prepareImageForWhatsApp, withPreparedVideo } from "../services/mediaPrepare.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
   ANIME_TOKEN_PREFIXES,
@@ -293,27 +294,40 @@ async function sendCard({
   const canal = canalButton();
   if (canal) buttons.push(canal);
 
-  const sent = await sendInteractiveWithFallback({
-    socket,
-    chatId: session.chatId,
-    content: {
-      // Com capa, o corpo tem de ir em `caption`: o baileys só anexa a imagem ao
-      // cabeçalho do card interativo quando o texto vem por `caption` (com
-      // `text` o corpo é construído como mensagem de texto e a imagem é
-      // descartada). O corpo final é `text || caption`, por isso o conteúdo é o
-      // mesmo — verificado contra `generateWAMessageContent`.
-      ...(image ? { caption: text, image: { url: image } } : { text }),
-      footer: RODAPE,
-      interactiveButtons: buttons,
-      viewOnce: true,
-    },
-    fallbackText: numberedFallback(options, fallbackPrompt || "Responde com o número 👇"),
-    sendReply: session.sendReply,
-    // Modo texto (`!`): entrega o texto numerado em vez do card.
-    textOnly: Boolean(session.textOnly),
-    onSendError: (error) =>
-      errorLog(`[anime] falha ao enviar card: ${error.message}`),
-  });
+  const sent = await (async () => {
+    // A capa é preparada aqui: alguns CDNs servem só WebP, que o WhatsApp não
+    // renderiza (e o jimp do Baileys não descodifica) — ver `mediaPrepare.js`.
+    // O ficheiro convertido é temporário e apagado no fim.
+    const capa = await prepareImageForWhatsApp(image);
+
+    try {
+      return await sendInteractiveWithFallback({
+        socket,
+        chatId: session.chatId,
+        content: {
+          // Com capa, o corpo tem de ir em `caption`: o baileys só anexa a imagem ao
+          // cabeçalho do card interativo quando o texto vem por `caption` (com
+          // `text` o corpo é construído como mensagem de texto e a imagem é
+          // descartada). O corpo final é `text || caption`, por isso o conteúdo é o
+          // mesmo — verificado contra `generateWAMessageContent`.
+          ...(capa.image ? { caption: text, image: { url: capa.image } } : { text }),
+          footer: RODAPE,
+          interactiveButtons: buttons,
+          viewOnce: true,
+        },
+        fallbackText: numberedFallback(options, fallbackPrompt || "Responde com o número 👇"),
+        sendReply: session.sendReply,
+        // Modo texto (`!`): entrega o texto numerado em vez do card.
+        textOnly: Boolean(session.textOnly),
+        onSendError: (error) =>
+          errorLog(`[anime] falha ao enviar card: ${error.message}`),
+      });
+    } finally {
+      if (capa.temporary) {
+        await fs.promises.rm(capa.image, { force: true }).catch(() => {});
+      }
+    }
+  })();
 
   // Guarda as linhas do último card para o modo texto: um número respondido
   // vale a linha nessa posição. Sem isto o anime só aceitava tokens (o fallback
@@ -588,6 +602,9 @@ async function sendSeasonList({ socket, session }) {
     }),
     title: "Temporadas",
     rows,
+    // A capa é a do título escolhido: é o que confirma visualmente que o fluxo
+    // abriu o anime certo antes de listar as temporadas.
+    image: capaEmTamanhoGrande(session.anime?.image) || null,
   });
 }
 
@@ -952,6 +969,9 @@ async function sendEpisodePage({ socket, session, page }) {
     }),
     title: "Episódios",
     rows,
+    // Mesma capa do passo anterior: a lista de episódios continua a confirmar
+    // qual é o título aberto.
+    image: capaEmTamanhoGrande(session.anime?.image) || null,
   });
 }
 
@@ -1235,16 +1255,20 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
         caption,
       });
     } else {
-      infoLog(`[anime] enviando como vídeo (${tamanhoMB.toFixed(1)} MB)`);
-      if (typeof sendVideoFromFile === "function") {
-        await sendVideoFromFile(result.filePath, caption);
-      } else {
-        await socket.sendMessage(session.chatId, {
-          video: mediaUploadFromFile(result.filePath),
-          mimetype: "video/mp4",
-          caption,
-        });
-      }
+      // Sem o `moov` no início o WhatsApp responde "vídeo não está disponível":
+      // o `withPreparedVideo` remuxa/transcode e apaga o temporário no fim.
+      await withPreparedVideo(result.filePath, async (filePath) => {
+        infoLog(`[anime] enviando como vídeo (${tamanhoMB.toFixed(1)} MB)`);
+        if (typeof sendVideoFromFile === "function") {
+          await sendVideoFromFile(filePath, caption);
+        } else {
+          await socket.sendMessage(session.chatId, {
+            video: mediaUploadFromFile(filePath),
+            mimetype: "video/mp4",
+            caption,
+          });
+        }
+      });
     }
   } catch (error) {
     errorLog(`[anime] falha no download: ${error.message}`);
