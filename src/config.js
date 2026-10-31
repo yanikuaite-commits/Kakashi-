@@ -395,16 +395,28 @@ export const RATE_LIMITED_COMMANDS = new Set([
 // FILA DE DOWNLOADS
 // ==========================================================================
 
+// Lê um inteiro positivo do ambiente, com um padrão quando o valor falta ou não
+// presta. Sem esta guarda um valor inválido (ex. `DOWNLOAD_CONCURRENCY=abc`)
+// virava NaN, e `running < NaN` é sempre falso: a fila nunca arrancava nada e
+// todo o download morria no timeout. O bot tem de aguentar qualquer host, por
+// isso um valor torto degrada para o padrão em vez de parar a fila.
+function positiveIntFromEnv(name, fallback) {
+  const value = Number(process.env[name]);
+
+  return Number.isFinite(value) && value >= 1 ? Math.floor(value) : fallback;
+}
+
 // Quantos downloads correm ao mesmo tempo. O excedente espera na fila em vez de
-// dividir a banda com os outros. 1 serializa tudo.
-export const DOWNLOAD_CONCURRENCY = Number(
-  process.env.DOWNLOAD_CONCURRENCY || 2,
-);
+// dividir a banda com os outros. 1 (padrão) serializa tudo: uma coisa de cada
+// vez, em qualquer host.
+export const DOWNLOAD_CONCURRENCY = positiveIntFromEnv("DOWNLOAD_CONCURRENCY", 1);
 
 // Tempo máximo na fila antes de desistir (ms). Evita esperas sem fim quando o
-// downloader à frente encrava.
-export const DOWNLOAD_QUEUE_TIMEOUT_MS = Number(
-  process.env.DOWNLOAD_QUEUE_TIMEOUT_MS || 5 * 60 * 1000,
+// downloader à frente encrava. Também passa pela guarda: um `NaN` aqui fazia o
+// temporizador disparar logo e desistir de todos os pedidos.
+export const DOWNLOAD_QUEUE_TIMEOUT_MS = positiveIntFromEnv(
+  "DOWNLOAD_QUEUE_TIMEOUT_MS",
+  5 * 60 * 1000,
 );
 
 
