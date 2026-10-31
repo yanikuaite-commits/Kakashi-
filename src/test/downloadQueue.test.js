@@ -215,3 +215,39 @@ test("fila: cada aviso vai para o chat de quem pediu", async () => {
   vagaB.resolve("ok");
   await Promise.all([...emCurso, pedidoA, pedidoB]);
 });
+
+test("fila: o padrão é 1, uma coisa de cada vez", () => {
+  // Sem env var, o limite tem de ser 1: dois downloads ao mesmo tempo dividem a
+  // banda e ficam ambos lentos, que é exatamente o que a fila existe para evitar.
+  assert.equal(
+    DOWNLOAD_CONCURRENCY,
+    1,
+    "o padrão tem de serializar os downloads",
+  );
+});
+
+test("fila: um valor inválido no ambiente não prende a fila", async () => {
+  // Regressão: `Number("abc")` dava NaN, e `running < NaN` é sempre falso — a
+  // fila aceitava o pedido e nunca o arrancava, deixando-o morrer no timeout.
+  // O teste corre num processo próprio porque `config.js` lê o ambiente uma só
+  // vez, no arranque.
+  const { spawnSync } = await import("node:child_process");
+  const script = `
+    import { DOWNLOAD_CONCURRENCY } from "./src/config.js";
+    import { withDownloadSlot } from "./src/services/downloadQueue.js";
+    const resultado = await withDownloadSlot(async () => "ok", { timeoutMs: 2000 });
+    console.log(JSON.stringify({ limite: DOWNLOAD_CONCURRENCY, resultado }));
+  `;
+
+  const executado = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+    cwd: process.cwd(),
+    env: { ...process.env, DOWNLOAD_CONCURRENCY: "abc" },
+    encoding: "utf8",
+    timeout: 30000,
+  });
+
+  assert.equal(executado.status, 0, executado.stderr);
+  const saida = JSON.parse(executado.stdout.trim().split("\n").pop());
+  assert.equal(saida.limite, 1, "valor inválido volta ao padrão");
+  assert.equal(saida.resultado, "ok", "o download corre em vez de ficar preso");
+});

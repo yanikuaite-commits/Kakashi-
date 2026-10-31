@@ -23,6 +23,11 @@ services:
       # Runtime JS para os desafios do YouTube (o projeto usa Node >= 22.8).
       - key: YTDLP_JS_RUNTIME
         value: node
+      # Fila de downloads: 1 baixa uma coisa de cada vez, sem dividir a banda
+      # entre pedidos. O padrão do código já é 1; fica explícito aqui para o
+      # comportamento não depender de quem lê o código.
+      - key: DOWNLOAD_CONCURRENCY
+        value: "1"
       # Cookies do YouTube: o projeto usa o cookies.txt commitado na raiz do
       # repositório (o Dockerfile copia tudo para /opt/project). Para usar um
       # Secret File no painel em vez disso, troque o valor para

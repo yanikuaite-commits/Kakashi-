@@ -483,12 +483,18 @@ and to keep the bot from being banned for spam.
 
 **Download queue** (`src/services/downloadQueue.js`):
 
-- at most `DOWNLOAD_CONCURRENCY` downloads (default 2) run at once; the rest
-  wait, so two users no longer split the bandwidth and slow each other down
+- at most `DOWNLOAD_CONCURRENCY` downloads (default 1: one at a time) run at
+  once; the rest wait, so two users no longer split the bandwidth and slow each
+  other down. An invalid value (e.g. `DOWNLOAD_CONCURRENCY=abc`) falls back to
+  the default instead of becoming `NaN` and stalling the queue forever
 - every download goes through `withDownloadSlot`. The queue is entered inside
-  `downloader.js` (`downloadMedia` / `downloadYouTubeVideo`) and in the anime
-  flow (`animeMenu.js`), so the limit applies to the download itself and not to
-  the link resolution, which is fast
+  `downloader.js` (`downloadMedia` / `downloadYouTubeVideo`), in the anime flow
+  (`animeMenu.js`) and in the megacine flow (`megacineMenu.js`), so the limit
+  applies to the download itself and not to the link resolution, which is fast
+- the queue notifier is established in `dynamicCommand.js` for commands and in
+  `onMesssagesUpsert.js` for the menu flows (anime, megacine, audio/video
+  format). Without the middleware side the download is still serialized, but the
+  position/turn messages never reach the chat
 - the waiting user is told the position (`queuedMessage`) and warned when their
   turn arrives (`downloadTurnMessage`), instead of waiting in silence
 - a request that waits longer than `DOWNLOAD_QUEUE_TIMEOUT_MS` leaves the queue

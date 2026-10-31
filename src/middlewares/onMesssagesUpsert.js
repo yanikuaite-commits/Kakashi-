@@ -23,6 +23,7 @@ import { hasPaymentMessage } from "../utils/paymentMessage.js";
 import { handleAfkReferences } from "./afkHandler.js";
 import { onGroupParticipantsUpdate } from "./onGroupParticipantsUpdate.js";
 import { handlePendingDocOffer } from "../services/downloader.js";
+import { withDownloadNotifier } from "../services/downloadQueue.js";
 import { handleAudioFormatReply } from "../utils/audioFormatMenu.js";
 import { handleInteractiveMenuReply } from "../utils/interactive.js";
 import { handleVideoFormatReply } from "../utils/videoFormatMenu.js";
@@ -158,9 +159,18 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         continue;
       }
 
+      // Estes fluxos são despachados aqui, e não pelo `dynamicCommand` — o único
+      // sítio que estabelece o contexto da fila. Sem envolver estas chamadas, o
+      // download é serializado mas o aviso de posição nunca chega ao chat: o
+      // `sendReply` fica fora do contexto e o utilizador espera em silêncio.
+      const comFila = (callback) =>
+        withDownloadNotifier(commonFunctions.sendReply, callback, {
+          priority: isBotOwner({ userLid: commonFunctions.userLid }),
+        });
+
       // Fluxo de animes (HiAnime): antes do fluxo guiado, porque com uma
       // sessão de anime aberta o próximo texto é o NOME do anime.
-      if (await handleAnimeReply({
+      if (await comFila(() => handleAnimeReply({
         socket,
         chatId: commonFunctions.remoteJid,
         senderLid: commonFunctions.userLid,
@@ -173,14 +183,14 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         sendReply: commonFunctions.sendReply,
         sendVideoFromFile: commonFunctions.sendVideoFromFile,
         prefix: getPrefix(commonFunctions.remoteJid) || PREFIX,
-      })) {
+      }))) {
         continue;
       }
 
       // Fluxo do Megacine (séries, doramas e animes episódicos): antes do fluxo
       // guiado, porque com uma sessão aberta o próximo texto pode ser o NOME do
       // título.
-      if (await handleMegacineReply({
+      if (await comFila(() => handleMegacineReply({
         socket,
         chatId: commonFunctions.remoteJid,
         senderLid: commonFunctions.userLid,
@@ -193,7 +203,7 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         sendReply: commonFunctions.sendReply,
         sendVideoFromFile: commonFunctions.sendVideoFromFile,
         prefix: getPrefix(commonFunctions.remoteJid) || PREFIX,
-      })) {
+      }))) {
         continue;
       }
 
@@ -247,7 +257,7 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         continue;
       }
 
-      if (await handleAudioFormatReply({
+      if (await comFila(() => handleAudioFormatReply({
         chatId: commonFunctions.remoteJid,
         senderLid: commonFunctions.userLid,
         senderName: webMessage?.pushName,
@@ -267,11 +277,11 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
             sendReply: commonFunctions.sendReply,
           });
         },
-      })) {
+      }))) {
         continue;
       }
 
-      if (await handleVideoFormatReply({
+      if (await comFila(() => handleVideoFormatReply({
         chatId: commonFunctions.remoteJid,
         senderLid: commonFunctions.userLid,
         senderName: webMessage?.pushName,
@@ -290,7 +300,7 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
             sendReply: commonFunctions.sendReply,
           });
         },
-      })) {
+      }))) {
         continue;
       }
 
