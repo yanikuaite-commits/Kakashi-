@@ -269,7 +269,7 @@ export const PAIRING_NUMBER = process.env.PAIRING_NUMBER || "";
 export const CREDITS_TIMEZONE = "Africa/Maputo";
 
 // Créditos gratuitos renovados todos os dias às 00h00 (horário de Moçambique).
-export const DAILY_FREE_CREDITS = 30;
+export const DAILY_FREE_CREDITS = 10;
 
 // Contato do dono para receber pagamento e recarregar créditos.
 // Use o número com DDI e DDD, apenas dígitos (ex: "258840000000").
