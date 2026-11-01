@@ -199,6 +199,15 @@ function registerMenu({
     });
   }
 
+  // Um menu curto não pode encurtar um menu longo já aberto no mesmo chat: a
+  // confirmação de pagamento vale 10 horas, e abrir o menu principal (2 min) na
+  // mesma conversa matava-a em 2 minutos. Fica o prazo mais longo dos dois.
+  const restante = previous?.expiresAt
+    ? Math.max(0, previous.expiresAt - Date.now())
+    : 0;
+  const prazo = Math.max(ttlMs, restante);
+  menu.expiresAt = Date.now() + prazo;
+
   menu.cleanupTimer = setTimeout(() => {
     if (pendingMenus.get(key) !== menu) return;
     pendingMenus.delete(key);
@@ -208,7 +217,7 @@ function registerMenu({
         menu.sendReply?.("⏳ O tempo deste menu terminou. Abre-o novamente para escolher."),
       ).catch(() => {});
     }
-  }, ttlMs);
+  }, prazo);
   menu.cleanupTimer.unref?.();
 
   pendingMenus.set(key, menu);

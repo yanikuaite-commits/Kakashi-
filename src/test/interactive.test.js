@@ -344,3 +344,47 @@ test("token consumido não pode ser reutilizado depois do menu", async () => {
   assert.deepEqual(staleClick, { handled: true });
   assert.match(replies.at(-1), /expirou/i);
 });
+
+test("menu curto no mesmo chat não encurta o prazo de um menu longo", async () => {
+  const chatId = "menu-prazo-combinado@g.us";
+  const tokenPagamento = createInteractiveActionId();
+  const tokenPainel = createInteractiveActionId();
+  const replies = [];
+
+  // Confirmação de pagamento: prazo longo (o real são 10 horas).
+  await sendInteractiveWithFallback({
+    socket: { sendMessage: async () => {} },
+    chatId,
+    ownerId: "dono",
+    content: { buttons: [{ buttonId: tokenPagamento }] },
+    responseMappings: [{ id: tokenPagamento, target: ".recarga-confirmar abc" }],
+    sendReply: async (text) => replies.push(text),
+    ttlMs: 10_000,
+  });
+
+  // Menu curto no MESMO chat/dono: não pode matar o prazo do anterior.
+  await sendInteractiveWithFallback({
+    socket: { sendMessage: async () => {} },
+    chatId,
+    ownerId: "dono",
+    content: { buttons: [{ buttonId: tokenPainel }] },
+    responseMappings: [{ id: tokenPainel, target: ".painel" }],
+    sendReply: async (text) => replies.push(text),
+    ttlMs: 50,
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 120));
+
+  const escolha = await handleInteractiveMenuReply({
+    chatId,
+    senderId: "dono",
+    text: tokenPagamento,
+    sendReply: async (text) => replies.push(text),
+  });
+
+  assert.deepEqual(escolha, {
+    handled: false,
+    selectedId: ".recarga-confirmar abc",
+  });
+  assert.equal(replies.length, 0);
+});
