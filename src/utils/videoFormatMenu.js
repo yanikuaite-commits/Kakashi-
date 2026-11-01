@@ -19,7 +19,7 @@
  * antes de `handleInteractiveMenuReply` no middleware (e depois do fluxo
  * guiado, que ignora tokens `vfmt:*`).
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import fs from "node:fs/promises";
 import {

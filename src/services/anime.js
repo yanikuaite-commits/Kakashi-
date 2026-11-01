@@ -16,7 +16,7 @@
  * vez de guardado em estado global, porque cada episódio pertence ao provider
  * onde foi encontrado e as sessões podem coexistir.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import {
   ANIME_ACCEPT_LANGUAGE,
@@ -53,7 +53,7 @@ const DEP_MISSING_HINT =
 
 const NO_PROVIDER_HINT =
   "Nenhuma fonte de animes respondeu. Estes sites bloqueiam IPs de datacenter " +
-  "(como o Render) e mudam de domínio com frequência — ajuste ANIME_PROVIDERS " +
+  "(como o do host em nuvem) e mudam de domínio com frequência — ajuste ANIME_PROVIDERS " +
   "com um provider que esteja no ar ou ANIME_PROXY_URL com um proxy residencial.";
 
 /** Nome → construtor no namespace `ANIME` da biblioteca. */
@@ -91,7 +91,7 @@ const instancias = new Map();
  *
  * A biblioteca não define User-Agent, pelo que o axios envia "axios/1.x" e o
  * Cloudflare — à frente de todos estes sites — bloqueia esse agente em IPs de
- * datacenter (Render incluído). Sem isto, a pesquisa falha com "nenhuma fonte
+ * datacenter. Sem isto, a pesquisa falha com "nenhuma fonte
  * respondeu" mesmo com o site no ar. O proxy é o escape hatch para quando o IP
  * do host está bloqueado de vez.
  *

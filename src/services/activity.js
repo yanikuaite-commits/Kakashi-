@@ -12,7 +12,7 @@
  * entra no backup a cada 2h, por isso não pode crescer sem fim. O que sai da
  * lista é o mais antigo, que é o menos útil num painel.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { readActivity, saveActivity } from "../utils/database.js";
 

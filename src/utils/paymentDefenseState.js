@@ -16,7 +16,7 @@
  * Tudo é volátil de propósito, como o messageEnvelopeRegistry: o modo de falha
  * ao reiniciar é ficar mais conservador, nunca menos seguro.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { sendCleanChat } from "./cleanChat.js";
 import { deletePaymentMessageWithFallback } from "./deletePaymentMessage.js";

@@ -4,7 +4,7 @@
  * Usa o despacho real (`handleInteractiveMenuReply`), o mesmo que o middleware
  * usa, para garantir que a escolha do item da lista acaba no comando certo.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";

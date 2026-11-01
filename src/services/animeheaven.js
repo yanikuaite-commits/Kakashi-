@@ -3,11 +3,11 @@
  *
  * PORQUÊ: o `anikoto` (HiAnime) só publica UMA variante, em 1080p, o que obriga
  * a baixar ~350 MB e a reduzir localmente com o ffmpeg. O AnimeHeaven publica o
- * episódio em 720p nativo (~95–128 MB), já dentro do teto de 200 MB: não há
+ * episódio em 720p nativo (~95–128 MB), já dentro do teto de 500 MB: não há
  * compressão nem downscale, e o download termina muito mais rápido.
  *
  * COMO: o site é PHP simples, sem Cloudflare e responde a IPs de datacenter
- * (Render incluído). A cadeia é:
+ * A cadeia é:
  *
  *   GET /search.php?s=<termo>          → resultados; id curto em anime.php?<id>
  *   GET /anime.php?<id>                → episódios; cada um tem um hash de 32 hex
@@ -21,7 +21,7 @@
  * sem metadados), por isso o mirror é escolhido AQUI, por tamanho — ver
  * `escolherMirror`.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { ANIME_API_TIMEOUT_MS, ANIME_USER_AGENT } from "../config.js";
 import { errorLog, infoLog } from "../utils/logger.js";

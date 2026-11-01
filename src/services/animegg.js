@@ -1,7 +1,7 @@
 /**
  * Provider "animegg": extrai o MP4 direto do site, sem API de terceiros.
  *
- * PORQUÊ: é o único site testado que responde a IPs de datacenter (Render
+ * PORQUÊ: é o único site testado que responde a IPs de datacenter
  * incluído), entrega H.264 (`avc1`) — que o WhatsApp reproduz — e não precisa de
  * browser: a extração é `fetch` + regex. O anikoto só publica 1080p e o
  * animeheaven não tem catálogo recente; o animegg preenche esse espaço.
@@ -16,8 +16,8 @@
  *
  * Cada entrada de `videoSources` é um degrau de qualidade (`360p`/`480p`/`720p`).
  * O rótulo diz a resolução, mas NÃO o tamanho: medido num episódio de 24 min,
- * 360p = 31 MB, 480p = 80 MB e 720p = 201 MB — ou seja, o 720p passa o teto de
- * 200 MB. Por isso a escolha é feita aqui, por `Content-Length`, e não pelo
+ * 360p = 31 MB, 480p = 80 MB e 720p = 201 MB. Por isso a escolha é feita aqui,
+ * por `Content-Length`, e não pelo
  * rótulo. O degrau preferido é `ANIME_GG_MAX_HEIGHT` (480p).
  *
  * LIMITE CONHECIDO: em ~1 de cada 8 episódios o embed traz
@@ -25,7 +25,7 @@
  * passa a repetir), pelo que o fluxo tem de cair para o provider seguinte — ver
  * o fallback em `src/services/anime.js`.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import {
   ANIME_API_TIMEOUT_MS,
@@ -229,7 +229,7 @@ export function parseVideoSources(html) {
  *
  * O degrau preferido (`ANIME_GG_MAX_HEIGHT`, 480p por padrão) vem primeiro; se
  * faltar, tenta-se o imediatamente abaixo antes do acima, porque subir de
- * resolução arrisca passar o teto de 200 MB.
+ * resolução gasta mais banda e disco.
  *
  * @param {Array<{file: string, label: string, height: number}>} fontes
  * @returns {Array<{file: string, label: string, height: number}>}

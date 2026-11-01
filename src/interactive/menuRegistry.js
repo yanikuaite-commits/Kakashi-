@@ -37,7 +37,7 @@
  * o catálogo de texto nunca divergirem; aqui ficam só a descrição curta e a
  * restrição de permissão.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { MENU_CATEGORIES } from "../menu.js";
 

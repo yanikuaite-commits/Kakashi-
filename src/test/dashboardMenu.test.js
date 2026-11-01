@@ -1,7 +1,7 @@
 /**
  * Testes para o menu e visuais do painel.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert";
 import { describe, it } from "node:test";

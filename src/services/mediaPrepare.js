@@ -17,7 +17,7 @@
  * inevitável. Sem ffmpeg disponível nada disto corre e a mídia segue como está:
  * a degradação é preferível a falhar o envio.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { execFile } from "node:child_process";
 import fs from "node:fs";

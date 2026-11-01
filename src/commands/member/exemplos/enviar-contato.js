@@ -18,7 +18,7 @@ export default {
 
     await delay(3000);
 
-    await sendContact("+55 11 99612-2056", "Dev Gui");
+    await sendContact("+55 11 99612-2056", "Dev Yanik");
 
     await delay(3000);
 

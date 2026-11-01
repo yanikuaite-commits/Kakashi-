@@ -15,7 +15,7 @@
  * largada no início do download: o segundo pedido do mesmo utilizador não
  * chegaria à fila. Dois utilizadores distintos é o cenário que o dono relatou.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert/strict";
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";

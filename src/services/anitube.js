@@ -35,7 +35,7 @@
  * posts com o mesmo nome-base e o número em "Episódio <n>", pelo que a série é
  * reconstruída a partir de uma pesquisa paginada.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { ANIME_API_TIMEOUT_MS, ANIME_MAX_DOWNLOAD_BYTES, ANIME_USER_AGENT } from "../config.js";
 import { infoLog } from "../utils/logger.js";

@@ -1,7 +1,7 @@
 /**
  * Serviços de upload de imagem e geração de link.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import axios from "axios";
 import FormData from "form-data";
@@ -37,7 +37,7 @@ ou pelo comando:
 \`${PREFIX}set-spider-api-token seu_token_aqui\`
 
 Para obter uma API Key do Linker:
-1. Acesse: https://linker.devgui.dev
+1. Acesse: https://linker.devyaniik.dev
 2. Faça login ou crie uma conta entrando com sua conta Google
 3. Vá em *Configurações*
 4. Copie sua API Key

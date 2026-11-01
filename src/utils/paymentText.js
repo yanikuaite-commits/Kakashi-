@@ -14,7 +14,7 @@
  *   m-pesa:  "Confirmado DII4LME7OGU. Transferiste 5.00MT e a taxa foi de
  *            1.00MT para 865672009 aos 18/9/26 as 2:37 PM. ..."
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 
 const PROVIDER_EMOLA = "emola";

@@ -20,7 +20,7 @@
  * gzip e codificado em base64 (6.5 MB de ficheiros → ~160 KB de texto), porque
  * a coluna guarda texto.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 
 import fs from "node:fs";

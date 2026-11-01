@@ -2,7 +2,7 @@
  * Direcionador
  * de comandos.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { BOT_EMOJI, ONLY_GROUP_ID, PREFIX } from "../config.js";
 import {

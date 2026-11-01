@@ -13,6 +13,12 @@ export const BOT_EMOJI = "🤖";
 // Nome do bot (mude se preferir).
 export const BOT_NAME = "Kakashi Bot";
 
+// Assinatura gravada nos metadados das figurinhas (o "publisher" que o WhatsApp
+// mostra ao ver o pacote). Aparece por baixo do nome de quem criou a figurinha.
+export const STICKER_PACK_PUBLISHER =
+  process.env.STICKER_PACK_PUBLISHER ||
+  `✨ Kakashi Bot 💙 por Dev Yanik`;
+
 // LID do bot (no caso, o que você rodará o bot).
 // Para obter o LID do bot, use o comando <prefixo>lid respondendo em cima de uma mensagem do número do bot
 // Troque o <prefixo> pelo prefixo do bot (ex: /lid).
@@ -43,9 +49,9 @@ export const COMMANDS_DIR = path.join(__dirname, "commands");
 // Diretório de arquivos de mídia.
 //
 // `DATABASE_DIR` e `AUTH_DIR` são configuráveis por ambiente porque em hosts
-// com disco efémero (Cloady, Render, Fly) o estado só sobrevive se ficar num
-// volume persistente, e cada host monta o volume num caminho diferente. Sem o
-// override, apontar o volume para outro sítio obrigava a mexer no código.
+// com disco efémero o estado só sobrevive se ficar num volume persistente, e
+// cada host monta o volume num caminho diferente. Sem o override, apontar o
+// volume para outro sítio obrigava a mexer no código.
 export const DATABASE_DIR =
   process.env.DATABASE_DIR || path.resolve(__dirname, "..", "database");
 
@@ -73,14 +79,15 @@ export const MAIN_MENU_OWNER_NUMBER =
   process.env.MAIN_MENU_OWNER_NUMBER || "258834788141";
 
 // Canal oficial do botão "📢 Canal". Vazio esconde o botão.
+// É também o canal usado pelos cards de anime e pelo fluxo guiado.
 export const MAIN_MENU_CHANNEL_URL =
   process.env.MAIN_MENU_CHANNEL_URL ||
-  "https://www.youtube.com/@devgui_?sub_confirmation=1";
+  "https://www.youtube.com/@devyanik?sub_confirmation=1";
 
 // Imagem do cabeçalho: caminho local OU URL https. Vazio = card sem imagem.
 export const MAIN_MENU_IMAGE =
   process.env.MAIN_MENU_IMAGE ||
-  path.join(ASSETS_DIR, "images", "takeshi-bot.png");
+  path.join(ASSETS_DIR, "images", "kakashi-bot.png");
 
 // Rodapé exato do card interativo.
 export const MAIN_MENU_FOOTER =
@@ -98,9 +105,12 @@ export const SPIDER_API_TOKEN = "seu_token_aqui";
 // Plataforma recomendada para o comando gerar-link.
 // Com chave propria do Linker, os links seguem a duracao do plano Linker.
 // Com token da Spider X API, os links duram 1 dia.
-export const LINKER_BASE_URL = "https://linker.devgui.dev/api";
+// O domínio padrão é o do Dev Yanik; se o serviço mudar, aponte LINKER_BASE_URL
+// no ambiente (ou configure o token da Spider X API e deixe esta em branco).
+export const LINKER_BASE_URL =
+  process.env.LINKER_BASE_URL || "https://linker.devyaniik.dev/api";
 
-// Obtenha sua chave em: https://linker.devgui.dev.
+// Obtenha sua chave em: https://linker.devyaniik.dev.
 // Se não configurar esta chave, o bot usa automaticamente o token da Spider X API.
 export const LINKER_API_KEY = "seu_token_aqui";
 
@@ -252,7 +262,7 @@ export const SESSION_SYNC_INTERVAL_MINUTES = Math.max(
 export const SESSION_STATE_NAME = "session";
 // Segredo pedido pela página de pareamento (com ou sem o "/pairing").
 // Você pode trocar o valor aqui ou definir PAIRING_SECRET no ambiente do bot
-// (variável de ambiente do Render, por exemplo); o ambiente tem prioridade.
+// (variável de ambiente do host, por exemplo); o ambiente tem prioridade.
 // A comparação diferencia maiúsculas de minúsculas e ignora espaços nas pontas.
 export const PAIRING_SECRET = process.env.PAIRING_SECRET || "KakashiPairing2026";
 
@@ -455,23 +465,24 @@ export const MEDIA_CREDITS_BY_SIZE = [
 ];
 
 // ==========================================================================
-// YT-DLP (downloader local, recomendado no Render/Docker)
+// YT-DLP (downloader local, recomendado em Docker)
 // ==========================================================================
 // O binário "yt-dlp_linux" é instalado pelo Dockerfile (e por
 // "npm run setup:ytdlp" em hosts sem Docker). Quando ele não existe, os
 // downloads continuam funcionando pela API GenDownload (fallback).
 export const YTDLP_ENABLED = process.env.YTDLP_ENABLED !== "false";
 export const YTDLP_PATH = process.env.YTDLP_PATH || "";
-// Teto de tempo de UMA execução do yt-dlp. 15 min por omissão: um episódio de
-// 24 min em 480p (~95 MB) desce a ~7 MB/min de alguns hosts, o que não cabia
-// nos 5 min anteriores — o processo era morto a meio, sem stderr, e o
-// utilizador só via o comando (ver `friendlyError` em `src/services/ytdlp.js`).
+// Teto de tempo de UMA execução do yt-dlp. 30 min por omissão: um episódio de
+// 24 min em 480p (~95 MB) desce a ~7 MB/min de alguns hosts, e com o teto de
+// 500 MB os ficheiros grandes precisam de mais folga — o processo era morto a
+// meio, sem stderr, e o utilizador só via o comando (ver `friendlyError` em
+// `src/services/ytdlp.js`).
 // Ajustável por YTDLP_TIMEOUT_MS; valor não numérico ou <= 0 cai no default.
 const ytdlpTimeoutMs = Number(process.env.YTDLP_TIMEOUT_MS);
 export const YTDLP_TIMEOUT_MS =
   Number.isFinite(ytdlpTimeoutMs) && ytdlpTimeoutMs > 0
     ? ytdlpTimeoutMs
-    : 15 * 60 * 1000;
+    : 30 * 60 * 1000;
 // Cookies (formato Netscape) para o YouTube aceitar a sessão em IP de datacenter.
 export const YTDLP_COOKIES_PATH = process.env.YTDLP_COOKIES_PATH || "";
 export const YTDLP_PROXY = process.env.YTDLP_PROXY || "";
@@ -501,8 +512,8 @@ export const VIDEO_FIX_TIMEOUT_MS = Number(
 // ==========================================================================
 // Com `MONGODB_URI` definido, o estado (créditos, assinaturas, banimentos,
 // prefixos, ...) passa a ser gravado no MongoDB Atlas em vez de só no disco do
-// host — que em Render/Cloady/Fly/Railway é efémero e apagava tudo a cada
-// deploy. Sem a variável, o bot mantém o comportamento antigo (JSON em disco),
+// host — que num host de disco efémero é apagado a cada deploy. Sem a
+// variável, o bot mantém o comportamento antigo (JSON em disco),
 // por isso a migração é reversível por configuração, sem reverter código.
 //
 // A URI contém a password: defina-a por variável de ambiente ou em
@@ -601,7 +612,7 @@ export const ANIME_PROVIDERS = (
 
 // A biblioteca NÃO define User-Agent, pelo que o axios envia "axios/1.x" — e o
 // Cloudflare (que está à frente de todos estes sites) bloqueia esse agente em
-// IPs de datacenter, como o Render. Sem estes cabeçalhos a pesquisa falha com
+// IPs de datacenter. Sem estes cabeçalhos a pesquisa falha com
 // "nenhuma fonte respondeu". Isto é o mesmo tipo de bloqueio que o YouTube já
 // faz a IPs de datacenter.
 export const ANIME_USER_AGENT =
@@ -664,9 +675,9 @@ export const MEGACINE_DOWNLOAD_CREDITS = Number(
 );
 
 // Teto do download. Um episódio de série fica bem dentro do teto dos animes
-// (300 MB), que já cobre um episódio longo em boa qualidade.
+// (500 MB), que já cobre um episódio longo em boa qualidade.
 export const MEGACINE_MAX_DOWNLOAD_BYTES =
-  Number(process.env.MEGACINE_MAX_DOWNLOAD_MB || 300) * 1024 * 1024;
+  Number(process.env.MEGACINE_MAX_DOWNLOAD_MB || 500) * 1024 * 1024;
 
 // Tradução de títulos PT → língua do catálogo (ver `src/services/translate.js`).
 //
@@ -680,20 +691,21 @@ export const TRANSLATE_TIMEOUT_MS = 8 * 1000;
 // YouTube, aplicada pelo `decideAnimeSend`); acima deste teto o envio é
 // cancelado e o utilizador é convidado a escolher uma qualidade menor.
 //
-// 300 MB: o envio mantém em disco o download e a cópia encriptada do Baileys,
-// ou seja ~2x o tamanho (300 MB -> ~600 MB). O plano gratuito do Cloady dá 1 GB
-// de RAM e 5 GB de disco, o que aguenta o dobro do que o Render Starter (512 MB)
-// aguentava. O valor continua configurável para hosts mais apertados.
+// 500 MB: o envio mantém em disco o download e a cópia encriptada do Baileys,
+// ou seja ~2x o tamanho (500 MB -> ~1 GB). O Oracle Cloud (instância ARM com
+// volume persistente) aguenta esse pico, ao contrário dos hosts de disco
+// efémero com pouca RAM que existiam antes. O valor continua configurável para
+// hosts mais apertados.
 export const ANIME_DOCUMENT_LIMIT_MB = Number(
-  process.env.ANIME_DOCUMENT_LIMIT_MB || 300,
+  process.env.ANIME_DOCUMENT_LIMIT_MB || 500,
 );
 export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 
 // Resolução máxima do download de animes. O provider entrega um m3u8 com várias
 // faixas (240p–1080p) e, sem limite, o yt-dlp escolhe a maior (1080p): um
-// episódio de 24 min passa de 200 MB e o envio acaba cancelado. Fixar 480p
-// mantém o episódio dentro do limite. Se a faixa de 480p não existir, o seletor
-// do yt-dlp cai para a melhor disponível em vez de falhar.
+// episódio de 24 min passa de 400 MB, gasta o dobro da banda e arrisca o teto
+// de 500 MB. Fixar 480p mantém o episódio leve. Se a faixa de 480p não existir,
+// o seletor do yt-dlp cai para a melhor disponível em vez de falhar.
 export const ANIME_MAX_HEIGHT = Number(process.env.ANIME_MAX_HEIGHT) || 480;
 
 // Procurar a faixa DUBLADA primeiro quando o episódio publica as duas.
@@ -725,7 +737,7 @@ export const ANIME_PT_DUB_PROVIDERS = (
   .filter(Boolean);
 
 // Teto do provider AnimeHeaven, que publica 720p nativo (~112–164 MB): o
-// episódio já cabe no limite de 200 MB, por isso não há razão para o degradar
+// episódio já cabe no teto de 500 MB, por isso não há razão para o degradar
 // para 480p. Mantém-se configurável para o caso de episódios mais pesados.
 export const ANIME_HEAVEN_MAX_HEIGHT =
   Number(process.env.ANIME_HEAVEN_MAX_HEIGHT) || 720;
@@ -733,17 +745,20 @@ export const ANIME_HEAVEN_MAX_HEIGHT =
 // Resolução preferida no provider AnimeGG, que publica 360p/480p/720p.
 //
 // 480p por padrão: o mesmo episódio mede 31 MB em 360p, 80 MB em 480p e 201 MB
-// em 720p, ou seja o 720p passa o teto de 200 MB e o 360p degrada sem
-// necessidade. O provider mede cada degrau por `Content-Length` e só desce/sobe
-// se o preferido não couber — ver `escolherDegrau` em `src/services/animegg.js`.
+// em 720p. O provider mede cada degrau por `Content-Length` e só desce/sobe se
+// o preferido não couber — ver `escolherDegrau` em `src/services/animegg.js`.
 export const ANIME_GG_MAX_HEIGHT = Number(process.env.ANIME_GG_MAX_HEIGHT) || 480;
 
-export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+export const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 export const AI_TIMEOUT_MS = 30 * 1000;
 export const ATTP_TIMEOUT_MS = 10 * 1000;
 export const PENDING_DOWNLOAD_TTL_MS = 5 * 60 * 1000;
 export const DEFAULT_VIDEO_HEIGHT = 720;
-export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+// Teto de cancelamento de um download geral (TikTok, Instagram, X, Facebook,
+// Pinterest, GenDownload, cobalt). Acima disto o download é recusado em vez de
+// encher o disco. É o mesmo teto dos animes (`ANIME_DOCUMENT_LIMIT_MB`), para
+// não haver dois números diferentes a dizer "demasiado grande".
+export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024;
 export const ATTP_APIS = [
 	"https://api.urfake.com/attp?text=",
 	"https://widipe.com/api/attp?text=",

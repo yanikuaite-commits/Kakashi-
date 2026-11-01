@@ -1,7 +1,7 @@
 /**
  * Melhorado por: Mkg
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { PREFIX } from "../../config.js";
 import { formatMessage } from "../../utils/formatMessage.js";

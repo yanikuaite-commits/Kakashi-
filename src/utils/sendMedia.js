@@ -5,7 +5,7 @@
  * comandos não repetirem a mesma lógica. A decisão em si vive em
  * `mediaSend.js` (pura e testável).
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { decideGeneralSend, decideYouTubeSend, mediaUploadFromFile } from "./mediaSend.js";
 import { withPreparedVideo } from "../services/mediaPrepare.js";

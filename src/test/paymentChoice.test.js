@@ -6,7 +6,7 @@
  * importa provar é que a escolha acaba GRAVADA NO PEDIDO — se ficasse só no
  * handler, o dono confirmaria horas depois e a compra sairia errada.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";

@@ -6,8 +6,8 @@
  *   npm run setup:ytdlp -- --force # força um novo download
  *
  * Quando usar:
- * - hosts Linux/macOS sem Docker (VPS, Render com build nativo, etc.).
- * - No Docker/Render a imagem já instala o yt-dlp (veja o Dockerfile).
+ * - hosts Linux/macOS sem Docker (VPS com build nativo, etc.).
+ * - No Docker a imagem já instala o yt-dlp (veja o Dockerfile).
  * - No Termux: prefira `pkg install yt-dlp` (o binário Linux não roda no
  *   Android) ou aponte YTDLP_PATH para o binário instalado.
  *

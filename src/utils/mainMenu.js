@@ -31,7 +31,7 @@
  * A linha de "cupom" da captura de referência NÃO existe no nativeFlow (é de
  * mensagens de template/business), por isso foi ignorada de propósito.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import fs from "node:fs";
 import {

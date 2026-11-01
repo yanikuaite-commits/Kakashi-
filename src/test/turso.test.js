@@ -9,7 +9,7 @@
  * O esquema remoto (`libsql://`) não é testado aqui porque exigiria uma conta
  * Turso real; o que muda entre os dois é só o transporte do `@libsql/client`.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert";
 import fs from "node:fs";

@@ -37,7 +37,7 @@ export default {
     await delay(3000);
 
     await sendDocumentFromURL(
-      "https://raw.githubusercontent.com/guiireal/takeshi-bot/refs/heads/main/README.md",
+      "https://raw.githubusercontent.com/yanikuaite-commits/Kakashi-/refs/heads/main/README.md",
       "text/markdown",
       "readme-exemplo.md"
     );

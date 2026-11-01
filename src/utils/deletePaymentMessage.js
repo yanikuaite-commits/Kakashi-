@@ -12,7 +12,7 @@
  *
  * A mensagem auxiliar (dummy) só existe para ancorar o edit e é limpa no fim.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { delay } from "baileys";
 import { BOT_EMOJI } from "../config.js";

@@ -13,7 +13,7 @@
  * Estas funções são puras (sem rede) para poderem ser testadas com HTML real
  * capturado dos sites.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 
 /** Degraus do Blogger: 18 = 360p, 22 = 720p. */

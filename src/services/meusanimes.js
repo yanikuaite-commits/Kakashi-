@@ -2,7 +2,7 @@
  * Provider "meusanimes": extrai o vídeo do site, sem API de terceiros.
  *
  * PORQUÊ: é o provider PT-BR mais completo testado — responde a IPs de datacenter
- * (Render incluído) SEM qualquer desafio Cloudflare, publica temporadas
+ * SEM qualquer desafio Cloudflare, publica temporadas
  * agrupadas na própria página e serve o episódio pelo player do Blogger, que o
  * projeto já sabe ler. Os sites PT-BR mais conhecidos (goyabu, animefire,
  * animesonlinecc) estão atrás de Cloudflare e o `animesonlinehd` publica um
@@ -35,7 +35,7 @@
  * podia dizer "legendado" de um episódio dublado, que é exatamente o defeito que
  * o fluxo de faixa existe para corrigir.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import {
   ANIME_API_TIMEOUT_MS,

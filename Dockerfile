@@ -40,11 +40,11 @@ RUN npm ci --omit=dev
 # Código
 COPY . .
 
-# Permissões para scripts shell (o host Remove o bit executável em uploads)
+# Permissões para scripts shell (alguns hosts removem o bit executável em uploads)
 RUN chmod +x update.sh reset-qr-auth.sh 2>/dev/null || true
 
-# O servidor de pareamento escuta em process.env.PORT (o Render injeta a porta
-# dele; 10000 é o padrão do Render e também o padrão local da imagem).
+# O servidor de pareamento escuta em process.env.PORT (o host injeta a porta
+# dele; 10000 é o padrão local da imagem).
 ENV PORT=10000
 EXPOSE 10000
 

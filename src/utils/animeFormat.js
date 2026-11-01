@@ -10,7 +10,7 @@
  * índices estáveis (`anm:ep:<i>` / `anm:src:<i>`) e o array real vive na
  * sessão (ver `src/utils/animeMenu.js`).
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 
 /** Quantos episódios aparecem por página da lista. */

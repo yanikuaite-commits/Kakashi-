@@ -97,7 +97,7 @@ export default {
 
     if (typeof sendImageFromFile === "function") {
       await sendImageFromFile(
-        path.join(ASSETS_DIR, "images", "takeshi-bot.png"),
+        path.join(ASSETS_DIR, "images", "kakashi-bot.png"),
         caption,
       );
     }

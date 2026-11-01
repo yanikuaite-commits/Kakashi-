@@ -5,7 +5,7 @@
  * o que está a ser testado é a interação com o driver — `bulkWrite`, upsert por
  * `_id` e restauro do estado no arranque — e um mock não a exerceria.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert";
 import fs from "node:fs";

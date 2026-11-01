@@ -15,15 +15,15 @@ const MAIN_TEXT = "Reels no WhatsApp";
 
 const REEL_ITEMS = [
   {
-    title: "Dev Gui",
+    title: "Dev Yanik",
     profileIconUrl: PROFILE_PICTURE_URL,
     thumbnailUrl:
       "https://p77-sign-va.tiktokcdn.com/tos-maliva-p-0068/03fcbc862dbd4d97b857f7ca9d510d57_1728870269~tplv-tiktokx-origin.image?dr=14575&x-expires=1777388400&x-signature=WQNXZGzgRybLxYwsupPvGUXEFPc%3D&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my2",
-    videoUrl: "https://www.tiktok.com/@guiireal/video/7425441211613220101",
+    videoUrl: "https://www.tiktok.com/@yanikuaite/video/7425441211613220101",
     source: "TT",
   },
   {
-    title: "Dev Gui",
+    title: "Dev Yanik",
     profileIconUrl: PROFILE_PICTURE_URL,
     thumbnailUrl:
       "https://instagram.fcgh10-1.fna.fbcdn.net/v/t51.71878-15/491433614_1607589536600484_8415149229338072627_n.jpg?stp=dst-jpg_e15_tt6&_nc_cat=102&ig_cache_key=MzEwNzI3Mjk0NTcyNTIxMjgyNg%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjQwOHg3MjYuc2RyLkMzIn0%3D&_nc_ohc=2QkaY__xINkQ7kNvwFuU7FX&_nc_oc=AdopX3oMUpmiuygjSMx0U2degM5KyX-jLMYqBrxVHQWbpLYZNmUbBVRF0WtwOq8agldYFYVNwg3T8zz0X_BPbWMm&_nc_ad=z-m&_nc_cid=0&_nc_zt=23&_nc_ht=instagram.fcgh10-1.fna&_nc_gid=VbLCGFsddAL6Ne30ucdWzA&_nc_ss=7a22e&oh=00_Af1d1SVcvKf1QjKpqb8v4JJrrtnUi-nwk_w-ByErl9t2Pw&oe=69F3F2EA",
@@ -31,7 +31,7 @@ const REEL_ITEMS = [
     source: "IG",
   },
   {
-    title: "Dev Gui",
+    title: "Dev Yanik",
     profileIconUrl: PROFILE_PICTURE_URL,
     thumbnailUrl:
       "https://instagram.fcgh10-2.fna.fbcdn.net/v/t51.71878-15/491421181_1027633322797181_4564860355533563396_n.jpg?stp=dst-jpg_e15_tt6&_nc_cat=109&ig_cache_key=MzExMjc1MjExMDgzNDI5NjE1Mg%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjQyOXgyMzYuc2RyLkMzIn0%3D&_nc_ohc=_Sg7tcZ3Tr4Q7kNvwGszckR&_nc_oc=AdpzVDjxC4ZWMqInTalABvxv_fLbrg7Ftaup65odMpFQ0l8c2FT4GVX6QVfk32nMs7gHICYHiYj7qV3zAupsIJPH&_nc_ad=z-m&_nc_cid=0&_nc_zt=23&_nc_ht=instagram.fcgh10-2.fna&_nc_gid=VbLCGFsddAL6Ne30ucdWzA&_nc_ss=7a22e&oh=00_Af0zyLEKh-ZYVW3YtlyPbgutG9pcqMi5yxUGoyrZnunMLw&oe=69F3EDD0",
@@ -111,7 +111,7 @@ function buildRichResponse(submessages) {
     submessages,
     unifiedResponse: {
       data: encodeUnifiedResponseData({
-        response_id: `takeshi-reels-${Date.now()}-${randomBytes(6).toString("hex")}`,
+        response_id: `kakashi-reels-${Date.now()}-${randomBytes(6).toString("hex")}`,
         sections: submessages.map(buildUnifiedSection).filter(Boolean),
       }),
     },
@@ -223,7 +223,7 @@ function buildBotMetadata(sources = [], extraCapabilities = []) {
       premiumModelStatus: "AVAILABLE",
     },
     botAgeCollectionMetadata: {},
-    botResponseId: `takeshi-reels-${Date.now()}-${randomBytes(6).toString("hex")}`,
+    botResponseId: `kakashi-reels-${Date.now()}-${randomBytes(6).toString("hex")}`,
     verificationMetadata: {
       proofs: [],
     },

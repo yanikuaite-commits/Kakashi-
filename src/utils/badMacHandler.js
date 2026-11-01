@@ -5,7 +5,7 @@
  * Este módulo fornece funções para detectar, contar
  * e lidar graciosamente com esses erros.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import fs from "node:fs";
 import path from "node:path";

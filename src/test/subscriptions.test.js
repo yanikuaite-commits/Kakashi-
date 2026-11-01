@@ -5,7 +5,7 @@
  * com +40 tem de render 30+40 todos os dias, até completar os 7. É isso que
  * distingue uma assinatura de uma recarga avulsa, e é o que estes testes fixam.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";

@@ -2,9 +2,8 @@
  * Ligação ao MongoDB (Atlas) para a camada de persistência.
  *
  * Por que existe:
- * - o `database/` em JSON vive no disco do host; em hosts com disco efémero
- *   (Render, Cloady, Fly, Railway) cada deploy apagava créditos, assinaturas e
- *   pareamento;
+ * - o `database/` em JSON vive no disco do host; num host com disco efémero
+ *   cada deploy apagava créditos, assinaturas e pareamento;
  * - o MongoDB Atlas (M0, grátis) guarda esse estado fora do host e permite
  *   manejá-lo pelo telemóvel com o Data Explorer;
  * - o driver do Mongo é assíncrono, mas o `database.js` expõe 69 funções

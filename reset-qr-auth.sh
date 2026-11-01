@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script para reset da autenticação do Kakashi Bot
-# Autor: Dev Gui
+# Autor: Dev Yanik
 # Versão: 0.9.0-BETA
 
 echo "🤖 Kakashi Bot - Reset da Autenticação"

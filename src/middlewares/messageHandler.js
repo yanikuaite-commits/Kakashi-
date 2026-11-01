@@ -1,7 +1,7 @@
 /**
  * Validador de mensagens
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { BOT_LID, OWNER_LID } from "../config.js";
 import {

@@ -5,7 +5,7 @@
  * — o formato exato das páginas — sem depender de um site de terceiros estar no
  * ar. Os testes de integração ficam no fim, atrás de `MEGACINE_TEST_NETWORK=1`.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";

@@ -2,7 +2,7 @@
  * Classe de erro customizada para
  * parâmetros inválidos.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 export default class InvalidParameterError extends Error {
   constructor(message) {

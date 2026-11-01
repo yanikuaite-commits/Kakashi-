@@ -7,7 +7,7 @@
  * depender de um site de terceiros estar no ar. O yt-dlp é substituído por um
  * módulo falso porque o download real precisa de rede e de disco.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert/strict";
 import { test, mock } from "node:test";

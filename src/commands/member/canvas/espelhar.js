@@ -1,8 +1,8 @@
 /**
  * Desenvolvido por: MRX
- * Refatorado por: Dev Gui
+ * Refatorado por: Dev Yanik
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";

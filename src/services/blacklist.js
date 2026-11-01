@@ -9,7 +9,7 @@
  * É a mesma escolha das assinaturas: quem pergunta "está banido agora?" compara
  * com o relógio, em vez de confiar num processo de limpeza que pode não correr.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { readBlacklist, saveBlacklist } from "../utils/database.js";
 import { infoLog } from "../utils/logger.js";

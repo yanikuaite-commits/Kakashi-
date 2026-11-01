@@ -35,7 +35,7 @@ const HTML_BLOGGER = `
 <script>var x=[[[&quot;https://rr2---sn-aigzrnse.googlevideo.com/videoplayback?expire\\u003d1792808112\\u0026ei\\u003dMKTb\\u0026itag\\u003d18\\u0026source\\u003dblogger&quot;]]]</script>
 `;
 
-// O mesmo vídeo em 720p: tem de ser ignorado, porque passa o teto de 200 MB.
+// O mesmo vídeo em 720p: tem de ser ignorado, porque passa o teto de 500 MB.
 const HTML_BLOGGER_720P = `
 <script>var x=[[[&quot;https://rr2---sn-aigzrnse.googlevideo.com/videoplayback?expire\\u003d1792808112\\u0026itag\\u003d22\\u0026source\\u003dblogger&quot;]]]</script>
 `;

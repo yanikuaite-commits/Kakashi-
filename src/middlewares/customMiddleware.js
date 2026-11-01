@@ -11,7 +11,7 @@
  * Para exemplos de uso, consulte:
  * - README.md (seção "Custom Middleware")
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 export async function customMiddleware({
   socket,

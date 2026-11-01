@@ -7,7 +7,7 @@ import { exec } from "child_process";
 import webp from "node-webpmux";
 import fs from "node:fs";
 import path from "node:path";
-import { BOT_EMOJI, BOT_NAME, TEMP_DIR } from "../config.js";
+import { STICKER_PACK_PUBLISHER, TEMP_DIR } from "../config.js";
 import { getRandomName, getRandomNumber, getUserName } from "../utils/index.js";
 
 export async function addStickerMetadata(media, metadata) {
@@ -164,7 +164,7 @@ export async function createSticker(paramsHandler) {
 
   const metadata = {
     username: getUserName(webMessage, userLid),
-    botName: `${BOT_EMOJI} ${BOT_NAME}`,
+    botName: STICKER_PACK_PUBLISHER,
   };
 
   const outputTempPath = path.resolve(TEMP_DIR, getRandomName("webp"));

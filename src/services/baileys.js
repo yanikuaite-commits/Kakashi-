@@ -2,7 +2,7 @@
  * Funções reaproveitáveis
  * da biblioteca Baileys (comunicação com o WhatsApp).
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import fs from "node:fs";
 import path from "node:path";

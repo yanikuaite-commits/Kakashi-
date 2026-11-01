@@ -5,7 +5,7 @@
  * PORQUÊ: o `@consumet/extensions` corre dentro do bot, mas os providers dele
  * (AnimeUnity, AnimePahe, HiAnime) estão atrás de Cloudflare e/ou com domínio
  * morto, e a biblioteca não define `User-Agent` — o Cloudflare bloqueia o
- * agente `axios/1.x` vindo de IPs de datacenter como o do Render.
+ * agente `axios/1.x` vindo de IPs de datacenter.
  *
  * COMO: `anikoto.cz` é um clone de HiAnime que responde a IPs de datacenter
  * (verificado) e expõe a cadeia clássica em JSON:
@@ -21,7 +21,7 @@
  * Os pedidos precisam do `Referer` da página de watch, senão o site responde
  * "bad request".
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import crypto from "node:crypto";
 import { ANIME_API_TIMEOUT_MS, ANIME_USER_AGENT } from "../config.js";

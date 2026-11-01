@@ -1,9 +1,9 @@
 /**
  * Desenvolvido por: Mkg
- * Refatorado por: Dev Gui
+ * Refatorado por: Dev Yanik
  * Proteções de segurança implementadas
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { exec as execChild } from "child_process";
 import { PREFIX } from "../../config.js";

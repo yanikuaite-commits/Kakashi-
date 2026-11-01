@@ -15,7 +15,7 @@
  * `credits.js` pergunta-lhe `dailySubscriptionBonus`, e quem ativa é o fluxo de
  * pagamento (`src/services/recharges.js`), depois de o dono confirmar.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { readSubscriptions, saveSubscriptions } from "../utils/database.js";
 import { mozambiqueDay } from "../utils/clock.js";

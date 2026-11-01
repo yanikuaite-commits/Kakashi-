@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { BOT_EMOJI, BOT_NAME, PREFIX, TEMP_DIR } from "../../config.js";
+import { PREFIX, STICKER_PACK_PUBLISHER, TEMP_DIR } from "../../config.js";
 import { InvalidParameterError } from "../../errors/index.js";
 import { generateTtp } from "../../services/ttp.js";
 import { processAnimatedGifToSticker } from "../../services/sticker.js";
@@ -48,7 +48,7 @@ export default {
 
       const metadata = {
         username,
-        botName: `${BOT_EMOJI} ${BOT_NAME}`,
+        botName: STICKER_PACK_PUBLISHER,
       };
 
       finalStickerPath = await processAnimatedGifToSticker(inputPath, metadata);

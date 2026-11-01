@@ -16,7 +16,7 @@
  * Todas as abas são também comandos de dono próprios (`.painel-sistema`, ...),
  * para funcionarem por atalho e para o menu poder apontar para elas.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { BOT_NAME, PREFIX } from "../../config.js";
 import { InvalidParameterError } from "../../errors/index.js";

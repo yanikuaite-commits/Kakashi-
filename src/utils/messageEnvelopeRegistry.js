@@ -15,7 +15,7 @@
  * bot reiniciar e perder o histórico, o modo de falha é ficar mais conservador
  * (não corrobora -> não bane), nunca menos seguro.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 
 const ENVELOPE_TTL_MS = 60 * 60 * 1000;

@@ -4,7 +4,7 @@
  * grupo, remover o autor, apagar a mensagem e limpar o chat, com deduplicação e
  * coalescência sob rajada, vive em paymentDefenseState.js.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { BOT_LID, OWNER_LID } from "../config.js";
 import { errorLog } from "./logger.js";

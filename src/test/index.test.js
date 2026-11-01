@@ -1,7 +1,7 @@
 /**
  * Testes para index.js (funções utilitárias)
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert";
 import { describe, it } from "node:test";
@@ -350,13 +350,13 @@ describe("Utility Functions", () => {
   describe("getRandomName", () => {
     it("should generate name without extension", () => {
       const name = utils.getRandomName();
-      assert.ok(name.startsWith("takeshi_temp_"));
+      assert.ok(name.startsWith("kakashi_temp_"));
       assert.ok(!name.includes("."));
     });
 
     it("should generate name with extension", () => {
       const name = utils.getRandomName("jpg");
-      assert.ok(name.startsWith("takeshi_temp_"));
+      assert.ok(name.startsWith("kakashi_temp_"));
       assert.ok(name.endsWith(".jpg"));
     });
 

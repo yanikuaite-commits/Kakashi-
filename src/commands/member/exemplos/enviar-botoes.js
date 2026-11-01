@@ -79,7 +79,7 @@ export default {
               ],
             }),
           },
-          urlButton("📢 Canal", "https://www.youtube.com/@devgui_?sub_confirmation=1"),
+          urlButton("📢 Canal", "https://www.youtube.com/@devyanik?sub_confirmation=1"),
         ],
         viewOnce: true,
       },
@@ -161,7 +161,7 @@ await socket.sendMessage(remoteJid, {
       name: 'cta_url',
       buttonParamsJson: JSON.stringify({
         display_text: 'Abrir site',
-        url: 'https://github.com/guiireal'
+        url: 'https://github.com/yanikuaite-commits'
       })
     }
   ],

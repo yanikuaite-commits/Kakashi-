@@ -1,7 +1,7 @@
 /**
  * Testes para o serviço de atividade (estatísticas e auditoria do painel).
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert";
 import fs from "node:fs";

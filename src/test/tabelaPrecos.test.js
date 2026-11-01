@@ -1,7 +1,7 @@
 /**
  * Testes das tabelas de preços (dados, formatação e despacho 1/2).
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";

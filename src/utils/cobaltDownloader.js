@@ -86,7 +86,7 @@ export async function downloadWithCobalt(url) {
     const fileSize = (await stat(filePath)).size;
     if (fileSize > MAX_FILE_SIZE_BYTES) {
       const error = new Error(
-        "O arquivo excede o limite de 100 MB do WhatsApp.",
+        "O arquivo excede o limite de 500 MB do download.",
       );
       error.code = "FILE_TOO_LARGE";
       throw error;

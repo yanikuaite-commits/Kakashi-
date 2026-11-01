@@ -20,8 +20,8 @@
  *      as qualidades (rowId `anm:src:<índice>`);
  *   5. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
  *      (a mesma do YouTube, com teto maior):
- *        > 300 MB   → cancela e pede qualidade menor;
- *        100–300 MB → envia como DOCUMENTO;
+ *        > 500 MB   → cancela e pede qualidade menor;
+ *        100–500 MB → envia como DOCUMENTO;
  *        ≤ 100 MB   → envia como VÍDEO.
  *
  * A resolução do download depende do tipo de fonte. Um m3u8 traz vários degraus
@@ -34,10 +34,10 @@
  * tem limite de tamanho e os links de stream são longos/assinados; o array real
  * fica na sessão (`sessoesAnime`). Ver `src/utils/animeFormat.js`.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import fs from "node:fs";
-import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, ANIME_PT_DUB_PROVIDERS, OWNER_LID } from "../config.js";
+import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, ANIME_PT_DUB_PROVIDERS, MAIN_MENU_CHANNEL_URL, OWNER_LID } from "../config.js";
 import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnimeCandidates } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withDownloadSlot } from "../services/downloadQueue.js";
@@ -90,7 +90,6 @@ import {
 
 export const ANIME_TTL_MS = INTERACTIVE_MENU_TTL_MS;
 
-const CHANNEL_URL = "https://www.youtube.com/@devgui_?sub_confirmation=1";
 const CANCEL_TOKEN = "anm:cancel";
 
 /**
@@ -259,7 +258,7 @@ function ensureSession({
 }
 
 function canalButton() {
-  return urlButton("📢 Canal", CHANNEL_URL);
+  return urlButton("📢 Canal", MAIN_MENU_CHANNEL_URL);
 }
 
 function cancelRow() {
@@ -1116,8 +1115,8 @@ function animeDownloadArgs(provider, source) {
  *
  * O anikoto só publica 1080p, por isso o download é limitado a 480p para caber
  * no limite de envio. O AnimeHeaven já publica 720p nativo (~112–164 MB, dentro
- * do teto de 200 MB): limitar a 480p só degradaria a imagem sem ganhar nada. O
- * AnimeGG é fixado em 480p (ANIME_GG_MAX_HEIGHT) porque o 720p passa os 200 MB.
+ * do teto de 500 MB): limitar a 480p só degradaria a imagem sem ganhar nada. O
+ * AnimeGG é fixado em 480p (ANIME_GG_MAX_HEIGHT) porque o 720p já pesa mais.
  *
  * @param {string} provider
  * @returns {number}

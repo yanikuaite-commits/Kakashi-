@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const baileysDir = path.join(rootDir, 'node_modules', 'baileys');
-const marker = '// Alterado por: Dev Gui';
+const marker = '// Alterado por: Dev Yanik';
 
 const files = {
     types: path.join(baileysDir, 'lib', 'Types', 'Message.d.ts'),
@@ -841,4 +841,4 @@ patchTypes();
 patchUtils();
 patchSocket();
 
-console.log('[patch-baileys] Compatibilidade Dev Gui aplicada em baileys/lib.');
+console.log('[patch-baileys] Compatibilidade Dev Yanik aplicada em baileys/lib.');

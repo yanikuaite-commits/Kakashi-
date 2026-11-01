@@ -12,7 +12,7 @@
  * texto: uma imagem obrigaria a subir um renderizador e a esperar pelo envio de
  * mídia a cada consulta.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { BOT_NAME, PREFIX } from "../config.js";
 import {

@@ -15,7 +15,7 @@
  *
  * Nada é creditado automaticamente: quem confirma o dinheiro é o dono.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { CREDITS_TIMEZONE, MAIN_MENU_OWNER_NUMBER, PAYMENT_CONFIRM_TTL_MS, PAYMENT_E_MOLA_NUMBER, PAYMENT_M_PESA_NUMBER, PREFIX } from "../config.js";
 import {

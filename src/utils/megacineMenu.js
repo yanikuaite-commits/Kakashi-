@@ -23,7 +23,7 @@
  * As linhas guardam apenas índices (`mgc:ep:0`) porque o `rowId` do WhatsApp
  * tem limite de tamanho; os slugs e URLs reais ficam na sessão.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import fs from "node:fs";
 import {

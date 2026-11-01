@@ -175,7 +175,7 @@ test("ordenarPorPreferencia põe o 480p à frente do 360p e do 720p", () => {
   assert.deepEqual(
     ordenadas.map((f) => f.label),
     ["480p", "360p", "720p"],
-    "abaixo do preferido vem antes de acima (acima arrisca passar os 200 MB)",
+    "abaixo do preferido vem antes de acima (acima gasta mais banda)",
   );
 });
 

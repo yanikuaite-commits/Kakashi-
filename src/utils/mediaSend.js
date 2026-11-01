@@ -10,9 +10,9 @@
  *   enviam SEMPRE como vídeo, independente do tamanho;
  * - YouTube: documento acima de 100 MB, vídeo até 100 MB;
  * - animes: mesma regra do YouTube (documento acima de 100 MB), mas com um
- *   teto maior — acima de 200 MB o envio é cancelado.
+ *   teto maior — acima de `ANIME_DOCUMENT_LIMIT_MB` o envio é cancelado.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { ANIME_DOCUMENT_LIMIT_MB } from "../config.js";
 import fs from "node:fs";

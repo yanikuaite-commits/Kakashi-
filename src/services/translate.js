@@ -18,7 +18,7 @@
  * fluxo segue com o termo original. Uma falha de tradução não pode impedir um
  * download.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { ANIME_USER_AGENT, TRANSLATE_TIMEOUT_MS } from "../config.js";
 import { errorLog, infoLog } from "../utils/logger.js";

@@ -11,7 +11,7 @@
  * O que você pode extrair do handle está definido em src/@types/index.d.ts
  * Cuidado, respeite letras maiúsculas e minúsculas!
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { PREFIX } from "../config.js";
 

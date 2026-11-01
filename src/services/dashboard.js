@@ -15,7 +15,7 @@
  * disponível, o campo vem `null` e o painel mostra "n/d" — nunca um número
  * inventado.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import fs from "node:fs";
 import os from "node:os";

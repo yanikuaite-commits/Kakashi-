@@ -10,9 +10,7 @@
 [![Baileys](https://img.shields.io/badge/Baileys-7.0.0.rc14-purple?logo=whatsapp)](https://github.com/WhiskeySockets/Baileys)
 [![FFMPEG](https://img.shields.io/badge/FFMPEG-Latest-orange?logo=ffmpeg)](https://ffmpeg.org/)
 
-## Desenvolvida do zero, no vídeo
-
-[CRIANDO UM BOT DE WHATSAPP DO ZERO (GUIA DEFINITIVO) - BASE COMPLETA + 6 COMANDOS - JAVASCRIPT](https://youtu.be/6zr2NYIYIyc)
+## Base multifuncional para WhatsApp
 
 ![Logger](./assets/images/logger.png)
 
@@ -82,22 +80,22 @@ Não é necessário criar um `.env`.
 O segredo da página `/pairing` também está em `src/config.js`, na constante
 `PAIRING_SECRET`.
 
-### Pareamento no Render
+### Pareamento no servidor (Oracle Cloud)
 
 O pareamento é universal: no Termux, `npm start` pede o número diretamente no
-terminal. No Render, abra a URL original do serviço em
-`https://SEU-SERVICO.onrender.com/pairing`, informe o número com código do país
+terminal. Num servidor, abra a URL do serviço em
+`https://SEU-DOMINIO/pairing`, informe o número com código do país
 e o segredo definido em `src/config.js`; o código aparecerá na página. O campo
 `PAIRING_NUMBER` é opcional para solicitar o código automaticamente. O segredo
 pode vir de `src/config.js` ou da variável de ambiente `PAIRING_SECRET` (o
-ambiente tem prioridade). O serviço usa a variável `PORT` fornecida pelo Render.
+ambiente tem prioridade). O serviço usa a variável `PORT` do ambiente.
 
 A sessão do WhatsApp (`assets/auth/baileys`) **não** é versionada: cada
 instalação cria a sua no pareamento.
 
 #### Persistência entre deploys (volume)
 
-Em hosts com disco efémero (Cloady, Render, Fly, Railway) o container começa
+Num host com disco efémero o container começa
 limpo a cada deploy. **Sem um volume perdem-se os créditos, as assinaturas e o
 pareamento** — o bot volta a pedir o número. Monte um volume persistente para os
 **dois** caminhos que guardam estado:
@@ -119,8 +117,9 @@ está montado:
 O bot cria as pastas sozinho quando não existem, por isso um volume acabado de
 montar (vazio) funciona à primeira.
 
-No Cloady os volumes sobrevivem a start, stop e redeploy; só são destruídos se
-apagar a aplicação. **Nunca apague a app para a renomear** — isso apaga os dados.
+Num servidor com volume persistente (o Oracle Cloud, por exemplo) os dados
+sobrevivem a start, stop e redeploy; só se perdem se o volume for apagado.
+**Nunca apague o volume para renomear o serviço** — isso apaga os dados.
 
 #### Persistência no Turso (opcional, recomendada)
 
@@ -233,7 +232,7 @@ atuais. São coisas diferentes: apagar o histórico não mexe nos dados.
 
 #### A sessão do WhatsApp sobrevive aos deploys
 
-Num host de disco efémero (Render, Cloady, Fly, Railway) a sessão do Baileys
+Num host de disco efémero a sessão do Baileys
 (`assets/auth/baileys/`) desaparecia a cada deploy, obrigando a re-parear o
 número. Com o Turso configurado, a sessão é espelhada na tabela de estado
 (entrada `session`, comprimida) a cada `SESSION_SYNC_INTERVAL_MINUTES` (15 por
@@ -284,9 +283,9 @@ Sem nenhuma destas variáveis, nada muda: o bot comporta-se exatamente como ante
 e grava só em `database/`. Se o destino estiver inacessível, o bot **continua a
 funcionar** com os dados locais e sincroniza quando a ligação voltar.
 
-### Downloads no Render (yt-dlp)
+### Downloads no servidor (yt-dlp)
 
-A imagem Docker (veja `Dockerfile` e `render.yaml`) já instala **ffmpeg** e o
+A imagem Docker (veja `Dockerfile`) já instala **ffmpeg** e o
 binário oficial do **yt-dlp** (`yt-dlp_linux`, sem precisar de Python). Com isso
 os downloads de YouTube, TikTok, Instagram, Facebook, X e Pinterest acontecem
 dentro do container, sem depender de APIs de terceiros.
@@ -300,6 +299,7 @@ Variáveis de ambiente usadas pelo yt-dlp:
 | --- | --- |
 | `YTDLP_ENABLED` | `false` desliga o yt-dlp e usa só a API GenDownload |
 | `YTDLP_PATH` | Caminho do binário (padrão: `/usr/local/bin/yt-dlp`, `bin/yt-dlp` ou `yt-dlp` do PATH) |
+| `YTDLP_TIMEOUT_MS` | Teto de tempo de UMA execução (padrão: 30 minutos) |
 | `YTDLP_COOKIES_PATH` | Arquivo de cookies (Netscape) para o YouTube aceitar a sessão |
 | `YTDLP_PROXY` | Proxy usado pelo yt-dlp (ex: `http://usuario:senha@host:porta`) |
 | `YTDLP_JS_RUNTIME` | Runtime JS dos desafios do YouTube (padrão `node`) |
@@ -307,21 +307,20 @@ Variáveis de ambiente usadas pelo yt-dlp:
 | `YTDLP_EXTRACTOR_ARGS` | Argumentos extras de extractor (ex: `youtube:player_client=web`) |
 
 ⚠ **IP de datacenter:** o YouTube costuma responder
-`Sign in to confirm you're not a bot` para IPs de nuvem (Render incluso). Não
+`Sign in to confirm you're not a bot` para IPs de nuvem. Não
 existe flag que resolva isso de vez: o caminho é enviar cookies
 (`YTDLP_COOKIES_PATH`) ou rotear por um proxy residencial (`YTDLP_PROXY`).
 Quando a extração falha, o bot avisa o motivo e tenta a API GenDownload.
 
-Duas maneiras de fornecer cookies no Render:
+Duas maneiras de fornecer cookies no servidor:
 
 1. **Commitado no repositório (padrão do projeto):** coloque
-   `cookies.txt` na raiz e evolua ele como parte do código.
-   `render.yaml` já define `YTDLP_COOKIES_PATH=/opt/project/cookies.txt`
+   `cookies.txt` na raiz e evolua ele como parte do código. Defina
+   `YTDLP_COOKIES_PATH=/opt/project/cookies.txt`
    (o Dockerfile faz `COPY . .`, então o arquivo entra na imagem a cada deploy).
-2. **Secret File no painel (alternativa):** crie um Secret File chamado
-   `cookies.txt` (montado em `/etc/secrets/cookies.txt`) e deixe
-   `YTDLP_COOKIES_PATH=/etc/secrets/cookies.txt` no painel — nesse caso omita a
-   variável do `render.yaml` para o valor do painel prevalecer.
+2. **Ficheiro no servidor (alternativa):** guarde o `cookies.txt` fora do
+   repositório e defina `YTDLP_COOKIES_PATH` para esse caminho absoluto — o
+   ficheiro fica fora do versionamento.
 
 ⚠ Cookies de sessão do YouTube no repositório: se o repositório ficar público,
 cookies expostos permitem uso da sua conta no YouTube (inclusive gravações/
@@ -405,7 +404,7 @@ traz 360p, 480p, 720p (recomendado), 1080p e Best, e o vídeo só é baixado dep
 da escolha (o menu tem timeout de 2 minutos). Só quem pediu pode escolher; se a
 lista não abrir, responda com o número de 1 a 5. Links de outras plataformas em
 `play video` baixam diretamente. `pinterest` exige URL.
-Downloads têm timeout de cinco minutos e limite de 100 MB por arquivo;
+Downloads têm timeout de trinta minutos e limite de 500 MB por arquivo;
 os fallbacks de ATTP e os ajustes de IA ficam em `src/config.js`: modelos/temperatura da Groq (`GROQ_*`) e imagem da Google (`GEMINI_*`).
 
 ### Menu principal visual (`.menu`)
@@ -522,7 +521,7 @@ O comando indicado tem de existir em `src/commands/member`.
 7. Envie `.ia uma pergunta` e confirme a mensagem de espera e a resposta editada.
 8. Responda a uma imagem com `.removebg`, `.invert`, `.cadeia`, `.rip` e `.bolsonaro`.
 
-Se um download ultrapassar 100 MB, o bot informa o limite e recomenda resolução
+Se um download ultrapassar 500 MB, o bot informa o limite e recomenda resolução
 menor ou a versão em áudio.
 
 ## Sobre este projeto
@@ -531,10 +530,10 @@ Este projeto não possui qualquer vínculo oficial com o WhatsApp. O Kakashi Bot
 
 Não nos responsabilizamos por qualquer uso indevido deste bot. É de responsabilidade exclusiva do usuário garantir que sua utilização esteja em conformidade com os termos de uso do WhatsApp e a legislação vigente.
 
-## Instalação no Termux (novo vídeo tutorial: [https://youtu.be/-yjn1Xe3ltg](https://youtu.be/-yjn1Xe3ltg))
+## Instalação no Termux
 
 1 - Abra o Termux e execute os comandos abaixo.
-_Não tem o Termux? [Clique aqui e baixe a última versão](https://www.mediafire.com/file/wxpygdb9bcb5npb/Termux_0.118.3_Dev_Gui.apk) ou [clique aqui e baixe versão da Play Store](https://play.google.com/store/apps/details?id=com.termux) caso a versão do MediaFire anterior não funcione._
+_Não tem o Termux? [Clique aqui e baixe a versão da Play Store](https://play.google.com/store/apps/details?id=com.termux)._
 
 ```sh
 pkg upgrade -y && pkg update -y && pkg install git -y && pkg install nodejs-lts -y && pkg install ffmpeg -y
@@ -600,7 +599,7 @@ npm start
 
 9 - Insira o número de telefone e pressione `enter`.
 
-10 - Informe o código que aparece no termux, no seu WhatsApp, [assista aqui, caso não encontre essa opção](https://youtu.be/6zr2NYIYIyc?t=5395).
+10 - Informe o código que aparece no termux no seu WhatsApp (Aparelhos conectados → Conectar aparelho → Conectar com número de telefone).
 
 11 - Aguarde 10 segundos, depois digite `CTRL + C` para parar o bot.
 
@@ -932,11 +931,11 @@ export const SPIDER_API_TOKEN = "seu_token_aqui";
 Para comandos de **canvas** e **gerar-link**, é necessário configurar a API do **Linker**:
 
 ```js
-export const LINKER_BASE_URL = "https://linker.devgui.dev/api";
+export const LINKER_BASE_URL = "https://linker.devyaniik.dev/api";
 export const LINKER_API_KEY = "seu_token_aqui";
 ```
 
-Obtenha sua API Key em: [https://linker.devgui.dev](https://linker.devgui.dev)
+Obtenha sua API Key em: [https://linker.devyaniik.dev](https://linker.devyaniik.dev)
 
 ## Funcionalidades gerais
 
@@ -1300,7 +1299,7 @@ Você deve apagar um dos bots e tanto configurar quanto executar **apenas um**
 
 ## Inscreva-se no canal
 
-[![YouTube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@devgui_?sub_confirmation=1)
+[![YouTube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@devyanik?sub_confirmation=1)
 
 ## Contribuindo com o projeto
 
@@ -1324,7 +1323,7 @@ Isso significa que:
 - Você pode usar este código como quiser, seja para projetos pessoais ou comerciais.
 - Você pode modificar o código para adaptá-lo às suas necessidades.
 - Você pode compartilhar ou vender o código, mesmo modificado, mas precisa:
-  - Manter os créditos ao autor original (Guilherme França - Dev Gui).
+  - Manter os créditos ao autor original (Yanik Uaite - Dev Yanik).
   - Tornar o código modificado disponível sob a mesma licença GPL-3.0.
 
 O que você não pode fazer:

@@ -2,7 +2,7 @@
  * Serviço de download via yt-dlp (CLI).
  *
  * Por que existe:
- * - o Render (e qualquer host em nuvem) bloqueia/limita as APIs de download
+ * - qualquer host em nuvem bloqueia/limita as APIs de download
  *   terceiras; o yt-dlp roda dentro do próprio container e cobre YouTube,
  *   TikTok, Instagram, Facebook, X, Pinterest e mais de 1000 sites;
  * - o yt-dlp devolve a duração real da mídia, o que deixa o custo de
@@ -12,7 +12,7 @@
  * que usam este módulo caem no fallback da API GenDownload.
  *
  * Instalação do binário:
- * - Docker/Render: veja o Dockerfile (yt-dlp_linux, sem Python);
+ * - Docker: veja o Dockerfile (yt-dlp_linux, sem Python);
  * - outros hosts: `npm run setup:ytdlp` (salva em `bin/yt-dlp`);
  * - Termux: `pkg install yt-dlp` e/ou defina `YTDLP_PATH`.
  */
@@ -45,12 +45,12 @@ const MAX_BUFFER = 32 * 1024 * 1024;
 
 const BOT_CHECK_HINT =
   "O YouTube está pedindo confirmação de que não é um robô (comum em IP de " +
-  "datacenter, como o do Render). Configure YTDLP_COOKIES_PATH apontando para um " +
+  "datacenter). Configure YTDLP_COOKIES_PATH apontando para um " +
   "arquivo de cookies ou YTDLP_PROXY com um proxy residencial.";
 
 const IP_BLOCKED_HINT =
   "O servidor de origem bloqueou o IP do bot (HTTP 403/Forbidden). Isso é comum " +
-  "em IP de datacenter (Render). Configure YTDLP_COOKIES_PATH com cookies válidos " +
+  "em IP de datacenter. Configure YTDLP_COOKIES_PATH com cookies válidos " +
   "ou YTDLP_PROXY com um proxy residencial.";
 
 const UNSUPPORTED_URL_HINT =
@@ -370,8 +370,8 @@ async function pickOutputPath(stdout, id) {
  * @param {string} url
  * @param {{ audio?: boolean, height?: number|string, maxBytes?: number,
  *   extraArgs?: string[], concurrentFragments?: number }} options
- *   `maxBytes` sobrepõe o limite padrão de 100 MB (os animes aceitam documento
- *   até 200 MB, então precisam de um limite maior); `extraArgs` acrescenta
+ *   `maxBytes` sobrepõe o limite padrão de 500 MB (os animes usam um teto
+ *   próprio); `extraArgs` acrescenta
  *   flags ao yt-dlp (ex.: `--impersonate` e `--referer` para o CDN de animes);
  *   `concurrentFragments` controla o `-N` (1 = sequencial, para CDNs com rate
  *   limit).

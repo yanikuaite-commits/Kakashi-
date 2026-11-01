@@ -4,7 +4,7 @@
  * necessidade de modificar
  * este arquivo.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { delay } from "baileys";
 import fs from "node:fs";

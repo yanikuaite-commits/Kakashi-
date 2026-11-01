@@ -15,7 +15,7 @@
  * Os tokens (`fmt:*`) chegam pelo `fullMessage` (extractDataFromMessage já lê
  * o `selected_row_id` das respostas do native flow).
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import fs from "node:fs/promises";
 import { RODAPE, downloadMessage } from "./formatMessage.js";

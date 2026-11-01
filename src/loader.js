@@ -4,7 +4,7 @@
  * que serão escutados pelo
  * socket do WhatsApp.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { onCall } from "./middlewares/onCall.js";
 import { onMessagesUpsert } from "./middlewares/onMesssagesUpsert.js";

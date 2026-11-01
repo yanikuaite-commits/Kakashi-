@@ -1,7 +1,7 @@
 /**
  * Logs
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import pkg from "../../package.json" with { type: "json" };
 

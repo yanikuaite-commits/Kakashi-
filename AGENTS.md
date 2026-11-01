@@ -234,7 +234,7 @@ same guard covers a truncated file, which used to make every later read throw.
 
 ### Persistence on ephemeral hosts
 
-Hosts without a mounted volume (Cloady, Render, Fly, Railway) start each deploy
+Hosts without a mounted volume start each deploy
 from a fresh container. Two directories are lost, and losing either one is
 visible to the user:
 
@@ -257,11 +257,12 @@ repository paths, so a host that mounts its volume at `/data` only needs
 - **the volume is what makes the data survive; a database engine does not.**
   Moving from JSON to SQLite/Postgres without a volume still loses everything on
   every deploy. Fix the volume first.
-- on Cloady, volumes survive start/stop/redeploy and are only destroyed when the
-  app is deleted. Never delete an app to rename it.
-- `ANIME_DOCUMENT_LIMIT_MB` (300) assumes ~2x the media size on disk (the
-  download plus the Baileys encrypted copy). The Cloady free tier gives 5 GB of
-  SSD; check it before raising the limit.
+- on a host with a persistent volume the data survives start/stop/redeploy and
+  is only lost when the volume is deleted. Never delete the volume to rename the
+  service.
+- `ANIME_DOCUMENT_LIMIT_MB` (500) assumes ~2x the media size on disk (the
+  download plus the Baileys encrypted copy), so a 500 MB episode needs ~1 GB
+  free. Check the host's disk and RAM before raising the limit.
 
 ### Automatic backup
 
@@ -677,15 +678,16 @@ the GenDownload API when the binary is missing or the extraction fails.
 - `npm run setup:ytdlp` downloads it to `bin/yt-dlp` on non-Docker hosts; Termux uses `pkg install yt-dlp`
 - configuration lives in `src/config.js` under the `YTDLP_*` constants (`ENABLED`, `PATH`, `TIMEOUT_MS`, `COOKIES_PATH`, `PROXY`, `JS_RUNTIME`, `IMPERSONATE`, `EXTRACTOR_ARGS`, `CONCURRENT_FRAGMENTS`)
 - `YTDLP_ENABLED=false` disables it entirely; nothing breaks without the binary
-- `YTDLP_TIMEOUT_MS` caps a single yt-dlp run (default 15 min). It used to be 5 min, which killed long downloads mid-flight: a 24 min episode at 480p (~95 MB) can take ~7 min on a slow host, and the kill is silent — `execFile` sends SIGTERM, so stderr is empty and the raw `Command failed: <full command>` (signed CDN URL included) was what reached the user. `friendlyError` now recognises `killed`+`SIGTERM` and reports the timeout, and falls back to a generic text instead of echoing the command when stderr is empty
+- `YTDLP_TIMEOUT_MS` caps a single yt-dlp run (default 30 min). It used to be 5 min, which killed long downloads mid-flight: a 24 min episode at 480p (~95 MB) can take ~7 min on a slow host, and the kill is silent — `execFile` sends SIGTERM, so stderr is empty and the raw `Command failed: <full command>` (signed CDN URL included) was what reached the user. It was raised to 15 min and then to 30 min, to match the 500 MB ceiling. `friendlyError` recognises `killed`+`SIGTERM` and reports the timeout, and falls back to a generic text instead of echoing the command when stderr is empty
 - `YTDLP_CONCURRENT_FRAGMENTS` sets the yt-dlp `-N` (default 4). CDNs that rate-limit parallel requests (the anime CDN answers 429) need `1`, otherwise yt-dlp drops fragments and fails with `No such file ...-FragN`; the anime flow forces `1` for `anikoto`
-- YouTube blocks datacenter IPs (Render included) with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
+- YouTube blocks datacenter IPs with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
 
 Media sending must stream, never buffer: use `mediaUploadFromFile()` from
 `src/utils/mediaSend.js` (returns `{ stream }`) instead of `fs.readFileSync`.
 The Baileys path encrypts chunk by chunk, so a 350 MB episode costs ~65 MB of
-RSS as a stream against ~351 MB as a buffer. The Render `starter` plan has
-512 MB, so buffering a large episode gets the process killed by OOM.
+RSS as a stream against ~351 MB as a buffer. A host with 512 MB of RAM gets
+the process killed by OOM when buffering a large episode, so check the RAM
+before sending big files.
 
 Sent files carry the search title, not a fixed name: build it with
 `safeMediaFileName()` (same module) instead of hardcoding `"anime.mp4"` /
@@ -706,7 +708,7 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
 
 - **`animegg`, `anitube`, `anikoto`, `animeheaven`, `animesonlinehd` and
   `meusanimes` are the
-  providers that work from a datacenter IP (Render).** All are scraped by the bot itself, not by the
+  providers that work from a datacenter IP.** All are scraped by the bot itself, not by the
   library, because every `@consumet/extensions` anime provider sits behind
   Cloudflare and/or is dead. The anikoto chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
   `/ajax/server/list?servers=<data-ids>` → `/ajax/server?get=<link>&sv=<sv>` →
@@ -731,7 +733,7 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   to the yt-dlp call; `downloadWithYtDlp` accepts `extraArgs` for that. Without
   impersonation (which needs the standalone binary's `curl_cffi`) the download
   fails with HTTP 403
-- **`animeheaven` serves a direct 720p MP4 (~112–164 MB), inside the 200 MB
+- **`animeheaven` serves a direct 720p MP4 (~112–164 MB), inside the 500 MB
   send limit, so it is not capped to 480p.** The chain is: `/search.php?s=<termo>`
   → `/anime.php?<id>` (each
   episode carries a 32-hex hash) → `/gate.php` with the `key=<hash>` cookie,
@@ -748,7 +750,7 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   is why `getEpisodeSources` accepts both shapes: assuming HLS for a direct MP4
   printed the wrong quality label
 - `ANIME_HEAVEN_MAX_HEIGHT` (default 720) is the AnimeHeaven ceiling: the
-  episode already fits the 200 MB limit, so forcing 480p would only degrade the
+  episode already fits the 500 MB limit, so forcing 480p would only degrade the
   image for nothing. `ANIME_MAX_HEIGHT` (480) still applies to anikoto, whose
   master.m3u8 carries a single 1080p variant
 - **`meusanimes` is the first provider** (`meusanimes.blog`). It answers from a
@@ -775,7 +777,7 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   audio step also reaches `seasons()`, because the season index is only valid
   inside the entry it was read from
 - it publishes itag 18 (360p, ~89 MB for a 23 min episode, inside the ceiling)
-  and itag 22 (720p, ~285 MB, right at the 300 MB limit) as separate sources, so
+  and itag 22 (720p, ~285 MB, inside the 500 MB limit) as separate sources, so
   the quality menu offers both and the size rule decides what can be sent.
   **Not every episode carries both**: older episodes often publish 360p only, so
   a one-item quality list is normal, not a failure
@@ -813,13 +815,13 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   With no explicit choice the dubbed id wins (`ANIME_PREFER_DUBBED`), falling back
   to subtitled only when the episode has no dubbing
 - the Blogger CDN serves itag 18 (360p, ~75 MB for a 24 min episode) and itag 22
-  (720p, ~219 MB). The 720p is above the 200 MB ceiling, so the episode is served
-  at 360p. The CDN requires the Blogger `Referer` **and** a browser
+  (720p, ~219 MB). Both tiers are inside the 500 MB ceiling, so the quality menu
+  offers both and the size rule decides what can be sent. The CDN requires the Blogger `Referer` **and** a browser
   `User-Agent`: without the User-Agent it answers 403 even with the right
   Referer, which is why `animeDownloadArgs` sets both
 - **the real end-to-end download was verified**: Kaiju Girls ep. 1 resolved
   through `animesonlinehd` and downloaded with yt-dlp to a 14.8 MB MP4, well
-  inside the 200 MB ceiling. The 360p/720p sizes above come from longer episodes
+  inside the 500 MB ceiling. The 360p/720p sizes above come from longer episodes
   (24 min); a short episode is much smaller
 - the library providers remain as fallback; extraction runs **in-process**
   through `@consumet/extensions`, with no Consumet server and no self-hosting.
@@ -880,9 +882,8 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   - `videoSources` already carries the `label` (`360p`/`480p`/`720p`), so the
     quality is known without a `HEAD` per entry. The size still has to be
     measured: a 24 min episode was 31 MB at 360p, 80 MB at 480p and **201 MB at
-    720p**, i.e. above the 200 MB ceiling. `escolherDegrau` measures each tier
-    and prefers `ANIME_GG_MAX_HEIGHT` (480p), falling back to the tier below
-    before the one above.
+    720p**. `escolherDegrau` measures each tier and prefers `ANIME_GG_MAX_HEIGHT`
+    (480p) to save bandwidth, falling back to the tier below before the one above.
   - an entry may carry a `bk` field: a base64-encoded mp4upload embed that acts
     as a backup mirror.
   - **`var videoSources = []` is the failure mode, and it is persistent, not
@@ -972,7 +973,7 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   hardcoding a domain in a command
 - **the library sites sit behind Cloudflare, and the library sends no
   `User-Agent`** (axios defaults to `axios/1.x`), which Cloudflare blocks from
-  datacenter IPs — Render included. This is the same class of block as YouTube's
+  datacenter IPs. This is the same class of block as YouTube's
   "confirm you're not a bot". `ANIME_USER_AGENT` / `ANIME_ACCEPT_LANGUAGE`
   (`src/config.js`) are applied to each library provider's HTTP client in
   `applyProviderClient`; without them search fails with "nenhuma fonte respondeu"
@@ -1067,13 +1068,13 @@ providers; `src/utils/animeMenu.js` runs the interactive flow
   single `anm:pg:<p>` "ver mais" row at the bottom for the rest, so the list
   stays short and every episode is still reachable — WhatsApp drops oversized
   lists, so "all at once" is not an option
-- size rule: `> 200 MB` cancels the send, `100–200 MB` sends as document,
+- size rule: `> 500 MB` cancels the send, `100–500 MB` sends as document,
   `≤ 100 MB` sends as video — the document threshold is the same rule YouTube
-  uses (`decideYouTubeSend`), the 200 MB ceiling is anime-specific
+  uses (`decideYouTubeSend`), the 500 MB ceiling is anime-specific
   (see `src/utils/mediaSend.js`)
 - resolution is fixed at `ANIME_MAX_HEIGHT` (480p): the provider's m3u8 carries
-  240p–1080p and, with no limit, yt-dlp picked 1080p and blew past the 200 MB
-  ceiling (a 24 min episode is ~470 MB at 1080p vs ~70 MB at 480p). The quality
+  240p–1080p and, with no limit, yt-dlp picked 1080p and blew past the ceiling
+  (a 24 min episode is ~470 MB at 1080p vs ~70 MB at 480p). The quality
   list picks the *source* (URL), not the final resolution
 
 ### Megacine (séries + doramas + animes episódicos)
@@ -1174,7 +1175,7 @@ Project-level scripts:
 (see the negated entries in `.gitignore`), because the project ships local changes to
 the baileys build output.
 
-Patched files, all marked with `// Alterado por: Dev Gui` on the first line:
+Patched files, all marked with `// Alterado por: Dev Yanik` on the first line:
 
 | File | Purpose |
 | --- | --- |

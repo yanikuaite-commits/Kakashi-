@@ -145,7 +145,7 @@ assert.ok(pedidos.some((alvo) => alvo.includes("anikoto.cz")));
 });
 
 test("os providers recebem User-Agent de browser", async () => {
-  // Regressão do erro "nenhuma fonte respondeu" no Render: a biblioteca não
+  // Regressão do erro "nenhuma fonte respondeu" em host de datacenter: a biblioteca não
   // define User-Agent, o axios envia "axios/1.x" e o Cloudflare bloqueia isso
   // em IPs de datacenter. O cliente tem de sair com cara de browser.
   const { ANIME } = await import("@consumet/extensions");

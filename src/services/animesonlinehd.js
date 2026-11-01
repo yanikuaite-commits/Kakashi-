@@ -2,7 +2,7 @@
  * Provider "animesonlinehd": extrai o vídeo do site, sem API de terceiros.
  *
  * PORQUÊ: é o único site testado que publica DUBLADO EM PORTUGUÊS e responde a
- * IPs de datacenter (Render incluído), sem Cloudflare. Os sites PT-BR mais
+ * IPs de datacenter, sem Cloudflare. Os sites PT-BR mais
  * conhecidos (goyabu, animefire, animesonlinecc, dattebayo) estão todos atrás de
  * Cloudflare, e o AniTube publica o dublado num único degrau de 720p (~330-450 MB)
  * que passa o teto de envio. Aqui cada episódio traz as DUAS faixas com ids
@@ -36,7 +36,7 @@
  * quiser o 720p escolhe-o e assume o tempo de download, em vez de o provider
  * decidir por ele. O teto de envio continua a travar o que não couber.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import {
   ANIME_API_TIMEOUT_MS,

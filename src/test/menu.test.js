@@ -25,7 +25,7 @@ test("menu principal mostra navegação curta e pesquisa fica nos downloads", ()
 
 test("todos os submenus mantêm a mesma foto e uma legenda utilizável", async () => {
   const sent = [];
-  const imagePath = path.join(ASSETS_DIR, "images", "takeshi-bot.png");
+  const imagePath = path.join(ASSETS_DIR, "images", "kakashi-bot.png");
   for (const section of ["", ...MENU_CATEGORIES.map(({ key }) => key)]) {
     await command.handle({
       remoteJid: chatId,

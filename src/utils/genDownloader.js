@@ -58,7 +58,7 @@ export async function downloadWithGenDownload(url, options = {}) {
     const format = selectFormat(data?.formats, options);
     if (!format) throw new Error(data?.error ? apiError(data) : "Nenhum formato de mídia compatível foi encontrado para este link.");
     if (Number(format.filesize) > MAX_FILE_SIZE_BYTES) {
-      throw new Error("O arquivo excede o limite de 100 MB do WhatsApp.");
+      throw new Error("O arquivo excede o limite de 500 MB do download.");
     }
 
     const extension = format.ext;
@@ -66,7 +66,7 @@ export async function downloadWithGenDownload(url, options = {}) {
     const response = await axios.get(format.url, { responseType: "stream", timeout: DOWNLOAD_TIMEOUT_MS });
     if (Number(response.headers["content-length"]) > MAX_FILE_SIZE_BYTES) {
       response.data.destroy();
-      throw new Error("O arquivo excede o limite de 100 MB do WhatsApp.");
+      throw new Error("O arquivo excede o limite de 500 MB do download.");
     }
     const contentType = String(response.headers["content-type"] || "").split(";")[0].toLowerCase();
     const expectedType = options.audio ? "audio/" : "video/";
@@ -82,7 +82,7 @@ export async function downloadWithGenDownload(url, options = {}) {
       transform(chunk, encoding, callback) {
         bytes += chunk.length;
         if (bytes > MAX_FILE_SIZE_BYTES) {
-          callback(new Error("O arquivo excede o limite de 100 MB do WhatsApp."));
+          callback(new Error("O arquivo excede o limite de 500 MB do download."));
         } else {
           callback(null, chunk);
         }

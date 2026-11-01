@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script de atualização automática do bot
-# Autor: Dev Gui
+# Autor: Dev Yanik
 # Versão: 1.0.0
 # Compatível com: VPS, WSL2 e Termux
 
@@ -28,7 +28,7 @@ detect_environment() {
 ENV_TYPE=$(detect_environment)
 
 if [ "$ENV_TYPE" = "termux" ]; then
-    TEMP_DIR="$HOME/.cache/takeshi-bot-update"
+    TEMP_DIR="$HOME/.cache/kakashi-bot-update"
     mkdir -p "$TEMP_DIR"
 else
     TEMP_DIR="/tmp"

@@ -5,7 +5,7 @@
  *
  * Para colocar a menção ao membro, use "@member" na mensagem.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 export const welcomeMessage =
   "👋 Bem-vindo(a) @member ao *{grupo}*!\n📜 Lê as regras com {prefixo}regras";

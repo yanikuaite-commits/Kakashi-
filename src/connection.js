@@ -12,7 +12,7 @@
  * a menos que você saiba
  * o que está fazendo.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import makeWASocket, {
   DisconnectReason,
@@ -98,10 +98,10 @@ export async function connect() {
 
   if (!socket.authState.creds.registered) {
     clearScreenWithBanner();
-    const useTerminal = Boolean(process.stdin.isTTY) && process.env.RENDER !== "true";
+    const useTerminal = Boolean(process.stdin.isTTY);
     console.log(useTerminal
       ? "Informe o número do bot no terminal."
-      : "Informe o número na página /pairing do serviço do Render.");
+      : "Informe o número na página /pairing do serviço.");
     const phoneNumber = PAIRING_NUMBER || (useTerminal
       ? await question("Número: ")
       : await waitForPairingNumber());

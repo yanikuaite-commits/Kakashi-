@@ -47,7 +47,7 @@
  * páginas abortava a verificação de um stream que estava bom, por isso esse
  * passo usa `MEGACINE_PLAYLIST_TIMEOUT_MS`.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import {
   MEGACINE_BASE_URL,

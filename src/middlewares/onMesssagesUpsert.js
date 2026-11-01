@@ -2,7 +2,7 @@
  * Evento chamado quando uma mensagem
  * é enviada para o grupo do WhatsApp
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { DEVELOPER_MODE, PREFIX } from "../config.js";
 import { badMacHandler } from "../utils/badMacHandler.js";

@@ -23,9 +23,9 @@
  * guardam o link na sessão e abrem o menu de qualidade/formato em lista
  * (videoFormatMenu / audioFormatMenu), que baixa só depois da escolha.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
-import { PREFIX } from "../config.js";
+import { MAIN_MENU_CHANNEL_URL, PREFIX } from "../config.js";
 import { getPrefix } from "../utils/database.js";
 import { RODAPE, formatMessage } from "../utils/formatMessage.js";
 import {
@@ -54,7 +54,6 @@ import {
 
 export const GUIDED_TTL_MS = INTERACTIVE_MENU_TTL_MS;
 
-const CHANNEL_URL = "https://www.youtube.com/@devgui_?sub_confirmation=1";
 
 const IDS = {
   main: "menu:main",
@@ -240,7 +239,7 @@ function emSecoes(title, rows, tamanho = 10) {
 }
 
 function canalButton() {
-  return urlButton("📢 Canal", CHANNEL_URL);
+  return urlButton("📢 Canal", MAIN_MENU_CHANNEL_URL);
 }
 
 /**

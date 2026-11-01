@@ -10,7 +10,7 @@
  * `kind` do registo. Este mapa só existe para saber que a próxima mensagem
  * curta do utilizador é a resposta a esta pergunta.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { errorLog, infoLog } from "./logger.js";
 import { setRechargeKind } from "../services/recharges.js";

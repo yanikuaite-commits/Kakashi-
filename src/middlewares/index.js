@@ -1,7 +1,7 @@
 /**
  * Interceptadores diversos.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { messageHandler } from "./messageHandler.js";
 import { onGroupParticipantsUpdate } from "./onGroupParticipantsUpdate.js";

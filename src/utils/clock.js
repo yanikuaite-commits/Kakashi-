@@ -6,7 +6,7 @@
  * as assinaturas (`src/services/subscriptions.js`). O `credits.js` reexporta
  * estas funções, por isso quem já as importava de lá continua a funcionar.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { CREDITS_TIMEZONE } from "../config.js";
 

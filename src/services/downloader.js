@@ -100,7 +100,7 @@ async function settleMediaCredits(command, result) {
 }
 
 /**
- * Escolhe o downloader: yt-dlp (local, recomendado no Render/Docker) quando
+ * Escolhe o downloader: yt-dlp (local, recomendado em Docker) quando
  * disponível, com fallback automático para a API GenDownload.
  *
  * A chamada passa pela fila (`withDownloadSlot`): o limite de concorrência é
@@ -133,7 +133,7 @@ export async function downloadVideo(source, height = DEFAULT_VIDEO_HEIGHT) {
 }
 
 /**
- * Baixa o vídeo do YouTube sem o teto de 100 MB.
+ * Baixa o vídeo do YouTube sem o teto de 500 MB.
  *
  * O teto padrão do yt-dlp cortaria o arquivo antes de sabermos que ele deve
  * seguir como DOCUMENTO (regra do YouTube: > 100 MB vira documento). Aqui o
@@ -193,7 +193,7 @@ export async function downloadByCommand(command, value, search = searchYouTube) 
     } : result;
   }
 
-  // YouTube: baixa sem o teto de 100 MB para o comando poder enviar como
+  // YouTube: baixa sem o teto de 500 MB para o comando poder enviar como
   // DOCUMENTO quando o ficheiro passar desse tamanho (regra do YouTube).
   if (command === "play-video") {
     const result = await downloadYouTubeVideo(source);

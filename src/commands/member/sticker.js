@@ -1,8 +1,8 @@
 /**
- * Desenvolvido por: Dev Gui
+ * Desenvolvido por: Dev Yanik
  * Implementação dos metadados feita por: MRX
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { PREFIX } from "../../config.js";
 import { InvalidParameterError } from "../../errors/index.js";

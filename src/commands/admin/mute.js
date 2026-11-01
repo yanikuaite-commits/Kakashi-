@@ -1,8 +1,8 @@
 /**
  * Desenvolvido por: Mkg
- * Refatorado por: Dev Gui
+ * Refatorado por: Dev Yanik
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { BOT_LID, OWNER_LID, PREFIX } from "../../config.js";
 import { DangerError } from "../../errors/index.js";

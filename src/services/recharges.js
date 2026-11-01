@@ -14,7 +14,7 @@
  * transação só é aceite uma vez (o id é a chave), para o mesmo SMS não pagar
  * créditos duas vezes.
  *
- * @author Dev Gui
+ * @author Dev Yanik
  */
 import { PAYMENT_CONFIRM_TTL_MS } from "../config.js";
 import {
