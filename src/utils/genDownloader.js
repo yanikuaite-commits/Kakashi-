@@ -8,6 +8,9 @@ import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { DOWNLOAD_TIMEOUT_MS, MAX_FILE_SIZE_BYTES } from "../config.js";
 
+// O limite entra na mensagem para nunca divergir do valor real.
+const LIMITE_MB = Math.floor(MAX_FILE_SIZE_BYTES / (1024 * 1024));
+
 const TEMP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../tmp");
 
 function selectFormat(formats, { audio = false, height } = {}) {
@@ -58,7 +61,7 @@ export async function downloadWithGenDownload(url, options = {}) {
     const format = selectFormat(data?.formats, options);
     if (!format) throw new Error(data?.error ? apiError(data) : "Nenhum formato de mídia compatível foi encontrado para este link.");
     if (Number(format.filesize) > MAX_FILE_SIZE_BYTES) {
-      throw new Error("O arquivo excede o limite de 500 MB do download.");
+      throw new Error(`O arquivo excede o limite de ${LIMITE_MB} MB do download.`);
     }
 
     const extension = format.ext;
@@ -66,7 +69,7 @@ export async function downloadWithGenDownload(url, options = {}) {
     const response = await axios.get(format.url, { responseType: "stream", timeout: DOWNLOAD_TIMEOUT_MS });
     if (Number(response.headers["content-length"]) > MAX_FILE_SIZE_BYTES) {
       response.data.destroy();
-      throw new Error("O arquivo excede o limite de 500 MB do download.");
+      throw new Error(`O arquivo excede o limite de ${LIMITE_MB} MB do download.`);
     }
     const contentType = String(response.headers["content-type"] || "").split(";")[0].toLowerCase();
     const expectedType = options.audio ? "audio/" : "video/";
@@ -82,7 +85,7 @@ export async function downloadWithGenDownload(url, options = {}) {
       transform(chunk, encoding, callback) {
         bytes += chunk.length;
         if (bytes > MAX_FILE_SIZE_BYTES) {
-          callback(new Error("O arquivo excede o limite de 500 MB do download."));
+          callback(new Error(`O arquivo excede o limite de ${LIMITE_MB} MB do download.`));
         } else {
           callback(null, chunk);
         }

@@ -5,7 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { pipeline } from "node:stream/promises";
-import { MAX_FILE_SIZE_BYTES } from "../config.js";
+import { DOWNLOAD_TIMEOUT_MS, MAX_FILE_SIZE_BYTES } from "../config.js";
+
+// O limite entra na mensagem para nunca divergir do valor real.
+const LIMITE_MB = Math.floor(MAX_FILE_SIZE_BYTES / (1024 * 1024));
 
 const COBALT_API_URL = process.env.COBALT_API_URL;
 
@@ -44,7 +47,7 @@ export async function downloadWithCobalt(url) {
     cobaltResponse = await axios.post(
       COBALT_API_URL,
       { url },
-      { headers, timeout: 120_000 },
+      { headers, timeout: DOWNLOAD_TIMEOUT_MS },
     );
   } catch (error) {
     throw new Error(
@@ -80,13 +83,13 @@ export async function downloadWithCobalt(url) {
   try {
     const videoResponse = await axios.get(result.url, {
       responseType: "stream",
-      timeout: 120_000,
+      timeout: DOWNLOAD_TIMEOUT_MS,
     });
     await pipeline(videoResponse.data, createWriteStream(filePath));
     const fileSize = (await stat(filePath)).size;
     if (fileSize > MAX_FILE_SIZE_BYTES) {
       const error = new Error(
-        "O arquivo excede o limite de 500 MB do download.",
+        `O arquivo excede o limite de ${LIMITE_MB} MB do download.`,
       );
       error.code = "FILE_TOO_LARGE";
       throw error;
