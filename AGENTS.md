@@ -1017,18 +1017,20 @@ Rules:
 - to fix an upstream change, update the anchor or replacement in the single script and
   rerun `npm run patch:baileys`
 
-## HOSTING_AND_PTERODACTYL
+## HOSTING
 
-The project README currently highlights the supported hosts in its installation section.
-Treat `README.md` as the source of truth for host names and links.
+The bot now runs on **Oracle Cloud** (ARM Ampere instance). `README.md` is the
+source of truth for the installation steps; the VPS Debian/Ubuntu guide applies
+directly to an Oracle Cloud instance.
 
 Installation tutorials stay in `README.md`.
 
-If the topic is about hosting, VPS setup, startup configuration, schedules, SFTP, Pterodactyl panel usage, or backup flow, agents should also load:
+If the topic is about hosting, VPS setup, startup configuration, schedules, SFTP, panel usage, or backup flow, agents should also load:
 
 - `.agents/skills/pterodactyl-specialist/SKILL.md`
 
-That skill is the specialized source for Pterodactyl guidance.
+That skill is the specialized source for panel guidance (it still applies to any
+Pterodactyl-style panel).
 
 ## STABILITY_AND_ERRORS
 

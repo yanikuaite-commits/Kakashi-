@@ -32,7 +32,8 @@ mensagem clara em vez de falhar.
 Isto não é só organização: este repositório é **público**, e o GitHub revoga
 sozinho qualquer token que encontre num ficheiro versionado de um repositório
 público. Foi o que aconteceu ao token que estava em `src/config.js` — o `.backup`
-passou a responder HTTP 401 porque a credencial já tinha sido revogada. O
+passou a responder HTTP 401 porque a credencial já tinha sido revogada.
+
 Qualquer uma delas pode ser definida pelo WhatsApp, sem mexer no código: use
 `.api-keys` para ver o estado e os comandos, ou `.set-github-token`,
 `.set-spider-api-token`, `.set-linker-api-token`, `.set-groq-api-token`,
@@ -608,26 +609,13 @@ export const OWNER_LID = "12345678901234567890@lid";
 npm start
 ```
 
-## Instalação nas principais hosts do Brasil
+## Instalação no Oracle Cloud
 
-As principais hosts já oferecem o Kakashi como **bot padrão**, não sendo necessário nenhuma instalação manual!
-
-**Hosts suportadas**:
-
-| Bronxys | NexFuture | Speed Cloud |
-|---------|-----------|-------------|
-| [Grupo oficial](https://chat.whatsapp.com/HWeFfnUNR2mBGEw3F9GF5G) | [Grupo oficial](https://chat.whatsapp.com/Fl5FzZQC00J5CZp07AZVwQ?mode=r_c) | [Grupo oficial](https://chat.whatsapp.com/HsZDn6DJrx34z5lbNbNB2M) |
-| [![Bronxys](./assets/images/bronxys.png)](https://bronxyshost.com/) | [![NexFuture](./assets/images/nexfuture.png)](https://nexfuture.com.br/) | [![Speed Cloud](./assets/images/speed-cloud.png)](https://speedhosting.cloud/) |
-
-| TED Host | Cebolinha Host | Lumina Cloud |
-|----------|----------------|--------------|
-| [Grupo oficial](https://chat.whatsapp.com/I4EpMkbeaxCI4z4gQ3Pdif) | [Grupo oficial](https://chat.whatsapp.com/CCf2Pw9guan12orwGg0TqC?mode=gi_t) | [Grupo oficial](https://chat.whatsapp.com/DRfvf9SfekaAAFCIR8lGbj) |
-| [![TED Host](./assets/images/ted-host.png)](https://loja.tedhost.com.br/) | [![Cebolinha Host](./assets/images/cebolinha-host.jpeg)]( https://dash.cebolinhahost.com) | [![Lumina Cloud](./assets/images/lumina-logo.png)](https://loja.luminacloud.space/) |
-
-| Raikken Host | LordeHost | Jexa for Developers |
-|--------------|-----------|---------------------|
-| [Grupo oficial](https://chat.whatsapp.com/BzSDYUHbjHGF6gQmJfh2C7?mode=gi_t) | [Grupo oficial](https://chat.whatsapp.com/ENkfT9rjBnG2sCJRp48hhb) | [Grupo oficial](https://chat.whatsapp.com/EDWFGZVri3gEaW2HJxK4YV) |
-| [![Raikken](./assets/images/raikken-host.png)](https://painel.raikken.com.br) | [![LordeHost](./assets/images/lordehost.jpeg)](https://lordehost.com.br) | [![Jexa for Developers](./assets/images/jexa-for-developers.png)](https://devs.jexa.lat/) |
+O Kakashi corre no Oracle Cloud (instância ARM Ampere). O guia de instalação em
+VPS Debian/Ubuntu abaixo serve para o Oracle Cloud; basta abrir as portas
+necessárias na lista de segurança da instância e montar um volume persistente
+para `database/` e `assets/auth/baileys/` (ver
+[Persistência entre deploys](#persistência-entre-deploys-volume)).
 
 ## Instalação no Windows
 

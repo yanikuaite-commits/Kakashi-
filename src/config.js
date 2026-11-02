@@ -17,7 +17,7 @@ export const BOT_NAME = "Kakashi Bot";
 // mostra ao ver o pacote). Aparece por baixo do nome de quem criou a figurinha.
 export const STICKER_PACK_PUBLISHER =
   process.env.STICKER_PACK_PUBLISHER ||
-  "✦ ☄️ Constelado por Dev Yanik 🪐 ✦";
+  "⋆｡°✩ Feito por Dev Yanik ✩°｡⋆";
 
 // LID do bot (no caso, o que você rodará o bot).
 // Para obter o LID do bot, use o comando <prefixo>lid respondendo em cima de uma mensagem do número do bot
