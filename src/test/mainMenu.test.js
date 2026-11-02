@@ -96,17 +96,17 @@ test("corpo do card segue o molde e injeta as variáveis", () => {
     velocidade: "0.2500s",
   });
 
-  assert.ok(body.startsWith("┏━━━༺ 🌐 ༻━━━┓"));
+  assert.ok(body.startsWith("  ☄️ · ✦ ·"));
   assert.match(body, new RegExp(`\\s${BOT_NAME.toUpperCase()}\\s`));
-  assert.match(body, /╭─『 🌙 INFORMAÇÕES 』─╮/);
-  assert.match(body, /👤 You Name: @Fulano/);
-  assert.match(body, /📅 Data: 25\/12\/2026/);
-  assert.match(body, /🕒 Horário: 23:30:06/);
-  assert.match(body, /📆 Hoje é: Sexta/);
-  assert.match(body, /⚡ Velocidade: 0\.2500s/);
-  assert.match(body, /👑 Criador: Yanik Uaite/);
+  assert.match(body, /╭────────  🪐  ────────╮/);
+  assert.match(body, /👽 @Fulano/);
+  assert.match(body, /🌍 25\/12\/2026/);
+  assert.match(body, /🌙 23:30:06/);
+  assert.match(body, /⭐ Sexta/);
+  assert.match(body, /🚀 0\.2500s/);
+  assert.match(body, /👑 Yanik Uaite/);
   assert.ok(body.includes(MAIN_MENU_FOOTER));
-  assert.match(body, /『 ⚡ Desenvolvido por Yanik Uaite 』/);
+  assert.match(body, /✦ Constelado por Yanik Uaite ✦/);
 });
 
 /* ═══════════ BOTÕES ═══════════ */
@@ -221,9 +221,9 @@ test("card principal vai com imagem, rodapé, menção e sessão de 2 minutos", 
 
   const card = ambiente.cards.at(-1);
   assert.ok(Buffer.isBuffer(card.image) || card.image?.url, "cabeçalho de imagem");
-  assert.match(card.caption, /You Name: @Membro/);
-  assert.match(card.caption, /Horário: 23:30:06/);
-  assert.match(card.caption, /Velocidade: 0\.2500s/);
+  assert.match(card.caption, /@Membro/);
+  assert.match(card.caption, /🌙 23:30:06/);
+  assert.match(card.caption, /🚀 0\.2500s/);
   assert.equal(card.footer, MAIN_MENU_FOOTER);
   assert.deepEqual(card.mentions, ["membro@lid"]);
 
@@ -261,7 +261,7 @@ test("se a imagem falhar reenvia o card sem cabeçalho", async () => {
   assert.equal(sent, true);
   assert.equal(cards.length, 1);
   assert.equal(cards[0].image, undefined);
-  assert.match(cards[0].text, /You Name: @Membro/);
+  assert.match(cards[0].text, /@Membro/);
   assert.ok(cards[0].interactiveButtons.length >= 1);
 });
 
@@ -296,7 +296,7 @@ test("fallbacks: card → lista clássica → texto numerado", async () => {
     lista.sections.every((secao) => secao.rows.length <= 10),
     "lista clássica respeita 10 linhas por seção",
   );
-  assert.match(replies.at(-1).text, /You Name: @Membro/);
+  assert.match(replies.at(-1).text, /@Membro/);
   assert.match(replies.at(-1).text, /1\. 🌐 Geral/);
   assert.match(replies.at(-1).text, /Responde com o número 👇/);
 
@@ -448,7 +448,7 @@ test(".menu envia o card novo e mantém .menu <categoria>", async () => {
   });
 
   const card = ambiente.cards.at(-1);
-  assert.match(card.caption || card.text, /You Name: @Membro/);
+  assert.match(card.caption || card.text, /@Membro/);
   assert.equal(card.footer, MAIN_MENU_FOOTER);
 
   await menuCommand.handle({

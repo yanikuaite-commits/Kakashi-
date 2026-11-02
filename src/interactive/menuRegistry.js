@@ -58,6 +58,7 @@ const DESCRICOES = {
   ia: "🤖 Inteligência artificial para perguntas, imagens e voz.",
   creditos: "💳 Saldo, custos e histórico dos seus créditos.",
   dono: "👑 Dono do bot: estado, backup e configuração.",
+  dev: "🧑‍💻 Exemplos de envio de mensagens para quem desenvolve comandos.",
 };
 
 /** Categorias restritas: "admin" (admin do grupo ou dono) e "owner". */
@@ -65,6 +66,7 @@ const RESTRITAS = {
   protecao: "admin",
   admin: "admin",
   dono: "owner",
+  dev: "owner",
 };
 
 export const CATEGORIES = MENU_CATEGORIES.map(
@@ -99,6 +101,20 @@ const ehLid = (valor) => {
     .split(":")[0]
     .replace(/\D/g, "");
 
+  return digitos.length >= 8 && digitos.length <= 20;
+};
+
+/**
+ * Valida uma marcação (`@número`) enviada pelo admin.
+ *
+ * Exige o `@` e pelo menos 8 dígitos: sem o `@` os comandos de moderação
+ * (`ban`, `warn`, `promover`, ...) recusam, por isso o menu recusa primeiro e
+ * explica o formato em vez de deixar o comando falhar a seguir.
+ */
+const ehMencao = (valor) => {
+  const texto = String(valor || "").trim();
+  if (!texto.startsWith("@")) return false;
+  const digitos = texto.replace(/\D/g, "");
   return digitos.length >= 8 && digitos.length <= 20;
 };
 
@@ -533,6 +549,271 @@ export const FUNCTIONS = [
     validador: ehLid,
     entrada: "um LID",
     exemplo: "275381038891241@lid",
+  }),
+
+  /* ═══════════ CINEMA ═══════════ */
+  entry("cinema", "megacine", "megacine", {
+    titulo: "Séries & Doramas",
+    icone: "📺",
+    descricao: "Baixa séries, doramas e animes episódicos do Megacine.",
+    guia: "Envie o nome da série (ex: Duna A Profecia).",
+    aceita: "texto",
+    exemplo: "Duna A Profecia",
+  }),
+
+  /* ═══════════ CRÉDITOS (pagamento e tabelas) ═══════════ */
+  entry("creditos", "pagamento", "pagamento", {
+    titulo: "Como pagar",
+    icone: "💳",
+    descricao: "Mostra os números de e-mola e m-pesa para recarregar.",
+    guia: "Não precisa enviar nada.",
+    aceita: "nenhum",
+    exemplo: "",
+  }),
+  ...[
+    ["tabela", "Tabelas de preços", "Mostra as duas tabelas (planos e pacotes)."],
+    ["tabela-dias", "Planos por dias", "Mostra a tabela de planos por dias."],
+    ["tabela-creditos", "Pacotes de créditos", "Mostra a tabela de pacotes de créditos."],
+    ["help", "Ajuda", "Ajuda sobre comandos e sobre os créditos."],
+  ].map(([comando, titulo, descricao]) =>
+    entry("creditos", comando, comando, {
+      titulo,
+      icone: "🧾",
+      descricao,
+      guia: "Não precisa enviar nada.",
+      aceita: "nenhum",
+      exemplo: "",
+    }),
+  ),
+
+  /* ═══════════ ADMINISTRAÇÃO (membros) ═══════════ */
+  ...[
+    ["ban", "Remover membro", "Remove o membro marcado do grupo."],
+    ["promover", "Promover a admin", "Torna o membro marcado administrador."],
+    ["rebaixar", "Rebaixar admin", "Volta o administrador a membro comum."],
+    ["mute", "Silenciar membro", "Silencia o membro (as mensagens dele são apagadas)."],
+    ["unmute", "Reativar membro", "Desativa o mute do membro."],
+    ["warn", "Advertir membro", "Aplica uma advertência ao membro."],
+    ["unwarn", "Perdoar advertência", "Remove ou lista advertências válidas."],
+    ["warn-reactivate", "Reativar advertência", "Reativa uma advertência inválida."],
+  ].map(([comando, titulo, descricao]) =>
+    entry("admin", comando, comando, {
+      titulo,
+      icone: "👮",
+      descricao,
+      guia: "Marque o membro com @ (ex: @5511999999999).",
+      aceita: "texto",
+      exemplo: "@5511999999999",
+      validador: ehMencao,
+      entrada: "uma marcação com @",
+    }),
+  ),
+  entry("admin", "revelar", "revelar", {
+    titulo: "Revelar mídia",
+    icone: "👁️",
+    descricao: "Revela uma imagem ou vídeo de visualização única.",
+    guia: "Envie a imagem ou o vídeo de visualização única.",
+    aceita: "midia",
+    exemplo: "imagem/vídeo",
+  }),
+  entry("admin", "delete", "delete", {
+    titulo: "Apagar mensagem",
+    icone: "🗑️",
+    descricao: "Apaga a mensagem à qual respondes.",
+    guia: "Responda à mensagem que queres apagar.",
+    aceita: "nenhum",
+    exemplo: "",
+  }),
+  ...[
+    ["auto-responder", "Auto-responder", "Ativa (1) ou desativa (0) o auto-responder."],
+    ["add-auto-responder", "Adicionar resposta", "Envie: termo / resposta."],
+    ["delete-auto-responder", "Remover resposta", "Envie o ID do termo (ver a lista)."],
+    ["list-auto-responder", "Listar respostas", "Lista os termos do auto-responder."],
+    ["block-wpp", "Bloquear número", "Bloqueia um número no WhatsApp do bot."],
+  ].map(([comando, titulo, descricao]) =>
+    entry("admin", comando, comando, {
+      titulo,
+      icone: "👮",
+      descricao,
+      guia: "Envie o valor pedido.",
+      aceita: comando === "list-auto-responder" ? "nenhum" : "texto",
+      exemplo: comando === "add-auto-responder" ? "bom dia / Bom dia!" : "",
+    }),
+  ),
+
+  /* ═══════════ DONO (painel, pagamentos, configuração) ═══════════ */
+  entry("dono", "painel", "painel", {
+    titulo: "Painel de administração",
+    icone: "📊",
+    descricao: "Abre o painel com as abas de gestão do bot.",
+    guia: "Não precisa enviar nada.",
+    aceita: "nenhum",
+    exemplo: "",
+  }),
+  ...[
+    ["painel-sistema", "Painel · Sistema", "RAM, CPU, disco e estado geral."],
+    ["painel-graficos", "Painel · Gráficos", "Gráficos de RAM/CPU das últimas 24h."],
+    ["painel-banco", "Painel · Banco de dados", "Tamanho e integridade dos dados."],
+    ["painel-logs", "Painel · Logs", "Últimos registos do bot."],
+    ["painel-usuarios", "Painel · Usuários", "Utilizadores conhecidos e atividade."],
+    ["painel-blacklist", "Painel · Blacklist", "Utilizadores banidos do bot."],
+    ["painel-whitelist", "Painel · Whitelist", "Autorizados a usar no privado."],
+    ["painel-backup", "Painel · Backup", "Estado dos backups."],
+    ["painel-config", "Painel · Configurações", "Configuração atual do bot."],
+    ["painel-limpar-cache", "Painel · Limpar cache", "Repõe a atividade e as amostras do painel."],
+  ].map(([comando, titulo, descricao]) =>
+    entry("dono", comando, comando, {
+      titulo,
+      icone: "📊",
+      descricao,
+      guia: "Não precisa enviar nada.",
+      aceita: "nenhum",
+      exemplo: "",
+    }),
+  ),
+  entry("dono", "set-menu-image", "set-menu-image", {
+    titulo: "Imagem do menu",
+    icone: "🖼️",
+    descricao: "Altera a imagem do cabeçalho do menu.",
+    guia: "Envie a nova imagem do menu.",
+    aceita: "midia",
+    exemplo: "imagem",
+  }),
+  entry("dono", "recarga-confirmar", "recarga-confirmar", {
+    titulo: "Confirmar pagamento",
+    icone: "✅",
+    descricao: "Confirma um pagamento e adiciona os créditos.",
+    guia: "Envie o ID da transação (e, se quiseres, os créditos).",
+    aceita: "texto",
+    exemplo: "MP250101.1234",
+  }),
+  entry("dono", "recarga-recusar", "recarga-recusar", {
+    titulo: "Recusar pagamento",
+    icone: "❌",
+    descricao: "Recusa um pagamento e cancela a transação.",
+    guia: "Envie o ID da transação.",
+    aceita: "texto",
+    exemplo: "MP250101.1234",
+  }),
+  entry("dono", "recargas-pendentes", "recargas-pendentes", {
+    titulo: "Pagamentos pendentes",
+    icone: "🧾",
+    descricao: "Lista os pagamentos à espera de confirmação.",
+    guia: "Não precisa enviar nada.",
+    aceita: "nenhum",
+    exemplo: "",
+  }),
+  ...[
+    ["remover-creditos", "Remover créditos", "Envie: créditos @usuario (ou 'tudo')."],
+    ["banir", "Banir do bot", "Envie: lid [1h|1d|7d|30d] [motivo]."],
+    ["set-prefix", "Mudar prefixo", "Envie o novo símbolo de prefixo."],
+    ["set-github-token", "Token do GitHub", "Envie o token do backup."],
+    ["set-spider-api-token", "Token do Spider", "Envie o token da API do Spider."],
+    ["block-command", "Bloquear comando", "Envie o nome do comando a bloquear."],
+    ["unblock-command", "Desbloquear comando", "Envie o nome do comando a desbloquear."],
+    ["exec", "Executar no terminal", "Envie o comando de terminal a executar."],
+    ["apagar-dados", "Apagar dados", "Envie 'confirmar' para apagar TODOS os dados."],
+  ].map(([comando, titulo, descricao]) =>
+    entry("dono", comando, comando, {
+      titulo,
+      icone: "👑",
+      descricao,
+      guia: descricao,
+      aceita: "texto",
+      exemplo: "",
+    }),
+  ),
+  ...[
+    ["on", "Ligar no grupo", "Ativa o bot neste grupo."],
+    ["off", "Desligar no grupo", "Desativa o bot neste grupo."],
+    ["blocked-commands", "Comandos bloqueados", "Lista os comandos bloqueados."],
+    ["testing", "Teste", "Comando de testes do dono."],
+  ].map(([comando, titulo, descricao]) =>
+    entry("dono", comando, comando, {
+      titulo,
+      icone: "👑",
+      descricao,
+      guia: "Não precisa enviar nada.",
+      aceita: "nenhum",
+      exemplo: "",
+    }),
+  ),
+
+  /* ═══════════ DESENVOLVEDOR (exemplos de envio) ═══════════ */
+  ...[
+    ["enviar-texto", "Enviar texto", "Mensagem de texto simples e com menções."],
+    ["enviar-botoes", "Enviar botões", "Listas e mensagens com botões."],
+    ["enviar-lista", "Enviar lista", "Mensagem em formato de lista."],
+    ["enviar-carrossel", "Enviar carrossel", "Mensagem em cards (carrossel)."],
+    ["enviar-enquete", "Enviar enquete", "Enquetes/votações em grupos."],
+    ["enviar-reacoes", "Enviar reações", "Diferentes tipos de reação (emojis)."],
+    ["enviar-resposta", "Enviar respostas", "Respostas de sucesso, erro, aviso e espera."],
+    ["enviar-codigo", "Enviar código", "Código com formatação do WhatsApp."],
+    ["enviar-latex", "Enviar LaTeX", "Fórmula LaTeX em Rich Response."],
+    ["enviar-tabela", "Enviar tabela", "Tabela em Rich Response."],
+    ["enviar-reels", "Enviar reels", "Reels em Rich Response."],
+    ["enviar-localizacao", "Enviar localização", "Mensagem de localização."],
+    ["enviar-contato", "Enviar contato", "Cartão de contato."],
+    ["enviar-mensagem-editada", "Mensagem editada", "Enviar e editar uma mensagem."],
+    ["enviar-imagem-de-url", "Imagem por URL", "Imagem a partir de um link."],
+    ["enviar-video-de-url", "Vídeo por URL", "Vídeo a partir de um link."],
+    ["enviar-audio-de-url", "Áudio por URL", "Áudio a partir de um link."],
+    ["enviar-gif-de-url", "GIF por URL", "GIF a partir de um link."],
+    ["enviar-sticker-de-url", "Sticker por URL", "Sticker a partir de um link."],
+    ["enviar-documento-de-url", "Documento por URL", "Documento a partir de um link."],
+    ["enviar-imagem-de-arquivo", "Imagem por ficheiro", "Imagem a partir de um ficheiro local."],
+    ["enviar-video-de-arquivo", "Vídeo por ficheiro", "Vídeo a partir de um ficheiro local."],
+    ["enviar-audio-de-arquivo", "Áudio por ficheiro", "Áudio a partir de um ficheiro local."],
+    ["enviar-gif-de-arquivo", "GIF por ficheiro", "GIF a partir de um ficheiro local."],
+    ["enviar-sticker-de-arquivo", "Sticker por ficheiro", "Sticker a partir de um ficheiro local."],
+    ["enviar-documento-de-arquivo", "Documento por ficheiro", "Documento a partir de um ficheiro local."],
+    ["enviar-imagem-de-buffer", "Imagem por buffer", "Imagem a partir de um buffer."],
+    ["enviar-video-de-buffer", "Vídeo por buffer", "Vídeo a partir de um buffer."],
+    ["enviar-audio-de-buffer", "Áudio por buffer", "Áudio a partir de um buffer."],
+    ["enviar-gif-de-buffer", "GIF por buffer", "GIF a partir de um buffer."],
+    ["enviar-sticker-de-buffer", "Sticker por buffer", "Sticker a partir de um buffer."],
+    ["enviar-documento-de-buffer", "Documento por buffer", "Documento a partir de um buffer."],
+    ["funcoes-grupo", "Funções de grupo", "Funções utilitárias de grupo."],
+    ["obter-dados-grupo", "Dados do grupo", "Informações detalhadas do grupo."],
+    ["raw-message", "Mensagem bruta", "Dados brutos da mensagem."],
+    ["exemplos-de-mensagens", "Lista de exemplos", "Lista todos os exemplos disponíveis."],
+  ].map(([comando, titulo, descricao]) =>
+    entry("dev", comando, comando, {
+      titulo,
+      icone: "🧑‍💻",
+      descricao,
+      guia: "Não precisa enviar nada.",
+      aceita: "nenhum",
+      exemplo: "",
+    }),
+  ),
+  ...[
+    ["enviar-texto-colorido", "Texto colorido", "Texto colorido em Rich Response."],
+  ].map(([comando, titulo, descricao]) =>
+    entry("dev", comando, comando, {
+      titulo,
+      icone: "🧑‍💻",
+      descricao,
+      guia: "Envie o texto a colorir.",
+      aceita: "texto",
+      exemplo: "Olá mundo",
+    }),
+  ),
+  entry("dev", "exemplo-gatilho", "exemplo-gatilho", {
+    titulo: "Botão que acionou",
+    icone: "🧑‍💻",
+    descricao: "Mostra qual botão ou item de lista acionou o comando.",
+    guia: "Envie qualquer texto para ver o gatilho.",
+    aceita: "texto",
+    exemplo: "teste",
+  }),
+  entry("dev", "obter-metadados-mensagem", "obter-metadados-mensagem", {
+    titulo: "Metadados da mensagem",
+    icone: "🧑‍💻",
+    descricao: "Informações detalhadas da mensagem atual ou citada.",
+    guia: "Envie a mensagem a analisar.",
+    aceita: "texto",
+    exemplo: "olá",
   }),
 ];
 

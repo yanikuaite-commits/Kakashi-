@@ -159,24 +159,29 @@ test("comando envia vídeo e apaga temporário mesmo com erro de envio", async (
   const messages = [];
   const sock = { sendMessage: async (_jid, data) => {
     messages.push(data);
-    if (data.video) assert.equal(await readFile(data.video.url, "utf8"), "media-content");
+    if (data.video) {
+      // O envio é por stream (`{ stream }`), não por caminho: ler o ficheiro
+      // pelo `stream.path` confirma o conteúdo sem consumir o stream.
+      assert.equal(await readFile(data.video.stream.path, "utf8"), "media-content");
+    }
   } };
   const message = { key: { remoteJid: "group@g.us" } };
   await command.handle({ socket: sock, webMessage: message, fullArgs: `${baseUrl}/source` });
   // Primeiro vem o aviso de download no molde único (com rodapé), depois o vídeo.
   assert.match(messages[0].text, /┌─〔 ⏳ .*CARREGANDO/);
-  assert.ok(messages[0].text.endsWith("© Made by Yanik Uaite"));
+  assert.ok(messages[0].text.endsWith("✦ Constelado por Yanik Uaite ✦"));
   const videoMessage = messages.find((data) => data.video);
   assert.ok(videoMessage, "o comando deve enviar o vídeo baixado");
   assert.equal(mediaRequests.at(-1), "/video?quality=720");
-  await assert.rejects(stat(videoMessage.video.url), { code: "ENOENT" });
+  const videoPath = videoMessage.video.stream.path;
+  await assert.rejects(stat(videoPath), { code: "ENOENT" });
 
   await handleDownload({ sendMessage: async (_jid, data) => {
     if (data.video) throw new Error("Falha WhatsApp");
     messages.push(data);
   } }, message, [`${baseUrl}/source`]);
   assert.match(messages.at(-1).text, /Falha WhatsApp/);
-  assert.equal((await readdir(dirname(videoMessage.video.url))).length, 0);
+  assert.equal((await readdir(dirname(videoPath))).length, 0);
 });
 
 test("erro da API, formato inválido e limite geram mensagens úteis", async () => {

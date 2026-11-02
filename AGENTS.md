@@ -73,11 +73,9 @@ High-value architectural notes:
 | `src/@types/index.d.ts` | Typing and documentation for command and middleware props. |
 | `src/services/spider-x-api.js` | Spider X integration for downloads, AI, Pinterest, Brat, and related endpoints. |
 | `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
-| `src/services/anime.js` | Anime search, episodes, streaming sources and the episode-level provider fallback. |
-| `src/services/animegg.js` | AnimeGG provider: search, episodes and 480p MP4 sources (no browser). |
-| `src/services/anitube.js` | AniTube provider: WordPress REST search, plus HLS and Blogger sources. |
-| `src/services/meusanimes.js` | Meus Animes provider (default): WordPress search, seasons, and Blogger sources via the player API. |
-| `src/services/bloggerVideo.js` | Blogger/Google Video reader shared by the PT-BR providers (iframe, token, itags). |
+| `src/services/anime.js` | Anime service layer over the single source: search, episodes, streaming sources. |
+| `src/services/meusanimes.js` | Single anime source: WordPress search, seasons, and Blogger sources via the player API. |
+| `src/services/bloggerVideo.js` | Blogger/Google Video reader (iframe, token, itags) used by `meusanimes`. |
 | `src/services/megacine.js` | Megacine scraper: series/dorama search (films filtered out), seasons, episodes and the m3u8 stream. |
 | `src/utils/megacineMenu.js` | Interactive Megacine flow: title → seasons → episodes → download. |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
@@ -285,6 +283,28 @@ repository paths, so a host that mounts its volume at `/data` only needs
 - `shouldBackupNow()` and `backupIntervalMs()` are pure and exported for tests,
   and `startBackupScheduler({ runBackup })` takes an injectable runner, so the
   scheduling is exercised without uploading anything to GitHub
+
+## MESSAGE_THEME
+
+`src/utils/formatMessage.js` is the single template every command reply goes
+through: `formatMessage({ icone, titulo, campos })` builds the framed body,
+`ensureFrame` keeps an already-framed body from being framed twice, and
+`RODAPE` is the footer. `moderationMessage` is the thin wrapper the moderation
+commands use.
+
+- the theme is **"I · Galáxia"**: a cosmic header (`☄️ · ✦ · ˚ ✧ · ☾`), the
+  `┌─〔 icone *KAKASHI BOT • TITULO* 〕─┐` frame and the footer
+  `✦ Constelado por Yanik Uaite ✦`
+- `src/utils/mainMenu.js` builds the main card body with the same theme
+  (`╭──────── 🪐 ────────╮`), so the menu and the replies do not drift apart
+- changing the footer means changing it in ONE place (`RODAPE`), but the tests
+  assert the literal string in several files (`menu.test.js`,
+  `mainMenu.test.js`, `youtubeSearch.test.js`, `genDownloader.test.js`,
+  `animeMenu.test.js`), so a footer change has to update those assertions too
+- the image caption of a submenu is the same text as the frame, and WhatsApp
+  caps a caption at 1024 characters. `menuMessage` (`src/menu.js`) drops the
+  per-command hints first, then truncates with a pointer back to `.menu`, so
+  the large `dono`/`dev` categories still fit. `menu.test.js` asserts the limit
 
 ## TABLES_AND_PRICING
 
@@ -581,6 +601,17 @@ Registry rules (`src/interactive/menuRegistry.js`):
   "um texto válido" even when it refused a non-LID
 - the card's shortcut line shows the full command, including `args`
 
+Category coverage:
+
+- every category listed in `MENU_CATEGORIES` (`src/menu.js`) MUST have at least
+  one entry, or it opens empty. `cinema` used to be exactly that: the card
+  existed and the `megacine` entry did not
+- `dev` (`Desenvolvedor`, 🧑‍💻) holds the 39 `enviar-*` examples and is
+  `restrita: "owner"` — they are developer samples, not member features
+- `menuRegistry.test.js` guards all of it: every entry must resolve to a real
+  command, no category may be empty, and every function needs `titulo`,
+  `descricao` and `guia`
+
 Owner category (`dono`) rules:
 
 - adding someone to the private whitelist is a guided flow: the owner picks the
@@ -679,7 +710,7 @@ the GenDownload API when the binary is missing or the extraction fails.
 - configuration lives in `src/config.js` under the `YTDLP_*` constants (`ENABLED`, `PATH`, `TIMEOUT_MS`, `COOKIES_PATH`, `PROXY`, `JS_RUNTIME`, `IMPERSONATE`, `EXTRACTOR_ARGS`, `CONCURRENT_FRAGMENTS`)
 - `YTDLP_ENABLED=false` disables it entirely; nothing breaks without the binary
 - `YTDLP_TIMEOUT_MS` caps a single yt-dlp run (default 30 min). It used to be 5 min, which killed long downloads mid-flight: a 24 min episode at 480p (~95 MB) can take ~7 min on a slow host, and the kill is silent — `execFile` sends SIGTERM, so stderr is empty and the raw `Command failed: <full command>` (signed CDN URL included) was what reached the user. It was raised to 15 min and then to 30 min, to match the 500 MB ceiling. `friendlyError` recognises `killed`+`SIGTERM` and reports the timeout, and falls back to a generic text instead of echoing the command when stderr is empty
-- `YTDLP_CONCURRENT_FRAGMENTS` sets the yt-dlp `-N` (default 4). CDNs that rate-limit parallel requests (the anime CDN answers 429) need `1`, otherwise yt-dlp drops fragments and fails with `No such file ...-FragN`; the anime flow forces `1` for `anikoto`
+- `YTDLP_CONCURRENT_FRAGMENTS` sets the yt-dlp `-N` (default 4). CDNs that rate-limit parallel requests need `1`, otherwise yt-dlp drops fragments and fails with `No such file ...-FragN`
 - YouTube blocks datacenter IPs with "Sign in to confirm you're not a bot"; the fix is cookies or a residential proxy, never a flag
 
 Media sending must stream, never buffer: use `mediaUploadFromFile()` from
@@ -695,388 +726,130 @@ Sent files carry the search title, not a fixed name: build it with
 file. Only documents can be named — the WhatsApp `VideoMessage` proto has no
 filename field, so a video sent as video carries no name at all.
 
-### Animes (meusanimes + animegg + anitube + animeheaven + animesonlinehd + anikoto + providers via @consumet/extensions)
+### Animes (fonte única: meusanimes)
 
-`src/services/anime.js` searches a live provider, lists episodes and returns
-streaming sources; `src/services/animegg.js`, `src/services/anitube.js`,
-`src/services/anikoto.js`, `src/services/animeheaven.js`,
-`src/services/animesonlinehd.js` and `src/services/meusanimes.js` are the
-in-house
-providers; `src/utils/animeMenu.js` runs the interactive flow
-(nome → temporadas → episódios → qualidade → download) and
-`src/utils/animeFormat.js` holds the pure helpers.
+`src/services/anime.js` é a camada de serviço sobre a **fonte única**
+`src/services/meusanimes.js`; `src/utils/animeMenu.js` corre o fluxo interativo
+(nome → faixa → pesquisa → temporadas → episódios → qualidade → download) e
+`src/utils/animeFormat.js` guarda os helpers puros. `src/services/bloggerVideo.js`
+lê os degraus (360p/720p) do CDN do Blogger, que é o que o `meusanimes` publica.
 
-- **`animegg`, `anitube`, `anikoto`, `animeheaven`, `animesonlinehd` and
-  `meusanimes` are the
-  providers that work from a datacenter IP.** All are scraped by the bot itself, not by the
-  library, because every `@consumet/extensions` anime provider sits behind
-  Cloudflare and/or is dead. The anikoto chain is: `/filter?keyword=` → `/ajax/episode/list/<id>` →
-  `/ajax/server/list?servers=<data-ids>` → `/ajax/server?get=<link>&sv=<sv>` →
-  the megaplay player → `/stream/getSources?id=<mediaid>`; the m3u8 comes in the
-  `enc` field, AES-256-CBC encrypted with a key/IV hardcoded in the player's JS
-  (`MEGAPLAY_KEY`/`MEGAPLAY_IV` in `src/services/anikoto.js` — public constants,
-  not our secret)
-- the anikoto `Referer` must be the watch page or the site answers "bad request";
-  episode ids therefore carry `<slug>::<epId>::<dataIds>`, and the anime id
-  carries `<numId>:<slug>`, so every later step has what it needs without state
-- **seasons are separate entries on the site, not a field.** A title like
-  Attack on Titan is 6 different animes (own slug and id); `api/seasons/<id>`
-  only groups them. Without the season step, picking a season showed the
-  episodes of the first one. The flow lists the group only when it has 2+
-  entries (`getAnimeSeasons` → `[]` means "skip straight to episodes", as
-  before). The numeric id the episode endpoint needs (`data-anime-id`) is read
-  from the season's watch page in `seasonEpisodes`, so the session stores only
-  the short slug
-- the anikoto CDN (`fetch.nexabloom.top`) passes a **Cloudflare challenge** on
-  the m3u8 fetch. `src/utils/animeMenu.js` (`animeDownloadArgs`) adds
-  `--extractor-args generic:impersonate` and `--referer https://megaplay.buzz/`
-  to the yt-dlp call; `downloadWithYtDlp` accepts `extraArgs` for that. Without
-  impersonation (which needs the standalone binary's `curl_cffi`) the download
-  fails with HTTP 403
-- **`animeheaven` serves a direct 720p MP4 (~112–164 MB), inside the 500 MB
-  send limit, so it is not capped to 480p.** The chain is: `/search.php?s=<termo>`
-  → `/anime.php?<id>` (each
-  episode carries a 32-hex hash) → `/gate.php` with the `key=<hash>` cookie,
-  which returns the `<source>` mirrors. `/gate.php` without the cookie answers
-  404 — the hash *is* the credential, which is why `sources` takes the hash and
-  not a numeric id
-- **not every `<source>` on AnimeHeaven is the episode.** `ax` always serves a
-  ~3.7 s trailer (88 KB) and `ct`/`ck` answer 0 bytes/error; yt-dlp cannot tell
-  them apart (the URL is `video.mp4` with no metadata), so the mirror is chosen
-  in `escolherMirror` by `Content-Length` — the only honest signal. The good
-  mirrors vary per title (`rx`, `co`, `cy`, `ci`, `sr`, `rt`, `cx`, `cz`, ...),
-  so the choice is by size, not by a fixed list. `animeheaven` returns an object
-  (`{url, quality: "720p", isM3U8: false}`) instead of a bare URL string, which
-  is why `getEpisodeSources` accepts both shapes: assuming HLS for a direct MP4
-  printed the wrong quality label
-- `ANIME_HEAVEN_MAX_HEIGHT` (default 720) is the AnimeHeaven ceiling: the
-  episode already fits the 500 MB limit, so forcing 480p would only degrade the
-  image for nothing. `ANIME_MAX_HEIGHT` (480) still applies to anikoto, whose
-  master.m3u8 carries a single 1080p variant
-- **`meusanimes` is the first provider** (`meusanimes.blog`). It answers from a
-  datacenter IP with **no Cloudflare challenge at all**, groups seasons on the
-  anime page and serves the episode through the same Blogger player the other
-  PT-BR providers use, so `src/services/bloggerVideo.js` is reused as-is. The
-  chain is: `/?s=<termo>` → `/a/<slug>/` (the `id='seasons'` block holds every
-  season and its episodes) → `/e/<ep-slug>/` (an iframe
+- **o `meusanimes` (`meusanimes.blog`) é a única fonte.** Responde de um IP de
+  datacenter **sem desafio Cloudflare**, agrupa temporadas na página do anime e
+  serve o episódio pelo player do Blogger. A cadeia é: `/?s=<termo>` →
+  `/a/<slug>/` (o bloco `id='seasons'` traz todas as temporadas e os episódios)
+  → `/e/<ep-slug>/` (um iframe
   `serv01.meusdoramas.club/#/video/<tmdb>/<season>/<episode>`) →
   `serv01.meusdoramas.club/posts/get-video.php?episode_number=&season_number=&tmdb=`
-  → `{success, videoUrl}` with a Blogger link → the direct `googlevideo.com` URL.
-  The player is a React SPA on another domain, and the real endpoint is
-  `posts/get-video.php` — the obvious `api/video/...` paths answer 404. The
-  `get-video.php` response is identical **with and without cookies** (the site's
-  `starstruck_...` cookie is session only), so the provider keeps no state: the
-  `tmdb`/season/episode triple travels inside the episode id
-- **the dubbed track is a separate ENTRY here** (`/a/<base>-dublado/`), not a
-  second id like in `animesonlinehd`. The suffix is the site's convention but not
-  a guarantee — `naruto-shippuden` serves a dub with no suffix — so the real
-  track is confirmed on the FIRST episode's page (`span.qualidade` says
-  "Dublado" or "Legendado") before the whole list is labelled. Without that check
-  the provider could call a dubbed episode "legendado", which is the exact bug
-  the audio flow exists to fix. `candidatosDeSlug` orders the entries to try; the
-  audio step also reaches `seasons()`, because the season index is only valid
-  inside the entry it was read from
-- it publishes itag 18 (360p, ~89 MB for a 23 min episode, inside the ceiling)
-  and itag 22 (720p, ~285 MB, inside the 500 MB limit) as separate sources, so
-  the quality menu offers both and the size rule decides what can be sent.
-  **Not every episode carries both**: older episodes often publish 360p only, so
-  a one-item quality list is normal, not a failure
-- **the real end-to-end chain was verified**: episode page → `get-video.php` →
-  Blogger token → `googlevideo.com` bytes, with `206`, `video/mp4` and a valid
-  `ftyp` header, and yt-dlp downloading the file. Search relevance matches or
-  beats `animesonlinehd` on the same terms; like every romaji-indexed PT-BR site,
-  an English term can still land on a spin-off (`attack on titan` → the Junior
-  High), which is the pre-existing `melhorResultado` limitation
-- **`animesonlinehd` and `anitube` are the providers whose "dubbed" track is
-  PT-BR** (`ANIME_PT_DUB_PROVIDERS` in `src/config.js`), together with
-  `meusanimes`. The track is a boolean
-  on the site ("dubbed" or not), but the LANGUAGE of that dub belongs to the
-  SITE: `animegg` is an English site, so its "Dubbed" is an English dub. Without
-  the distinction, asking for "Dublado" could hand back English audio with a
-  Portuguese label. `animesonlinehd` is a
-  Next.js frontend over a WordPress backend (`animesonline.blue`), and the
-  `/anime/<slug>` page carries the whole catalogue in the RSC payload
-  (`self.__next_f.push`), so one page gives every season and both audio tracks —
-  the WordPress REST API needs auth (401) and is not used. **The RSC payload only
-  comes back when the request carries the `RSC: 1` header**; without it the
-  server answers the shell HTML with `"episodes":[]` and no season, so the
-  provider reports "no episodes" and the `dub`/`leg` ids never appear. The chain is:
-  `/api/search?q=` → `/anime/<slug>` → `/api/episodio/<id>` (returns `tipo` plus
-  a Blogger `playerUrl`) → the Blogger page → the direct `googlevideo.com`
-  URL. `yt-dlp`'s blogger extractor fails on this format ("Unable to extract
-  JSON data"), so the URL is parsed here and yt-dlp gets it directly
-- **each episode carries separate `leg` and `dub` ids**, which is why the audio
-  step is a real choice here: picking "Dublado" swaps the episode id, not just a
-  label. `getAnimeInfo`/`getSeasonEpisodes`/`episodes` therefore take the
-  `audioVersion`, and `animeMenu.js` loads the list with the track the user
-  already chose (reloading it only on the post-list path).
-  An episode that does not publish the requested track is dropped rather than
-  falling back — serving the wrong audio is the exact bug this provider fixes.
-  With no explicit choice the dubbed id wins (`ANIME_PREFER_DUBBED`), falling back
-  to subtitled only when the episode has no dubbing
-- the Blogger CDN serves itag 18 (360p, ~75 MB for a 24 min episode) and itag 22
-  (720p, ~219 MB). Both tiers are inside the 500 MB ceiling, so the quality menu
-  offers both and the size rule decides what can be sent. The CDN requires the Blogger `Referer` **and** a browser
-  `User-Agent`: without the User-Agent it answers 403 even with the right
-  Referer, which is why `animeDownloadArgs` sets both
-- **the real end-to-end download was verified**: Kaiju Girls ep. 1 resolved
-  through `animesonlinehd` and downloaded with yt-dlp to a 14.8 MB MP4, well
-  inside the 500 MB ceiling. The 360p/720p sizes above come from longer episodes
-  (24 min); a short episode is much smaller
-- the library providers remain as fallback; extraction runs **in-process**
-  through `@consumet/extensions`, with no Consumet server and no self-hosting.
-  The public `api.consumet.org` instance was shut down (HTTP 451) and the HiAnime
-  provider (ex-Zoro) shut down for good in March 2026
-- `ANIME_PROVIDERS` (`src/config.js`) is a comma-separated preference list.
-  **The default is `meusanimes` only** — every other provider is implemented and
-  registered but deliberately DISABLED for now, so the flow depends on a single
-  source and failures are attributable. Re-enabling is just adding names to the
-  list (or to the `ANIME_PROVIDERS` env var); no code changes are needed. The
-  in-house names are `meusanimes`, `animesonlinehd`, `animegg`, `anitube`,
-  `animeheaven`, `anikoto`; each
-  provider
-  is tried
-  until one returns the episode, and the winning provider is carried in the
-  session so `getAnimeInfo`/`getEpisodeSources` hit the same source. With a dub
-  requested the list is reordered so the PT-BR sites come first — see
-  `ANIME_PT_DUB_PROVIDERS` below
-- **the fallback happens at the EPISODE level, not only at search time.** The
-  episode id is internal to the site that listed it, so when a provider has no
-  video for one episode, `getEpisodeSourcesWithFallback` (`src/services/anime.js`)
-  re-finds that same episode in the next providers by title + episode number and
-  returns the winning provider and the new id. `src/utils/animeMenu.js` writes
-  both back to the session, because the yt-dlp args and the max height depend on
-  the provider. If the number does not exist in a provider, it returns null
-  instead of risking the wrong episode.
-- **a message from anyone but the menu owner is ignored in SILENCE.** Every
-  non-owner message used to get "não foste tu que pediste o menu" back, so any
-  group chatter while a menu was open turned into a bot reply. Now
-  `handleAnimeReply` returns `false` for a non-owner (the message goes on to the
-  normal flow) and the session keeps waiting for its owner; an expired token is
-  still answered, because that one carries no session to wait for.
-- **AnimeGG (`animegg.org`) is the first fallback after `meusanimes`: no
-  browser, H.264 (`avc1`), and it fails on roughly one episode in eight — which is
-  exactly why the episode-level fallback exists.** The chain is plain `fetch` + regex, no
-  Playwright:
-  `/search/?q=` → `href="/series/<slug>"` → `/<slug>-episode-<n>` →
-  `/embed/<id>` → the inline
-  `var videoSources = [{file: "/play/<id>/video.mp4?for=<n>", label: "480p"}, …]`
-  → that path answers 302 to `s<n>.vidcache.net:8166/play/<token>/video.mp4`,
-  which yt-dlp downloads with only `--referer https://www.animegg.org/` (no
-  cookies needed).
-  - the embed link lives in `<iframe src="/embed/<id>">`, not in an `href`; the
-    regex accepts both.
-  - **the episode page carries one tab per audio track, and the `subbed` tab
-    comes FIRST — so "the first embed" was always the subtitled one.**
-    `escolherEmbed` now reads `data-version` next to `data-id` and picks the
-    requested track instead:
-    `<li><a href="#subbed-Animegg" data-version="subbed" data-id='27657'>` and
-    `<li><a href="#dubbed-Animegg" data-version="dubbed" data-id='27658'>`.
-    Without a requested track it keeps the old "first embed" behaviour, which is
-    the only option for pages with no identified tabs.
-  - the series page marks the track per episode with its own fragment
-    (`/<slug>-episode-<n>#subbed` / `#dubbed`), and `parseEpisodeVersions` reads
-    it. Coverage is uneven: on One Piece, 583 episodes have both tracks, 578 are
-    subbed-only and 1 is dubbed-only (1156) — which is why the menu only offers
-    the choice when the WHOLE list has both tracks.
-  - `videoSources` already carries the `label` (`360p`/`480p`/`720p`), so the
-    quality is known without a `HEAD` per entry. The size still has to be
-    measured: a 24 min episode was 31 MB at 360p, 80 MB at 480p and **201 MB at
-    720p**. `escolherDegrau` measures each tier and prefers `ANIME_GG_MAX_HEIGHT`
-    (480p) to save bandwidth, falling back to the tier below before the one above.
-  - an entry may carry a `bk` field: a base64-encoded mp4upload embed that acts
-    as a backup mirror.
-  - **`var videoSources = []` is the failure mode, and it is persistent, not
-    transient** — the same episode repeats empty across retries, so retrying the
-    embed does not help. Measured over 40 episodes across 10 series: 35 (88%)
-    served a source, 5 (13%) were empty (e.g. `kaijuu-8-gou-episode-1`,
-    `dungeon-meshi-episode-24`, `kimetsu-no-yaiba-episode-52`). A slug may also
-    need a suffix (`jujutsu-kaisen-tv`, not `jujutsu-kaisen`), which is why the
-    slug must come from `/search/?q=` and never be guessed from the title.
-- **AniTube (`anitube.zip`) is a WordPress site, so search uses the native REST
-  API** (`/wp-json/wp/v2/posts?search=`) instead of HTML scraping. It serves
-  H.264 (`avc1`), which WhatsApp plays.
-  - **the site serves the episode in TWO formats and both must be read**, since
-    old and new posts differ. `sources()` tries the old HLS first (it is already
-    in the page HTML and needs no extra request) and falls back to the Blogger
-    chain:
-    - **old HLS**: the player iframe is `api.anivideo.net/videohls.php?d=<m3u8>`
-      — the `d` parameter is the URL to download, and `parseVideoHls` reads it
-      BEFORE any bare `.m3u8` match, because the player URL also contains
-      `.m3u8` and downloading the player returns HTML.
-    - **Blogger (new)**: the iframe is `api.anivideo.net/file/<token>`, whose
-      HTML carries a `blogger.com/video.g?token=` token; that page publishes the
-      Google Video `videoplayback` (itag 18 = 360p, itag 22 = 720p). **This is
-      the format of every recent episode.** The reader lives in
-      `src/services/bloggerVideo.js`, shared with `animesonlinehd`, which uses
-      the same player.
-    - **before the Blogger path existed, every recent episode failed with
-      "Nenhum link de streaming encontrado"** — the site stopped publishing any
-      m3u8 and the old reader looked only for that.
-  - **size differs per format**: on Blogger a 24 min episode is ~64 MB at 360p
-    and ~162 MB at 720p, both inside the ceiling, so both tiers are offered. On
-    the old HLS there is only one tier at 720p (~257 MB), so that path still
-    measures the playlist before downloading and lets the fallback move on.
-  - **the download headers depend on the format**: the old HLS needs the
-    AniTube `Referer`, while the Blogger MP4 needs the Blogger `Referer` and a
-    browser `User-Agent` (without the UA the Google Video CDN answers 403). That
-    is why `animeDownloadArgs` receives the chosen source.
-  - Series are reconstructed by the title minus the episode suffix, and
-    "dublado"/"legendado" is kept in the key because they are separate posts of
-    the same anime.
-  - the audio track comes from the title (`versaoDoTitulo`) and is carried on the
-    episode, so the menu can offer the choice here too. Naruto Shippuden is the
-    real case: `naruto-shippuden-dublado` (500 dubbed episodes) and
-    `naruto-shippuden` (98 subbed) are two different series.
-  - **because the dubbed episode is a DIFFERENT post, the fallback must match the
-    track as well as the number.** Looking up only by episode number would
-    happily return the subtitled post for a user who asked for dubbed, so
-    `fontesDoProvider` filters the candidates by track (`escolherEpisodio`).
-  - **the title that comes out of a provider carries that site's own suffix**
-    ("Jujutsu Kaisen (TV)" from AnimeGG, "Naruto Shippuden (Dublado)" from
-    AniTube). Searching it literally in the NEXT provider returns 0 results, so
-    every episode ended up in the last provider (anikoto), even when the earlier
-    ones had it. `tituloDeBusca` (`src/utils/animeFormat.js`) strips the suffix
-    before `searchAnime` and `fontesDoProvider` search, falling back to the
-    original term when the stripped one returns nothing. Measured effect:
-    "Jujutsu Kaisen (TV)" went from anikoto to animeheaven/anitube.
-  - **the first search result is not always the requested title.** AnimeGG
-    answers "One Piece" with "One Piece: Episode of Merry" (a 1-episode special)
-    first; `melhorResultado` prefers the exact title match, so the series wins.
-  - **dubbed is preferred when the user did not choose.** `ANIME_PREFER_DUBBED`
-    (default true) makes `escolherEpisodio` pick the dubbed track among the
-    candidates; an explicit menu choice still wins, and an episode with no
-    dubbing still falls back to subtitled instead of failing.
-  - because the playlist carries no `Content-Length`, the size is estimated by
-    sampling 5 segments and multiplying by the segment count. Measuring only the
-    first segment overestimates ~2.5x (the first carries the header at 4.7 MB,
-    the last drops to 0.1 MB); sampling gives 266 MB against 257 MB measured.
-    Without this check the user would only find out after downloading it all, so
-    the provider rejects the episode and the fallback moves on.
-  - the segments are MPEG-TS disguised with a `.webp` extension, so a downloaded
-    file needs a remux to MP4 before it can be sent.
-- **anime7 (`anime7.net`) works without a browser too, but serves AV1
-  (`av01`), which WhatsApp cannot play.** Its catalogue is 4423 animes and
-  ~59 k episodes, readable from `sitemap.xml` → `sitemap/animes.xml` +
-  `sitemap/episodes-{1,2}.xml` (one request per file, ~30 s total). The
-  `mp4upload` embed answers the direct MP4 in the raw HTML
-  (`https://a<n>.mp4upload.com:183/d/<token>/video.mp4`). Kept as reference
-  only; do not wire it as a provider while the codec is AV1.
-- animesonline.cloud exposes the MP4 in the raw HTML but its CDN
-  (`mangas.cloud`) answers 403 to every request — it needs its own
-  `cf_clearance`, so it is not usable from the bot.
-- the returned link is an m3u8/mp4 that yt-dlp downloads; HLS sources are
-  preferred over DASH because some `.mpd` files from these sites ship without an
-  audio track
-- these sites change domain and die without notice, so a provider that works
-  today may need replacing tomorrow: fix by editing `ANIME_PROVIDERS`, never by
-  hardcoding a domain in a command
-- **the library sites sit behind Cloudflare, and the library sends no
-  `User-Agent`** (axios defaults to `axios/1.x`), which Cloudflare blocks from
-  datacenter IPs. This is the same class of block as YouTube's
-  "confirm you're not a bot". `ANIME_USER_AGENT` / `ANIME_ACCEPT_LANGUAGE`
-  (`src/config.js`) are applied to each library provider's HTTP client in
-  `applyProviderClient`; without them search fails with "nenhuma fonte respondeu"
-  even while the site is up. If the host IP is challenged even with browser
-  headers, set `ANIME_PROXY_URL` to a residential HTTP proxy
-- a provider failing does not abort the flow: each error is logged with its
-  reason and the next provider is tried, so `assets/temp/wa-logs.txt` tells you
-  exactly which provider failed and why
-- list rows carry only indices (`anm:ep:<i>` / `anm:src:<i>`); the real
-  (long, signed) stream URLs stay in the session, because WhatsApp drops
-  oversized `rowId`s
-- **a search with no exact match asks the user instead of guessing.** The flow
-  used to fall back to the provider's FIRST result, so "Meu Hero Academia" served
-  "Eiyuu Kyoushitsu" — a different anime — with no warning. `searchAnimeCandidates`
-  now returns `{anime: null, candidatos}` when nothing matches exactly, and the
-  menu shows a candidate list (`anm:an:<i>`). `searchAnime` keeps the old
-  first-result behaviour for any other caller. The comparison is
-  `correspondenciaExata`, which ignores the suffixes only the site uses
-  ("Black Clover" matches "Black Clover Dublado")
-- **translation is the last resort, never the first step** (`TRANSLATE_ENABLED`,
-  `src/services/translate.js`). The original term is searched first, because
-  `meusanimes` already indexes many PT aliases ("Ataque dos Titãs" → "Shingeki No
-  Kyojin"); only when that has no exact match is the term translated and searched
-  again. A translation that returns the same text is discarded, and any failure
-  (no network, HTTP error) returns `null` so the download proceeds with the
-  original term — translation can never block a download
-- **a candidate list carries the cover in the interactive header** (`image` +
-  `interactiveButtons`). The carousel (`cards`) cannot be used here: it OVERWRITES
-  `interactiveButtons` in `generateWAMessageContent`, and without the list the user
-  cannot pick. Covers come from `capaEmTamanhoGrande`, which strips the WordPress
-  `-150x150` suffix (the thumbnail is unreadable in a card). Two Baileys details
-  matter: the body must be sent as `caption` (with `text` the header image is
-  dropped) and the carousel accepts a `buttons` field per slide
-- **the audio track is asked BEFORE the search, not before the episode list**
-  (`anm:aud:subbed` / `anm:aud:dubbed`). The user picks the track as soon as the
-  name is known, and the search then runs with it. Asking after the list meant a
-  title that only exists subtitled could never satisfy a request for a dub, and
-  the user only found out at the end — after the whole search — and had to
-  repeat the request. `session.pendingName` holds the name while the question is
-  on screen, and `chooseAudioVersion` branches on it: with a pending name it
-  starts the search, otherwise it reloads the existing list (the old path)
-- **the track is asked without touching the network, so it cannot be derived
-  from the list.** Both tracks are always offered; the source decides whether it
-  has them. `availableAudioVersions` (UNION of the per-episode `versions`) is
-  still used, but now only to CHECK the answer, never to decide whether to ask
-- **when the source does not have the requested track, the bot says so and falls
-  back to the one it has** (`carregarEpisodiosComFaixa`). Serving the other track
-  silently is the bug this flow exists to fix, so the user is told:
-  "⚠️ Esta fonte não tem dublado deste título. Vou mostrar legendado." The check
-  reads the PUBLISHED TRACKS of the returned list, not whether the call
-  succeeded: AnimeGG ignores the requested track and always returns the whole
-  list, so "a list came back" does not prove the track exists. A provider that
-  publishes no tracks at all (`[]`, AniKoto/AnimeHeaven) gets no warning, because
-  there is nothing to compare and a warning with an empty label is worse than
-  silence. AniTube DOES publish tracks (`versaoDoTitulo`, from the post title),
-  so it is checked like AnimeGG
-- **with "Dublado", the PT-BR providers are searched FIRST**
-  (`ordenarProvidersParaFaixa` in `src/utils/animeFormat.js`). The configured
-  order (`ANIME_PROVIDERS`) used to put the non-PT-BR sites ahead, so asking for
-  a dub could land on a site that only dubs in English while the PT-BR dub sat on
-  another site. The reorder happens in `searchAnime(nome, audioVersion)` and in
-  `getEpisodeSourcesWithFallback`, so both the first search and the per-episode
-  fallback look for PT-BR first; the non-PT-BR sites stay behind as a safety net
-  (a title that only exists there is still reachable). With no track requested
-  the list is untouched — reordering for a track nobody asked for would impose a
-  choice. When the dubbed track ends up coming from a non-PT-BR site,
-  `avisoIdiomaDublagem` says so instead of letting the user find out by ear, and
-  the card label is `Dublado (PT-BR)` only for the sites that really dub in
-  Portuguese (`audioTrackLabel`). With the current default (only the PT-BR
-  `meusanimes`) the reorder has nothing to move; it matters again once the other
-  sites are re-enabled
-- the track rule is a UNION, not an intersection: requiring every episode to have
-  both tracks looks safer but hides the choice almost always, because the series
-  page fragment only covers part of the list (One Piece has 583 episodes with
-  both, 577 subbed-only and 2 dubbed-only). An episode that lacks the chosen
-  track fails with a clear message, which beats never offering the choice
-- the chosen track is stored in `session.audioVersion` and travels as the third
-  argument of `getEpisodeSources(episodeId, provider, audioVersion)` down to
-  `provider.sources(episode, slug, audioVersion)`; providers that do not
-  distinguish tracks simply ignore it. The card shows it (`Dublado (PT-BR) ·
-  480p`) so the user can confirm what was sent
-- the fallback keeps the track: `fontesDoProvider` filters candidates by
-  `versions`, because in AniTube the dubbed episode is a different post and
-  matching on the number alone would silently hand back the subtitled one.
-  `searchWithEpisodes` (the AniTube fallback entry point) must also forward
-  `versions`, or the choice is lost on that path
-- the series-page fragment is trustworthy where it exists: sampled against the
-  real episode tabs on Naruto, One Piece, Bleach and Death Note, `#subbed`/
-  `#dubbed` always matched the tabs actually present. Where it is absent the
-  episode list has no track information and the flow behaves as before
-- episodes are listed 10 at a time (`anm:ep:<i>` uses the ABSOLUTE index) with a
-  single `anm:pg:<p>` "ver mais" row at the bottom for the rest, so the list
-  stays short and every episode is still reachable — WhatsApp drops oversized
-  lists, so "all at once" is not an option
-- size rule: `> 500 MB` cancels the send, `100–500 MB` sends as document,
-  `≤ 100 MB` sends as video — the document threshold is the same rule YouTube
-  uses (`decideYouTubeSend`), the 500 MB ceiling is anime-specific
-  (see `src/utils/mediaSend.js`)
-- resolution is fixed at `ANIME_MAX_HEIGHT` (480p): the provider's m3u8 carries
-  240p–1080p and, with no limit, yt-dlp picked 1080p and blew past the ceiling
-  (a 24 min episode is ~470 MB at 1080p vs ~70 MB at 480p). The quality
-  list picks the *source* (URL), not the final resolution
-
+  → `{success, videoUrl}` com um link do Blogger → o URL direto
+  `googlevideo.com`. O player é uma SPA React noutro domínio e o endpoint real é
+  `posts/get-video.php` — os caminhos óbvios `api/video/...` respondem 404. A
+  resposta do `get-video.php` é idêntica **com e sem cookies** (o cookie
+  `starstruck_...` do site é só de sessão), pelo que a fonte não guarda estado: a
+  tripla `tmdb`/temporada/episódio viaja dentro do id do episódio
+- **a faixa dublada é uma ENTRADA separada** (`/a/<base>-dublado/`). O sufixo é
+  convenção do site mas não garantia — `naruto-shippuden` serve um dub sem
+  sufixo —, por isso a faixa real é confirmada na página do PRIMEIRO episódio
+  (`span.qualidade` diz "Dublado" ou "Legendado") antes de a lista ser rotulada.
+  Sem essa confirmação a fonte podia chamar a um episódio dublado "legendado",
+  que é exatamente o defeito que o fluxo de áudio corrige. `candidatosDeSlug`
+  ordena as entradas a tentar; o passo de faixa também passa por `seasons()`,
+  porque o índice de temporada só é válido dentro da entrada onde foi lido
+- **a fonte publica o itag 18 (360p, ~89 MB num episódio de 23 min) e o itag 22
+  (720p, ~285 MB) como fontes distintas**, pelo que o menu de qualidade oferece
+  ambas e a regra de tamanho decide o que pode ser enviado. **Nem todo o episódio
+  traz as duas**: episódios antigos publicam só 360p, pelo que uma lista de
+  qualidade com um item é normal, não uma falha
+- **a cadeia real ponta-a-ponta foi verificada**: página do episódio →
+  `get-video.php` → token do Blogger → bytes do `googlevideo.com`, com `206`,
+  `video/mp4` e um cabeçalho `ftyp` válido, e o yt-dlp a descarregar o ficheiro.
+  Como todo o site PT-BR indexado em romaji, um termo em inglês pode ainda cair
+  num spin-off (`attack on titan` → o Junior High), que é uma limitação da
+  correspondência por título
+- **a faixa dublada desta fonte é PT-BR** (`ANIME_PT_DUB_PROVIDERS` em
+  `src/config.js`). A faixa é um booleano no site ("dubbed" ou não), mas o
+  IDIOMA dessa dublagem pertence ao SITE. Com a fonte única atual (um site
+  brasileiro) a lista só tem esse nome; o mecanismo mantém-se porque o rótulo do
+  card (`Dublado (PT-BR)`) e o aviso de idioma ainda o consultam
+- **os cabeçalhos do download são os do CDN do Blogger**: `Referer` do Blogger
+  **e** um `User-Agent` de browser. Sem o `User-Agent` o CDN responde 403 mesmo
+  com o `Referer` certo. É o que `animeDownloadArgs()` em `src/utils/animeMenu.js`
+  acrescenta à chamada do yt-dlp
+- **a faixa é perguntada ANTES da pesquisa, não antes da lista de episódios**
+  (`anm:aud:subbed` / `anm:aud:dubbed`). O utilizador escolhe a faixa assim que o
+  nome é conhecido e a pesquisa corre já com ela. Perguntar depois da lista
+  significava que um título que só existe legendado nunca podia satisfazer um
+  pedido de dublado, e o utilizador só o descobria no fim — depois de toda a
+  pesquisa — e tinha de repetir o pedido. `session.pendingName` guarda o nome
+  enquanto a pergunta está no ecrã, e `chooseAudioVersion` ramifica por ele: com
+  um nome pendente começa a pesquisa, senão recarrega a lista existente
+- **a faixa é perguntada sem tocar na rede, por isso não pode ser derivada da
+  lista.** As duas faixas são sempre oferecidas; a fonte decide se as tem.
+  `availableAudioVersions` (UNIÃO dos `versions` por episódio) ainda é usada, mas
+  agora só para CONFIRMAR a resposta, nunca para decidir se se pergunta
+- **quando a fonte não tem a faixa pedida, o bot diz e cai para a que tem**
+  (`carregarEpisodiosComFaixa`). Servir a outra faixa em silêncio é o defeito que
+  este fluxo existe para corrigir, pelo que o utilizador é avisado:
+  "⚠️ Esta fonte não tem dublado deste título. Vou mostrar legendado." A
+  verificação lê as FAIXAS PUBLICADAS da lista devolvida, não o sucesso da
+  chamada. Uma fonte que não publica faixa nenhuma (`[]`) não gera aviso, porque
+  não há nada a comparar e um aviso com rótulo vazio é pior do que o silêncio
+- **a regra da faixa é uma UNIÃO, não uma interseção**: exigir que todos os
+  episódios tivessem as duas faixas parece mais seguro mas esconde a escolha
+  quase sempre. Um episódio que não tem a faixa escolhida falha com uma mensagem
+  clara, o que é melhor do que nunca oferecer a escolha
+- a faixa escolhida é guardada em `session.audioVersion` e viaja como terceiro
+  argumento de `getEpisodeSources(episodeId, provider, audioVersion)`. O card
+  mostra-a (`Dublado (PT-BR) · 480p`) para o utilizador confirmar o que foi
+  enviado
+- **uma pesquisa sem correspondência exata pergunta ao utilizador em vez de
+  adivinhar.** O fluxo caía no PRIMEIRO resultado da fonte, pelo que "Meu Hero
+  Academia" servia "Eiyuu Kyoushitsu" — outro anime — sem aviso.
+  `searchAnimeCandidates` devolve `{anime: null, candidatos}` quando nada
+  corresponde exatamente, e o menu mostra uma lista de candidatos (`anm:an:<i>`).
+  `searchAnime` mantém o comportamento antigo (primeiro resultado) para os
+  outros chamadores. A comparação é `correspondenciaExata`, que ignora os
+  sufixos que só o site usa ("Black Clover" corresponde a "Black Clover Dublado")
+- **a tradução é o último recurso, nunca o primeiro passo**
+  (`TRANSLATE_ENABLED`, `src/services/translate.js`). O termo original é
+  pesquisado primeiro, porque o `meusanimes` já indexa muitos aliases PT
+  ("Ataque dos Titãs" → "Shingeki No Kyojin"); só quando não há correspondência
+  exata é que o termo é traduzido e pesquisado de novo. Uma tradução que devolve
+  o mesmo texto é descartada, e qualquer falha (sem rede, erro HTTP) devolve
+  `null` para o download seguir com o termo original — a tradução nunca pode
+  bloquear um download
+- **uma lista de candidatos leva a capa no cabeçalho interativo** (`image` +
+  `interactiveButtons`). O carrossel (`cards`) não pode ser usado aqui:
+  SOBREPÕE `interactiveButtons` no `generateWAMessageContent`, e sem a lista o
+  utilizador não consegue escolher. As capas vêm de `capaEmTamanhoGrande`, que
+  tira o sufixo WordPress `-150x150` (a miniatura é ilegível num card). Dois
+  detalhes do Baileys importam: o corpo tem de ser enviado como `caption` (com
+  `text` a imagem do cabeçalho é descartada)
+- **uma mensagem de quem não pediu o menu é ignorada em SILÊNCIO.** Antes, cada
+  mensagem de terceiros recebia "não foste tu que pediste o menu" de volta, pelo
+  que qualquer conversa do grupo com um menu aberto virava resposta do bot. Agora
+  `handleAnimeReply` devolve `false` para um não-dono (a mensagem segue o fluxo
+  normal) e a sessão continua à espera do dono; um token expirado é ainda
+  respondido, porque esse não tem sessão para esperar
+- os episódios são listados 10 de cada vez (`anm:ep:<i>` usa o índice ABSOLUTO)
+  com uma única linha `anm:pg:<p>` "ver mais" no fundo para o resto, para a lista
+  ficar curta e todos os episódios continuarem alcançáveis — o WhatsApp descarta
+  listas demasiado grandes, pelo que "tudo de uma vez" não é opção
+- as linhas das listas levam só índices (`anm:ep:<i>` / `anm:src:<i>`); os URLs
+  de stream reais (longos, assinados) ficam na sessão, porque o WhatsApp descarta
+  `rowId`s demasiado grandes
+- regra de tamanho: `> 500 MB` cancela o envio, `100–500 MB` envia como
+  documento, `≤ 100 MB` envia como vídeo — o limite de documento é a mesma regra
+  do YouTube (`decideYouTubeSend`), o teto de 500 MB é específico dos animes
+  (`ANIME_DOCUMENT_LIMIT_MB`, `src/utils/mediaSend.js`)
+- a resolução é fixada em `ANIME_MAX_HEIGHT` (480p): a fonte publica 360p e
+  720p, e fixar 480p mantém o episódio leve. A lista de qualidade escolhe a
+  *fonte* (URL), não a resolução final
+- o `yt-dlp` descarrega o m3u8/mp4 devolvido; o timeout de uma execução é
+  `YTDLP_TIMEOUT_MS` (default 30 min) e o teto de cancelamento é o mesmo
+  `ANIME_DOCUMENT_LIMIT_MB` (500 MB)
+- se um dia for preciso reabrir outra fonte, o ponto de entrada é `FONTE` em
+  `src/services/anime.js`; nunca hardcode um domínio dentro de um comando
 ### Megacine (séries + doramas + animes episódicos)
 
 `src/services/megacine.js` scrapes `megacine.online` directly; `src/utils/megacineMenu.js`

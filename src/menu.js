@@ -1,6 +1,6 @@
 import { DAILY_FREE_CREDITS } from "./config.js";
 import { getPrefix } from "./utils/database.js";
-import { formatMessage } from "./utils/formatMessage.js";
+import { RODAPE, formatMessage } from "./utils/formatMessage.js";
 import { formatCommand } from "./utils/index.js";
 import { numberedFallback } from "./utils/interactive.js";
 
@@ -67,7 +67,7 @@ export const MENU_CATEGORIES = [
   },
   {
     key: "anime", label: "Animes", icon: "🍿", aliases: ["canime", "animes"],
-    intro: "Animes via providers vivos (animeunity, animepahe, ...). Baixa com yt-dlp.",
+    intro: "Animes pelo Meus Animes. Baixa com yt-dlp.",
     commands: [
       ["anime <nome>", "escolha episódio e qualidade"],
     ],
@@ -126,26 +126,55 @@ export const MENU_CATEGORIES = [
       ["conta custos", "tabela de custos por função"],
       ["pagamento", "números de e-mola e m-pesa"],
       ["tabela", "tabelas de preços (planos e créditos)"],
+      ["tabela-dias", "planos por dias"],
+      ["tabela-creditos", "pacotes de créditos"],
+      ["help", "ajuda sobre comandos e créditos"],
     ],
   },
   {
     key: "dono", label: "Dono", icon: "👑", aliases: ["cdono", "owner"],
     commands: [
+      ["painel", "painel de administração (abas)"],
       ["bot-on"], ["bot-off"], ["bot-status"],
+      ["on"], ["off"], ["exec <comando>"],
       ["backup", "dados (a sessão só com backup sessao)"],
       ["restore", "dados (a sessão só com restore sessao)"],
       ["delete-backup", "apaga o backup do GitHub"], ["get-group-id"],
+      ["recarga-confirmar <id> [créditos]", "confirmar um pagamento"],
+      ["recarga-recusar <id>", "recusar um pagamento"],
+      ["recargas-pendentes", "pagamentos à espera"],
       ["recarregar <créditos> @usuario", "adicionar créditos após pagamento"],
       ["remover-creditos <créditos|tudo> @usuario", "remover créditos"],
+      ["banir <lid> [1h|1d|7d|30d] [motivo]", "banir do bot"],
       ["block-command <nome>"], ["unblock-command <nome>"], ["blocked-commands"],
       ["private-whitelist add <lid>", "autorizar no privado"],
       ["set-menu-image", "responda a uma imagem"],
       ["set-prefix <símbolo>"], ["set-spider-api-token <token>"],
       ["set-github-token <token>", "token do backup no GitHub"],
-      ["on"], ["off"], ["exec <código>"],
+      ["apagar-dados confirmar", "apaga os dados do bot"],
+      ["testing", "comando de testes"],
+    ],
+  },
+  {
+    key: "dev", label: "Desenvolvedor", icon: "🧑‍💻", aliases: ["cdev", "dev"],
+    restrita: true,
+    intro: "Exemplos de envio de mensagens para quem desenvolve comandos. Só o dono — abre o menu interativo para ver os 39 exemplos com guia.",
+    commands: [
+      ["exemplos-de-mensagens", "lista todos os exemplos"],
+      ["enviar-texto"], ["enviar-botoes"], ["enviar-lista"],
+      ["enviar-carrossel"], ["enviar-enquete"], ["enviar-tabela"],
+      ["enviar-codigo"], ["enviar-latex"], ["enviar-reels"],
+      ["obter-metadados-mensagem"], ["raw-message"],
     ],
   },
 ];
+
+/**
+ * Limite de legenda de imagem do WhatsApp. A legenda do submenu viaja presa à
+ * foto do menu, por isso não pode passar disto — acima disso o cliente recusa
+ * a mensagem inteira e o submenu nunca aparece.
+ */
+const MAX_CAPTION_LENGTH = 1024;
 
 export function menuMessage(groupJid, section = "", userName = "Você") {
   const prefix = getPrefix(groupJid);
@@ -156,17 +185,36 @@ export function menuMessage(groupJid, section = "", userName = "Você") {
   if (key && !category) return null;
 
   if (category) {
-    const items = category.commands.map(([usage, hint]) => {
+    const itens = category.commands.map(([usage, hint]) => {
       const [name, ...parameters] = usage.split(" ");
       const display = [name.replaceAll("-", " "), ...parameters].join(" ");
-      return `${prefix}${display}${hint ? ` — ${hint}` : ""}`;
+      return { comando: `${prefix}${display}`, hint };
     });
 
-    const campos = [];
-    if (category.intro) campos.push(category.intro, "");
-    campos.push(...items, "", `💡 *Volta:* ${prefix}menu`);
+    const montar = (comHint) => {
+      const campos = [];
+      if (category.intro) campos.push(category.intro, "");
+      campos.push(
+        ...itens.map(({ comando, hint }) =>
+          comHint && hint ? `${comando} — ${hint}` : comando),
+      );
+      campos.push("", `💡 *Volta:* ${prefix}menu`);
+      return formatMessage({ icone: category.icon, titulo: category.label, campos });
+    };
 
-    return formatMessage({ icone: category.icon, titulo: category.label, campos });
+    // Categorias grandes (dono/dev) não cabem com as descrições: a legenda cai
+    // para a lista só de comandos e, se ainda assim estourar, corta o excesso
+    // apontando para o menu guiado, que tem todas as funções.
+    let texto = montar(true);
+    if (texto.length > MAX_CAPTION_LENGTH) texto = montar(false);
+
+    if (texto.length > MAX_CAPTION_LENGTH) {
+      const rodape = `\n\n… e mais ${itens.length} comandos.\n💡 *Volta:* ${prefix}menu`;
+      const corte = MAX_CAPTION_LENGTH - rodape.length;
+      texto = `${texto.slice(0, corte).trimEnd()}${rodape}`;
+    }
+
+    return texto;
   }
 
   const safeName = String(userName || "Você").replace(/[\r\n*_~`]/g, "").slice(0, 32);
@@ -244,7 +292,7 @@ export function buildInteractiveMenuPayload(groupJid, section = "", userName = "
           ],
         }),
     title: category ? category.label : "Menu principal",
-    footer: "© Made by Yanik Uaite",
+    footer: RODAPE,
     buttonText: category ? "Abrir comando" : "Abrir categoria",
     sections: [{
       title: category ? category.label : "Categorias",

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
-import { ANIME_EPISODE_CREDITS, ANIME_PROVIDERS, DATABASE_DIR } from "../config.js";
-import { accountBalance, chargeCredits, getAccount } from "../services/credits.js";
+import { ANIME_EPISODE_CREDITS, DATABASE_DIR } from "../config.js";
+import { accountBalance, addCredits, chargeCredits, getAccount } from "../services/credits.js";
 import {
   getAnimeSession,
   handleAnimeReply,
@@ -11,28 +11,9 @@ import {
   startAnimeFlow,
 } from "../utils/animeMenu.js";
 
-// Os testes de fluxo abaixo substituem a rede por HTML de providers concretos
-// (anikoto, animegg) para exercitar o menu. Como `ANIME_PROVIDERS` vem do
-// `config.js`, a lista é fixada aqui: sem isto o teste passaria a depender da
-// predefinição de produção e quebrava sempre que ela mudasse, mesmo sem o menu
-// mudar — foi o que aconteceu ao deixar só o `meusanimes` ativo.
-//
-// Cada ficheiro de teste corre no seu próprio processo, pelo que a alteração não
-// sai daqui.
-ANIME_PROVIDERS.length = 0;
-ANIME_PROVIDERS.push("anikoto", "animegg");
+// Os testes de fluxo abaixo substituem a rede pelo HTML do meusanimes, a fonte
+// única, para exercitar o menu sem tocar em nenhum site.
 
-/**
- * Regressão do bug: "Fui eu a mandar o menu mas o bot nega".
- *
- * O autor abria o menu com uma forma de JID e a resposta chegava com outra
- * (`@lid` vs número, com/sem sufixo de aparelho). A comparação por string
- * exata tratava o próprio autor como estranho.
- *
- * O caminho do token `anm:ep:<i>` chega a `sendQualityList`, que sem episódios
- * responde "não está mais disponível" SEM ir à rede — por isso dá para provar
- * que o autor passou pelo portão de posse sem chamar a API.
- */
 const CHAT = "120363000000000000@g.us";
 const LID = "987654321098765:12@lid";
 const PN = "244991234567@s.whatsapp.net";
@@ -54,6 +35,19 @@ async function abrirMenu(ownerLid, senderLids) {
   return replies;
 }
 
+/* ─────────── Posse do menu (JID em formas diferentes) ─────────── */
+
+/**
+ * Regressão do bug: "Fui eu a mandar o menu mas o bot nega".
+ *
+ * O autor abria o menu com uma forma de JID e a resposta chegava com outra
+ * (`@lid` vs número, com/sem sufixo de aparelho). A comparação por string
+ * exata tratava o próprio autor como estranho.
+ *
+ * O caminho do token `anm:ep:<i>` chega a `sendQualityList`, que sem episódios
+ * responde "não está mais disponível" SEM ir à rede — por isso dá para provar
+ * que o autor passou pelo portão de posse sem chamar a API.
+ */
 test("o autor passa o portão de posse mesmo com forma de JID diferente", async () => {
   resetAnimeSessions();
   await abrirMenu(LID, [LID, PN]);
@@ -183,41 +177,123 @@ test("token de anime sem sessão avisa que o menu expirou", async () => {
   assert.match(replies[0], /expirou/i);
 });
 
+test("anm:sea com sessão inexistente avisa que o menu expirou", async () => {
+  resetAnimeSessions();
+
+  const replies = [];
+  const consumiu = await handleAnimeReply({
+    socket: makeSocket(),
+    chatId: CHAT,
+    senderLid: LID,
+    senderLids: [LID],
+    text: "anm:sea:0",
+    sendReply: async (text) => replies.push(String(text)),
+  });
+
+  assert.equal(consumiu, true);
+  assert.match(replies[0], /expirou/i);
+});
+
+/* ─────────── Rede stubada (HTML do meusanimes) ─────────── */
+
+const BUSCA_NARUTO = `
+  <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/naruto/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Naruto" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/naruto/">Naruto</a></div><div class="meta"> <span class="year">2002</span></div></div></article></div>
+`;
+
+/** Página do anime com uma única temporada (o fluxo salta o passo de temporada). */
+const PAGINA_NARUTO_UMA = `
+  <div id='seasons'><div class='se-c'><div class='se-q'><span class='title'>Temporada 1</span></div><div class='se-a' style="display:block"><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-1/'>Episódio 1</a></div></li><li class='mark-2'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-2/'>Episódio 2</a></div></li></ul></div></div></div>
+`;
+
+/** Página com duas temporadas, cada uma com um número diferente de episódios. */
+const PAGINA_NARUTO_DUAS = `
+  <div id='seasons'><div class='se-c'><div class='se-q'><span class='title'>Temporada 1</span></div><div class='se-a' style="display:block"><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-1/'>Episódio 1</a></div></li><li class='mark-2'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-2/'>Episódio 2</a></div></li></ul></div></div><div class='se-c'><div class='se-q'><span class='title'>Temporada 2</span></div><div class='se-a'><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-2-episodio-1/'>Episódio 1</a></div></li></ul></div></div></div>
+`;
+
+/** Página do episódio que marca a faixa real ("Dublado"). */
+const PAGINA_EP_DUBLADO = `<span class="qualidade"><i class='fas fa-arrow-alt-circle-right'></i> Dublado</span>`;
+
+/** Página do episódio que marca a faixa real ("Legendado"). */
+const PAGINA_EP_LEGENDADO = `<span class="qualidade"><i class='fas fa-arrow-alt-circle-right'></i> Legendado</span>`;
+
+function stubFetch(respostas) {
+  const pedidos = [];
+
+  globalThis.fetch = async (url) => {
+    const alvo = String(url);
+    pedidos.push(alvo);
+
+    const chave = Object.keys(respostas).find((k) =>
+      alvo.toLowerCase().includes(k.toLowerCase()),
+    );
+    const corpo = respostas[chave] ?? "";
+    return {
+      ok: true,
+      status: 200,
+      text: async () => corpo,
+      json: async () => JSON.parse(corpo || "null"),
+    };
+  };
+
+  return pedidos;
+}
+
+function makeCapturingSocket(enviados) {
+  return {
+    sendMessage: async (_chat, content) => {
+      enviados.push(content);
+      return { key: { id: "m" } };
+    },
+  };
+}
+
+function rowIds(card) {
+  return (card?.interactiveButtons || [])
+    .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
+    .find((p) => p.sections)?.sections?.[0]?.rows
+    ?.map((r) => r.id) || [];
+}
+
+/* ─────────── Fluxo: faixa → episódios → temporadas ─────────── */
+
 test("cards de anime não repetem o rodapé (o card já leva footer)", async () => {
   resetAnimeSessions();
 
-  const respostas = {
-    "/filter?keyword=attack%20on%20titan": `
-      <div class="item ">
-        <div class="inner">
-          <div class="ani poster tip" data-tip="1631">
-            <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa/ep-1">
-              <img src="https://cdn.anipixcdn.co/a.jpg" alt="Attack on Titan" />
-            </a>
-          </div>
-        </div>
-      </div>`,
-    "/api/seasons/1631": JSON.stringify({
-      status: 200,
-      result: `
-        <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa"><div class="name">Season 1</div></a>
-        <a href="https://anikoto.cz/watch/attack-on-titan-season-2-0rtbh"><div class="name">Season 2</div></a>`,
-    }),
-  };
+  const enviados = [];
+  // Sem rede: o card da faixa é montado offline, antes de qualquer pesquisa.
+  await startAnimeFlow({
+    socket: makeCapturingSocket(enviados),
+    chatId: CHAT,
+    ownerLid: LID,
+    ownerName: "Yanik Uaite",
+    sendReply: async () => {},
+    nome: "attack on titan",
+  });
 
-  globalThis.fetch = async (url) => {
-    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
+  const cardFaixas = enviados[0];
+  assert.equal(
+    cardFaixas.text.split("✦ Constelado por Yanik Uaite ✦").length - 1,
+    0,
+    "o corpo do card não repete o rodapé que já vai em footer",
+  );
+  assert.equal(
+    cardFaixas.footer,
+    "✦ Constelado por Yanik Uaite ✦",
+    "o rodapé continua a ir no footer do card",
+  );
+});
+
+test("a faixa é perguntada ANTES de pesquisar (e a pesquisa usa a escolhida)", async () => {
+  resetAnimeSessions();
+  const pedidos = stubFetch({
+    "/?s=naruto": BUSCA_NARUTO,
+    "/a/naruto/": PAGINA_NARUTO_UMA,
+    "/e/naruto-1-episodio-1/": PAGINA_EP_DUBLADO,
+  });
 
   try {
     const enviados = [];
-    const socket = {
-      sendMessage: async (_chat, content) => {
-        enviados.push(content);
-        return { key: { id: "m" } };
-      },
-    };
+    const socket = makeCapturingSocket(enviados);
 
     await startAnimeFlow({
       socket,
@@ -225,20 +301,37 @@ test("cards de anime não repetem o rodapé (o card já leva footer)", async () 
       ownerLid: LID,
       ownerName: "Yanik Uaite",
       sendReply: async () => {},
-      nome: "attack on titan",
+      nome: "naruto",
     });
 
-    const cardTemporadas = enviados[0];
+    assert.equal(getAnimeSession(CHAT, LID).stage, "faixas", "para na escolha da faixa");
     assert.equal(
-      cardTemporadas.text.split("© Made by Yanik Uaite").length - 1,
+      pedidos.length,
       0,
-      "o corpo do card não repete o rodapé que já vai em footer",
+      "nenhuma pesquisa antes de o utilizador escolher a faixa",
     );
-    assert.equal(
-      cardTemporadas.footer,
-      "© Made by Yanik Uaite",
-      "o rodapé continua a ir no footer do card",
+
+    const ids = rowIds(enviados[0]);
+    assert.ok(ids.includes("anm:aud:subbed"), "oferece Legendado");
+    assert.ok(ids.includes("anm:aud:dubbed"), "oferece Dublado");
+    assert.ok(
+      !ids.some((id) => id.startsWith("anm:ep:")),
+      "ainda NÃO mostra episódios: a faixa vem primeiro",
     );
+
+    await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: "anm:aud:dubbed",
+      sendReply: async () => {},
+    });
+
+    assert.equal(getAnimeSession(CHAT, LID).stage, "episodios");
+    assert.equal(getAnimeSession(CHAT, LID).audioVersion, "dubbed");
+    assert.ok(pedidos.length > 0, "só agora é que a pesquisa corre");
+    assert.ok(rowIds(enviados[1]).includes("anm:ep:0"), "agora sim mostra os episódios");
   } finally {
     delete globalThis.fetch;
   }
@@ -246,73 +339,26 @@ test("cards de anime não repetem o rodapé (o card já leva footer)", async () 
 
 test("anm:sea carrega os episódios da temporada escolhida", async () => {
   resetAnimeSessions();
-
-  // Rede stubada (o código é o de produção): pesquisa → temporadas → página da
-  // temporada → lista de episódios. Cada temporada devolve um número de
-  // episódios DIFERENTE, para provar que a escolha não mostra sempre a 1ª.
-  const respostas = {
-    "/filter?keyword=attack%20on%20titan": `
-      <div class="item ">
-        <div class="inner">
-          <div class="ani poster tip" data-tip="1631">
-            <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa/ep-1">
-              <img src="https://cdn.anipixcdn.co/a.jpg" alt="Attack on Titan" />
-            </a>
-          </div>
-        </div>
-      </div>`,
-    "/api/seasons/1631": JSON.stringify({
-      status: 200,
-      result: `
-        <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa"><div class="name">Season 1</div></a>
-        <a href="https://anikoto.cz/watch/attack-on-titan-season-2-0rtbh"><div class="name">Season 2</div></a>`,
-    }),
-    "/watch/attack-on-titan-bgaoa/ep-1": `<div data-anime-id="1631"></div>`,
-    "/watch/attack-on-titan-season-2-0rtbh/ep-1": `<div data-anime-id="1385"></div>`,
-    "/ajax/episode/list/1631": JSON.stringify({
-      status: 200,
-      result: `<a href="#" data-id="1" data-num="1" data-ids="S1E1">1</a>
-               <a href="#" data-id="2" data-num="2" data-ids="S1E2">2</a>
-               <a href="#" data-id="3" data-num="3" data-ids="S1E3">3</a>`,
-    }),
-    "/ajax/episode/list/1385": JSON.stringify({
-      status: 200,
-      result: `<a href="#" data-id="9" data-num="1" data-ids="S2E1">1</a>
-               <a href="#" data-id="10" data-num="2" data-ids="S2E2">2</a>`,
-    }),
-  };
-
-  globalThis.fetch = async (url) => {
-    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
+  stubFetch({
+    "/?s=naruto": BUSCA_NARUTO,
+    "/a/naruto/": PAGINA_NARUTO_DUAS,
+    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+    "/e/naruto-2-episodio-1/": PAGINA_EP_LEGENDADO,
+  });
 
   try {
     const enviados = [];
-    const socket = {
-      sendMessage: async (_chat, content) => {
-        enviados.push(content);
-        return { key: { id: "m" } };
-      },
-    };
+    const socket = makeCapturingSocket(enviados);
 
-    // Nome → o bot pergunta a FAIXA antes de pesquisar.
     await startAnimeFlow({
       socket,
       chatId: CHAT,
       ownerLid: LID,
       ownerName: "Yanik Uaite",
       sendReply: async () => {},
-      nome: "attack on titan",
+      nome: "naruto",
     });
 
-    assert.equal(
-      getAnimeSession(CHAT, LID).stage,
-      "faixas",
-      "a faixa é perguntada antes da pesquisa",
-    );
-
-    // Escolhida a faixa → pesquisa → lista de TEMPORADAS (2 agrupadas).
     await handleAnimeReply({
       socket,
       chatId: CHAT,
@@ -322,21 +368,12 @@ test("anm:sea carrega os episódios da temporada escolhida", async () => {
       sendReply: async () => {},
     });
 
-    const linhasTemporadas = enviados[1].interactiveButtons
-      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
-      .find((p) => p.sections)?.sections?.[0]?.rows;
-    const idsTemporadas = (linhasTemporadas || []).map((r) => r.id);
-
+    const idsTemporadas = rowIds(enviados[1]);
     assert.ok(idsTemporadas.includes("anm:sea:0"), "oferece a temporada 1");
     assert.ok(idsTemporadas.includes("anm:sea:1"), "oferece a temporada 2");
-    assert.equal(
-      getAnimeSession(CHAT, LID).stage,
-      "temporadas",
-      "fica à espera da escolha da temporada",
-    );
+    assert.equal(getAnimeSession(CHAT, LID).stage, "temporadas");
 
-    // Escolhe a temporada 2 → os episódios têm de ser os DELA (2, não 3).
-    const consumiu = await handleAnimeReply({
+    await handleAnimeReply({
       socket,
       chatId: CHAT,
       senderLid: LID,
@@ -345,12 +382,59 @@ test("anm:sea carrega os episódios da temporada escolhida", async () => {
       sendReply: async () => {},
     });
 
-    assert.equal(consumiu, true);
-
     const sessao = getAnimeSession(CHAT, LID);
     assert.equal(sessao.stage, "episodios");
-    assert.equal(sessao.episodes.length, 2, "a temporada 2 tem 2 episódios");
-    assert.equal(sessao.episodes[0].id, "attack-on-titan-season-2-0rtbh::9::S2E1");
+    assert.equal(sessao.episodes.length, 1, "a temporada 2 tem 1 episódio");
+    assert.equal(
+      sessao.episodes[0].id,
+      "naruto::1::naruto-2-episodio-1::naruto-2-episodio-1",
+      "o id junta o slug da temporada (naruto::1) ao do episódio",
+    );
+  } finally {
+    delete globalThis.fetch;
+  }
+});
+
+test("sem temporadas agrupadas, salta direto para os episódios", async () => {
+  resetAnimeSessions();
+  stubFetch({
+    "/?s=naruto": BUSCA_NARUTO,
+    "/a/naruto/": PAGINA_NARUTO_UMA,
+    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+  });
+
+  try {
+    const enviados = [];
+    const socket = makeCapturingSocket(enviados);
+
+    await startAnimeFlow({
+      socket,
+      chatId: CHAT,
+      ownerLid: LID,
+      ownerName: "Yanik Uaite",
+      sendReply: async () => {},
+      nome: "naruto",
+    });
+
+    await handleAnimeReply({
+      socket,
+      chatId: CHAT,
+      senderLid: LID,
+      senderLids: [LID],
+      text: "anm:aud:subbed",
+      sendReply: async () => {},
+    });
+
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.stage, "episodios", "vai direto para os episódios");
+    assert.equal(sessao.episodes.length, 2);
+
+    const ids = rowIds(enviados[1]);
+    assert.ok(ids.includes("anm:ep:0"), "mostra os episódios logo");
+    assert.ok(
+      !ids.some((id) => id.startsWith("anm:sea:")),
+      "não mostra passo de temporada",
+    );
   } finally {
     delete globalThis.fetch;
   }
@@ -358,52 +442,27 @@ test("anm:sea carrega os episódios da temporada escolhida", async () => {
 
 test("modo texto: cards saem em texto numerado e o número escolhe a linha", async () => {
   resetAnimeSessions();
-
-  const respostas = {
-    "/filter?keyword=attack%20on%20titan": `
-      <div class="item ">
-        <div class="inner">
-          <div class="ani poster tip" data-tip="1631">
-            <a href="https://anikoto.cz/watch/attack-on-titan-bgaoa/ep-1">
-              <img src="https://cdn.anipixcdn.co/a.jpg" alt="Attack on Titan" />
-            </a>
-          </div>
-        </div>
-      </div>`,
-    "/api/seasons/1631": JSON.stringify({ status: 200, result: "" }),
-    "/ajax/episode/list/1631": JSON.stringify({
-      status: 200,
-      result: `<a href="#" data-id="1" data-num="1" data-ids="T1">1</a>`,
-    }),
-  };
-
-  globalThis.fetch = async (url) => {
-    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
+  stubFetch({
+    "/?s=naruto": BUSCA_NARUTO,
+    "/a/naruto/": PAGINA_NARUTO_UMA,
+    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+  });
 
   try {
     const enviados = [];
     const replies = [];
-    const socket = {
-      sendMessage: async (_chat, content) => {
-        enviados.push(content);
-        return { key: { id: "m" } };
-      },
-    };
+    const socket = makeCapturingSocket(enviados);
 
-    // `!anime <nome>`: modo texto desde o início.
     await startAnimeFlow({
       socket,
       chatId: CHAT,
       ownerLid: LID,
       ownerName: "Yanik Uaite",
       sendReply: async (text) => replies.push(String(text)),
-      nome: "attack on titan",
+      nome: "naruto",
       textOnly: true,
     });
 
-    // A lista de faixas saiu como TEXTO (nada foi para o socket).
     assert.deepEqual(enviados, [], "modo texto não envia cards");
     assert.equal(replies.length, 1);
     assert.match(replies[0], /1\. .*Legendado/i);
@@ -414,7 +473,6 @@ test("modo texto: cards saem em texto numerado e o número escolhe a linha", asy
     assert.equal(sessao.stage, "faixas");
     assert.ok(sessao.lastRows.length >= 2, "as linhas do card ficam guardadas");
 
-    // "1" = primeira linha = legendado: pesquisa e mostra os episódios em texto.
     const consumiu = await handleAnimeReply({
       socket,
       chatId: CHAT,
@@ -429,7 +487,6 @@ test("modo texto: cards saem em texto numerado e o número escolhe a linha", asy
     assert.deepEqual(enviados, [], "os episódios também saem em texto");
     assert.equal(getAnimeSession(CHAT, LID).stage, "episodios");
     assert.match(replies.at(-1), /1\. Episódio 1/i);
-    assert.doesNotMatch(replies.at(-1), /Não consegui abrir o menu interativo/);
   } finally {
     delete globalThis.fetch;
   }
@@ -443,7 +500,7 @@ test("modo texto: número fora do intervalo não consome a linha", async () => {
     ownerLid: LID,
     ownerName: "Yanik Uaite",
     sendReply: async () => {},
-    nome: "attack on titan",
+    nome: "naruto",
     textOnly: true,
   });
 
@@ -469,251 +526,20 @@ test("modo texto: número fora do intervalo não consome a linha", async () => {
   assert.equal(getAnimeSession(CHAT, LID).lastRows.length, linhas);
 });
 
-test("sem temporadas agrupadas, salta direto para os episódios", async () => {
-  resetAnimeSessions();
-
-  const respostas = {
-    "/filter?keyword=one%20piece": `
-      <div class="item ">
-        <div class="inner">
-          <div class="ani poster tip" data-tip="1642">
-            <a href="https://anikoto.cz/watch/one-piece-abc/ep-1">
-              <img src="https://cdn.anipixcdn.co/a.jpg" alt="One Piece" />
-            </a>
-          </div>
-        </div>
-      </div>`,
-    "/api/seasons/1642": JSON.stringify({ status: 200, result: "" }),
-    "/ajax/episode/list/1642": JSON.stringify({
-      status: 200,
-      result: `<a href="#" data-id="1" data-num="1" data-ids="T1">1</a>`,
-    }),
-  };
-
-  globalThis.fetch = async (url) => {
-    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
-
-  try {
-    const enviados = [];
-    const socket = {
-      sendMessage: async (_chat, content) => {
-        enviados.push(content);
-        return { key: { id: "m" } };
-      },
-    };
-
-    await startAnimeFlow({
-      socket,
-      chatId: CHAT,
-      ownerLid: LID,
-      ownerName: "Yanik Uaite",
-      sendReply: async () => {},
-      nome: "one piece",
-    });
-
-    // A faixa vem primeiro; só depois de escolhida é que a pesquisa corre.
-    await handleAnimeReply({
-      socket,
-      chatId: CHAT,
-      senderLid: LID,
-      senderLids: [LID],
-      text: "anm:aud:subbed",
-      sendReply: async () => {},
-    });
-
-    const sessao = getAnimeSession(CHAT, LID);
-    assert.equal(sessao.stage, "episodios", "vai direto para os episódios");
-    assert.equal(sessao.episodes.length, 1);
-
-    const ids = enviados[1].interactiveButtons
-      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
-      .find((p) => p.sections)?.sections?.[0]?.rows
-      ?.map((r) => r.id);
-    assert.ok(ids.includes("anm:ep:0"), "mostra os episódios logo");
-    assert.ok(
-      !ids.some((id) => id.startsWith("anm:sea:")),
-      "não mostra passo de temporada",
-    );
-  } finally {
-    delete globalThis.fetch;
-  }
-});
-
-test("a faixa é perguntada ANTES de pesquisar (e a pesquisa usa a escolhida)", async () => {
-  resetAnimeSessions();
-
-  // O bot tem de perguntar a faixa sem sequer tocar na rede: um título só
-  // legendado nunca satisfaria um pedido de dublado, e descobri-lo no fim
-  // obrigava o utilizador a repetir o pedido todo.
-  const respostas = {
-    "/search/?q=naruto": `
-      <div class="media searchre">
-        <a href="/series/naruto" class="mse"><div class="media-body"><div class="first"><h2>Naruto</h2></div></div></a>
-      </div>`,
-    "/series/naruto": `
-      <a href="/naruto-episode-1" class="anm_det_pop"><strong>Naruto 1</strong></a><a href="/naruto-episode-1#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-1#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
-      <a href="/naruto-episode-2" class="anm_det_pop"><strong>Naruto 2</strong></a><a href="/naruto-episode-2#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-2#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>`,
-  };
-
-  const pedidos = [];
-  globalThis.fetch = async (url) => {
-    pedidos.push(String(url));
-    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
-
-  try {
-    const enviados = [];
-    const socket = {
-      sendMessage: async (_chat, content) => {
-        enviados.push(content);
-        return { key: { id: "m" } };
-      },
-    };
-
-    await startAnimeFlow({
-      socket,
-      chatId: CHAT,
-      ownerLid: LID,
-      ownerName: "Yanik Uaite",
-      sendReply: async () => {},
-      nome: "naruto",
-    });
-
-    const sessao = getAnimeSession(CHAT, LID);
-    assert.equal(sessao.stage, "faixas", "para na escolha da faixa");
-    assert.equal(
-      pedidos.length,
-      0,
-      "nenhuma pesquisa antes de o utilizador escolher a faixa",
-    );
-
-    // As duas faixas são oferecidas, mesmo antes de saber o que a fonte tem.
-    const ids = enviados[0].interactiveButtons
-      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
-      .find((p) => p.sections)?.sections?.[0]?.rows
-      ?.map((r) => r.id);
-    assert.ok(ids.includes("anm:aud:subbed"), "oferece Legendado");
-    assert.ok(ids.includes("anm:aud:dubbed"), "oferece Dublado");
-    assert.ok(
-      !ids.some((id) => id.startsWith("anm:ep:")),
-      "ainda NÃO mostra episódios: a faixa vem primeiro",
-    );
-
-    // Escolher dublado → guarda a faixa, pesquisa e segue para os episódios.
-    await handleAnimeReply({
-      socket,
-      chatId: CHAT,
-      senderLid: LID,
-      senderLids: [LID],
-      text: "anm:aud:dubbed",
-      sendReply: async () => {},
-    });
-
-    assert.equal(getAnimeSession(CHAT, LID).stage, "episodios");
-    assert.equal(getAnimeSession(CHAT, LID).audioVersion, "dubbed");
-    assert.ok(pedidos.length > 0, "só agora é que a pesquisa corre");
-
-    const idsEp = enviados[1].interactiveButtons
-      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
-      .find((p) => p.sections)?.sections?.[0]?.rows
-      ?.map((r) => r.id);
-    assert.ok(idsEp.includes("anm:ep:0"), "agora sim mostra os episódios");
-  } finally {
-    delete globalThis.fetch;
-  }
-});
-
-test("lista MISTA (parte só legendada) não esconde a escolha da faixa", async () => {
-  resetAnimeSessions();
-
-  // Regressão: a lista real do Naruto tem 218 episódios com as duas faixas e 2
-  // só legendados. Com a regra de intersecção o menu concluía "subbed" e nunca
-  // perguntava, pelo que o dublado era inalcançável em quase todas as séries.
-  // A escolha é feita ANTES da pesquisa, por isso o ep 3 não a pode esconder.
-  const respostas = {
-    "/search/?q=naruto": `
-      <div class="media searchre">
-        <a href="/series/naruto" class="mse"><div class="media-body"><div class="first"><h2>Naruto</h2></div></div></a>
-      </div>`,
-    "/series/naruto": `
-      <a href="/naruto-episode-1" class="anm_det_pop"><strong>Naruto 1</strong></a><a href="/naruto-episode-1#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-1#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
-      <a href="/naruto-episode-2" class="anm_det_pop"><strong>Naruto 2</strong></a><a href="/naruto-episode-2#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-2#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>
-      <a href="/naruto-episode-3" class="anm_det_pop"><strong>Naruto 3</strong></a><a href="/naruto-episode-3#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a>`,
-  };
-
-  globalThis.fetch = async (url) => {
-    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
-
-  try {
-    const enviados = [];
-    const socket = {
-      sendMessage: async (_chat, content) => {
-        enviados.push(content);
-        return { key: { id: "m" } };
-      },
-    };
-
-    await startAnimeFlow({
-      socket,
-      chatId: CHAT,
-      ownerLid: LID,
-      ownerName: "Yanik Uaite",
-      sendReply: async () => {},
-      nome: "naruto",
-    });
-
-    assert.equal(
-      getAnimeSession(CHAT, LID).stage,
-      "faixas",
-      "o ep 3 não ter dublado não pode esconder a escolha",
-    );
-
-    const ids = enviados[0].interactiveButtons
-      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
-      .find((p) => p.sections)?.sections?.[0]?.rows
-      ?.map((r) => r.id);
-    assert.ok(ids.includes("anm:aud:dubbed"), "Dublado tem de ser alcançável");
-  } finally {
-    delete globalThis.fetch;
-  }
-});
+/* ─────────── Faixa de áudio: aviso e queda ─────────── */
 
 test("faixa pedida que a fonte não tem: avisa e cai para a que existe", async () => {
   resetAnimeSessions();
-
-  // O utilizador escolhe a faixa ANTES de a fonte ser conhecida, por isso pode
-  // pedir dublado num título só legendado. O bot não pode servir a outra faixa
-  // em silêncio (é o defeito que este fluxo corrige) nem deixar o utilizador
-  // sem nada: avisa e mostra a que existe.
-  const respostas = {
-    "/search/?q=naruto": `
-      <div class="media searchre">
-        <a href="/series/naruto" class="mse"><div class="media-body"><div class="first"><h2>Naruto</h2></div></div></a>
-      </div>`,
-    "/series/naruto": `
-      <a href="/naruto-episode-1" class="anm_det_pop"><strong>Naruto 1</strong></a><a href="/naruto-episode-1#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a>
-      <a href="/naruto-episode-2" class="anm_det_pop"><strong>Naruto 2</strong></a><a href="/naruto-episode-2#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a>`,
-  };
-
-  globalThis.fetch = async (url) => {
-    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
+  // A página do episódio marca "Legendado": a entrada só tem essa faixa.
+  stubFetch({
+    "/?s=naruto": BUSCA_NARUTO,
+    "/a/naruto/": PAGINA_NARUTO_UMA,
+    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+  });
 
   try {
-    const enviados = [];
     const replies = [];
-    const socket = {
-      sendMessage: async (_chat, content) => {
-        enviados.push(content);
-        return { key: { id: "m" } };
-      },
-    };
+    const socket = makeSocket();
 
     await startAnimeFlow({
       socket,
@@ -735,11 +561,7 @@ test("faixa pedida que a fonte não tem: avisa e cai para a que existe", async (
 
     const sessao = getAnimeSession(CHAT, LID);
     assert.equal(sessao.stage, "episodios", "não deixa o utilizador sem lista");
-    assert.equal(
-      sessao.audioVersion,
-      "subbed",
-      "cai para a única faixa que existe",
-    );
+    assert.equal(sessao.audioVersion, "subbed", "cai para a única faixa que existe");
     assert.ok(
       replies.some((r) => /não tem dublado/i.test(r) && /legendado/i.test(r)),
       "diz explicitamente que caiu para o legendado",
@@ -749,93 +571,17 @@ test("faixa pedida que a fonte não tem: avisa e cai para a que existe", async (
   }
 });
 
-test("fonte que não distingue faixas não gera aviso falso", async () => {
+test("faixa dublada pedida e disponível não gera aviso", async () => {
   resetAnimeSessions();
-
-  // O anikoto não publica faixas (`versions: []`): não há nada para comparar,
-  // por isso pedir dublado não pode produzir um aviso com rótulo vazio.
-  const respostas = {
-    "/filter?keyword=one%20piece": `
-      <div class="item ">
-        <div class="inner">
-          <div class="ani poster tip" data-tip="1642">
-            <a href="https://anikoto.cz/watch/one-piece-abc/ep-1">
-              <img src="https://cdn.anipixcdn.co/a.jpg" alt="One Piece" />
-            </a>
-          </div>
-        </div>
-      </div>`,
-    "/api/seasons/1642": JSON.stringify({ status: 200, result: "" }),
-    "/ajax/episode/list/1642": JSON.stringify({
-      status: 200,
-      result: `<a href="#" data-id="1" data-num="1" data-ids="T1">1</a>`,
-    }),
-  };
-
-  globalThis.fetch = async (url) => {
-    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
+  stubFetch({
+    "/?s=naruto": BUSCA_NARUTO,
+    "/a/naruto/": PAGINA_NARUTO_UMA,
+    "/e/naruto-1-episodio-1/": PAGINA_EP_DUBLADO,
+  });
 
   try {
     const replies = [];
-    const socket = {
-      sendMessage: async () => ({ key: { id: "m" } }),
-    };
-
-    await startAnimeFlow({
-      socket,
-      chatId: CHAT,
-      ownerLid: LID,
-      ownerName: "Yanik Uaite",
-      sendReply: async (text) => replies.push(String(text)),
-      nome: "one piece",
-    });
-
-    await handleAnimeReply({
-      socket,
-      chatId: CHAT,
-      senderLid: LID,
-      senderLids: [LID],
-      text: "anm:aud:dubbed",
-      sendReply: async (text) => replies.push(String(text)),
-    });
-
-    const sessao = getAnimeSession(CHAT, LID);
-    assert.equal(sessao.stage, "episodios", "segue para os episódios");
-    assert.equal(
-      replies.filter((r) => /não tem/i.test(r)).length,
-      0,
-      "sem faixas publicadas não há aviso de faixa",
-    );
-  } finally {
-    delete globalThis.fetch;
-  }
-});
-
-test("dublado numa fonte não-PT-BR avisa que o áudio é inglês", async () => {
-  resetAnimeSessions();
-
-  // O animegg é um site inglês: a faixa "dubbed" dele é dublagem inglesa. Quem
-  // pede "Dublado" não pode receber áudio inglês sem saber — o card dizia
-  // "Dublado" e o utilizador só descobria pelo som.
-  const respostas = {
-    "/search/?q=naruto": `
-      <div class="media searchre">
-        <a href="/series/naruto" class="mse"><div class="media-body"><div class="first"><h2>Naruto</h2></div></div></a>
-      </div>`,
-    "/series/naruto": `
-      <a href="/naruto-episode-1" class="anm_det_pop"><strong>Naruto 1</strong></a><a href="/naruto-episode-1#subbed"><span class="btn-xs btn-subbed">SUBBED</span></a><a href="/naruto-episode-1#dubbed"><span class="btn-xs btn-dubbed">DUBBED</span></a>`,
-  };
-
-  globalThis.fetch = async (url) => {
-    const chave = Object.keys(respostas).find((k) => String(url).endsWith(k));
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
-
-  try {
-    const replies = [];
-    const socket = { sendMessage: async () => ({ key: { id: "m" } }) };
+    const socket = makeSocket();
 
     await startAnimeFlow({
       socket,
@@ -855,31 +601,20 @@ test("dublado numa fonte não-PT-BR avisa que o áudio é inglês", async () => 
       sendReply: async (text) => replies.push(String(text)),
     });
 
-    assert.ok(
-      replies.some((r) => /dublagem desta fonte é em inglês/i.test(r)),
-      "tem de avisar que a dublagem desta fonte não é português",
+    const sessao = getAnimeSession(CHAT, LID);
+    assert.equal(sessao.stage, "episodios");
+    assert.equal(sessao.audioVersion, "dubbed", "a faixa pedida foi servida");
+    assert.equal(
+      replies.filter((r) => /não tem/i.test(r)).length,
+      0,
+      "a dublagem PT-BR do meusanimes não precisa de aviso",
     );
   } finally {
     delete globalThis.fetch;
   }
 });
 
-test("anm:sea com sessão inexistente avisa que o menu expirou", async () => {
-  resetAnimeSessions();
-
-  const replies = [];
-  const consumiu = await handleAnimeReply({
-    socket: makeSocket(),
-    chatId: CHAT,
-    senderLid: LID,
-    senderLids: [LID],
-    text: "anm:sea:0",
-    sendReply: async (text) => replies.push(String(text)),
-  });
-
-  assert.equal(consumiu, true);
-  assert.match(replies[0], /expirou/i);
-});
+/* ─────────── Paginação e card do dono ─────────── */
 
 test("anm:pg avança para os episódios seguintes com índice absoluto", async () => {
   resetAnimeSessions();
@@ -895,12 +630,7 @@ test("anm:pg avança para os episódios seguintes com índice absoluto", async (
   }));
 
   const enviados = [];
-  const socket = {
-    sendMessage: async (_chat, content) => {
-      enviados.push(content);
-      return { key: { id: "m" } };
-    },
-  };
+  const socket = makeCapturingSocket(enviados);
 
   const consumiu = await handleAnimeReply({
     socket,
@@ -914,13 +644,7 @@ test("anm:pg avança para os episódios seguintes com índice absoluto", async (
   assert.equal(consumiu, true);
   assert.equal(getAnimeSession(CHAT, LID).page, 1);
 
-  // A segunda página mostra os episódios 11–20, com ids absolutos, e mantém
-  // UM botão "ver mais" (para a página 3), sem retroceder.
-  const linhas = enviados[0].interactiveButtons
-    .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
-    .find((p) => p.sections)?.sections?.[0]?.rows;
-  const ids = (linhas || []).map((r) => r.id);
-
+  const ids = rowIds(enviados[0]);
   assert.ok(ids.includes("anm:ep:10"), "a segunda página começa no índice 10");
   assert.ok(ids.includes("anm:ep:19"), "e termina no 19");
   assert.ok(ids.includes("anm:pg:2"), "tem o botão para a página seguinte");
@@ -933,16 +657,8 @@ test("anm:pg avança para os episódios seguintes com índice absoluto", async (
 
 test("card de animes leva o botão do dono e mantém Canal", async () => {
   resetAnimeSessions();
-  const CHAT = "120363000000000000@g.us";
-  const LID = "987654321098765:12@lid";
   const enviados = [];
-
-  const socket = {
-    sendMessage: async (_chat, content) => {
-      enviados.push(content);
-      return { key: { id: "m" } };
-    },
-  };
+  const socket = makeCapturingSocket(enviados);
 
   // Sem `nome`: o card inicial é montado offline (não vai à rede).
   await startAnimeFlow({
@@ -1003,7 +719,7 @@ test("episódio sem saldo para 20 créditos é bloqueado antes do download", asy
 
     const session = getAnimeSession(chatId, ownerLid);
     session.stage = "qualidades";
-    session.provider = "anikoto";
+    session.provider = "meusanimes";
     session.anime = { title: "KAIJU GIRLS" };
     session.episode = { index: 0, number: 1, title: "", id: "ep-1" };
     session.sources = [{ url: "https://exemplo.invalido/a.m3u8", label: "480p" }];
@@ -1068,12 +784,15 @@ test("com saldo, o episódio passa do portão e cobra 20 créditos", async () =>
 
     const session = getAnimeSession(chatId, ownerLid);
     session.stage = "qualidades";
-    session.provider = "anikoto";
+    session.provider = "meusanimes";
     session.anime = { title: "KAIJU GIRLS" };
     session.episode = { index: 0, number: 1, title: "", id: "ep-1" };
     session.sources = [{ url: "https://exemplo.invalido/a.m3u8", label: "480p" }];
 
-    // Saldo suficiente (os 30 diários cobrem os 20 do episódio).
+    // Os 10 créditos diários não cobrem os 20 do episódio: recarrega o
+    // suficiente para o portão deixar passar.
+    addCredits(ownerLid, ANIME_EPISODE_CREDITS * 2, { note: "teste" });
+
     const antes = accountBalance(getAccount(ownerLid));
     assert.ok(antes >= ANIME_EPISODE_CREDITS);
 
@@ -1109,20 +828,7 @@ test("com saldo, o episódio passa do portão e cobra 20 créditos", async () =>
   }
 });
 
-/**
- * Fixa o provider destes testes em `meusanimes` (HTML de busca no formato do
- * WordPress) e restaura a lista no fim. O ficheiro usa anikoto/animegg por
- * predefinição, e a ordem dos providers é significativa.
- */
-function soMeusanimes() {
-  const guardados = [...ANIME_PROVIDERS];
-  ANIME_PROVIDERS.length = 0;
-  ANIME_PROVIDERS.push("meusanimes");
-  return () => {
-    ANIME_PROVIDERS.length = 0;
-    ANIME_PROVIDERS.push(...guardados);
-  };
-}
+/* ─────────── Desambiguação (candidatos) ─────────── */
 
 const BUSCA_EIYUU = `
   <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Eiyuu Kyoushitsu" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/">Eiyuu Kyoushitsu</a></div><div class="meta"> <span class="year">2023</span></div></div></article></div>
@@ -1131,7 +837,6 @@ const BUSCA_EIYUU = `
 const BUSCA_DOIS = `
   <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/boku-no-hero-academia/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/bnha-150x150.jpg" alt="Boku no Hero Academia" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/boku-no-hero-academia/">Boku no Hero Academia</a></div><div class="meta"> <span class="year">2016</span></div></div></article></div>
 `;
-
 
 /**
  * Desambiguação no fluxo: quando a pesquisa não tem correspondência exata, o
@@ -1143,9 +848,7 @@ const BUSCA_DOIS = `
  */
 test("sem correspondência exata, o card mostra a lista e não os episódios", async () => {
   resetAnimeSessions();
-  const restaurar = soMeusanimes();
-
-  const respostas = {
+  stubFetch({
     "translate.googleapis.com": JSON.stringify([
       [["My Hero Academia", "Meu Hero Academia", null, null]],
       null,
@@ -1153,30 +856,11 @@ test("sem correspondência exata, o card mostra a lista e não os episódios", a
     ]),
     "/?s=meu%20hero%20academia": BUSCA_EIYUU,
     "/?s=my%20hero%20academia": BUSCA_EIYUU,
-  };
-
-  globalThis.fetch = async (url) => {
-    const alvo = String(url);
-    const chave = Object.keys(respostas).find((k) =>
-      alvo.toLowerCase().includes(k.toLowerCase()),
-    );
-    const corpo = respostas[chave] ?? "";
-    return {
-      ok: true,
-      status: 200,
-      text: async () => corpo,
-      json: async () => JSON.parse(corpo || "null"),
-    };
-  };
+  });
 
   try {
     const enviados = [];
-    const socket = {
-      sendMessage: async (_chat, content) => {
-        enviados.push(content);
-        return { key: { id: "m" } };
-      },
-    };
+    const socket = makeCapturingSocket(enviados);
 
     await startAnimeFlow({
       socket,
@@ -1215,9 +899,7 @@ test("sem correspondência exata, o card mostra a lista e não os episódios", a
     assert.match(card.caption, /My Hero Academia/, "mostra o título encontrado");
     assert.match(card.caption, /Traduzi/, "explica que traduziu o termo");
 
-    const ids = card.interactiveButtons
-      .map((b) => JSON.parse(b.buttonParamsJson || "{}"))
-      .find((p) => p.sections)?.sections?.[0]?.rows?.map((r) => r.id);
+    const ids = rowIds(card);
     assert.ok(ids.includes("anm:an:0"), "a lista tem o candidato");
     assert.ok(
       !ids.some((id) => id.startsWith("anm:ep:")),
@@ -1228,39 +910,17 @@ test("sem correspondência exata, o card mostra a lista e não os episódios", a
   }
 });
 
-/**
- * Com correspondência exata, o fluxo NÃO mostra lista nenhuma: o comportamento
- * histórico (seguir direto para os episódios) tem de ficar intacto. Sem esta
- * prova, a desambiguação podia introduzir um passo extra em todos os pedidos.
- */
 test("com correspondência exata, segue direto sem lista de candidatos", async () => {
   resetAnimeSessions();
-  const restaurar = soMeusanimes();
-
-  const respostas = {
-    "/?s=naruto": `
-      <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/naruto/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Naruto" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/naruto/">Naruto</a></div><div class="meta"> <span class="year">2002</span></div></div></article></div>`,
-    "/a/naruto/": `
-      <div id='seasons'><div class='se-c'><div class='se-q'><span class='title'>Temporada 1</span></div><div class='se-a' style="display:block"><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-1/'>Episódio 1</a></div></li></ul></div></div></div>`,
-    "/e/naruto-1-episodio-1/": `<div id="option-2" class="play-box-iframe"><iframe src="https://serv01.exemplo.club/#/video/1/1/1/"></iframe></div>`,
-  };
-
-  globalThis.fetch = async (url) => {
-    const alvo = String(url);
-    const chave = Object.keys(respostas).find((k) =>
-      alvo.toLowerCase().includes(k.toLowerCase()),
-    );
-    return { ok: true, status: 200, text: async () => respostas[chave] ?? "" };
-  };
+  stubFetch({
+    "/?s=naruto": BUSCA_NARUTO,
+    "/a/naruto/": PAGINA_NARUTO_UMA,
+    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+  });
 
   try {
     const enviados = [];
-    const socket = {
-      sendMessage: async (_chat, content) => {
-        enviados.push(content);
-        return { key: { id: "m" } };
-      },
-    };
+    const socket = makeCapturingSocket(enviados);
 
     await startAnimeFlow({
       socket,
@@ -1286,8 +946,6 @@ test("com correspondência exata, segue direto sem lista de candidatos", async (
     assert.ok(sessao.episodes.length > 0, "os episódios foram carregados");
 
     const card = enviados[enviados.length - 1];
-    // A capa passou a acompanhar TODOS os passos da pesquisa: mesmo sem
-    // ambiguidade, a imagem é o que confirma que o título aberto é o pedido.
     assert.equal(
       card.image?.url,
       "https://meusanimes.blog/wp-content/uploads/2025/04/yLZS.jpg",
@@ -1298,15 +956,9 @@ test("com correspondência exata, segue direto sem lista de candidatos", async (
   }
 });
 
-/**
- * Escolher um candidato continua o fluxo a partir DELE (e não do primeiro
- * resultado): é a garantia de que a escolha do utilizador é respeitada.
- */
 test("escolher um candidato carrega os episódios do candidato escolhido", async () => {
   resetAnimeSessions();
-  const restaurar = soMeusanimes();
-
-  const respostas = {
+  stubFetch({
     "translate.googleapis.com": JSON.stringify([
       [["My Hero Academia", "Meu Hero Academia", null, null]],
       null,
@@ -1314,26 +966,12 @@ test("escolher um candidato carrega os episódios do candidato escolhido", async
     ]),
     "/?s=meu%20hero%20academia": BUSCA_EIYUU,
     "/?s=my%20hero%20academia": BUSCA_DOIS,
-    "/a/boku-no-hero-academia/": `
-      <div id='seasons'><div class='se-c'><div class='se-q'><span class='title'>Temporada 1</span></div><div class='se-a' style="display:block"><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/bnha-1-episodio-1/'>Episódio 1</a></div></li></ul></div></div></div>`,
-  };
-
-  globalThis.fetch = async (url) => {
-    const alvo = String(url);
-    const chave = Object.keys(respostas).find((k) =>
-      alvo.toLowerCase().includes(k.toLowerCase()),
-    );
-    const corpo = respostas[chave] ?? "";
-    return {
-      ok: true,
-      status: 200,
-      text: async () => corpo,
-      json: async () => JSON.parse(corpo || "null"),
-    };
-  };
+    "/a/boku-no-hero-academia/": PAGINA_NARUTO_UMA,
+    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+  });
 
   try {
-    const socket = { sendMessage: async () => ({ key: { id: "m" } }) };
+    const socket = makeSocket();
 
     await startAnimeFlow({
       socket,
@@ -1376,6 +1014,5 @@ test("escolher um candidato carrega os episódios do candidato escolhido", async
     assert.deepEqual(depois.candidates, [], "a lista é limpa depois da escolha");
   } finally {
     delete globalThis.fetch;
-    restaurar();
   }
 });

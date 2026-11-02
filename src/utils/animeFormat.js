@@ -1,11 +1,11 @@
 /**
- * Helpers puros do fluxo de animes (providers via @consumet/extensions).
+ * Helpers puros do fluxo de animes (fonte única: meusanimes).
  *
  * Ficam separados do cliente HTTP (`src/services/anime.js`) para poderem ser
  * testados sem rede e sem Baileys: aqui só há transformação de dados.
  *
  * Sobre os `rowId`: o WhatsApp limita o tamanho do `rowId` e os links de
- * stream dos providers são longos e assinados (m3u8 com token), então guardar a
+ * stream são longos e assinados (m3u8 com token), então guardar a
  * URL dentro do `rowId` faria a linha ser descartada. Por isso as linhas usam
  * índices estáveis (`anm:ep:<i>` / `anm:src:<i>`) e o array real vive na
  * sessão (ver `src/utils/animeMenu.js`).
@@ -16,7 +16,7 @@
 /** Quantos episódios aparecem por página da lista. */
 export const EPISODES_PER_PAGE = 10;
 
-/** Faixas de áudio que os providers podem publicar. */
+/** Faixas de áudio que a fonte pode publicar. */
 export const AUDIO_SUBBED = "subbed";
 export const AUDIO_DUBBED = "dubbed";
 export const AUDIO_VERSIONS = [AUDIO_SUBBED, AUDIO_DUBBED];
@@ -34,15 +34,13 @@ export const ANIME_TOKEN_PREFIXES = [
 /**
  * Título utilizável numa pesquisa, sem os sufixos que só um site usa.
  *
- * O AnimeGG devolve títulos como "Jujutsu Kaisen (TV)" e o AniTube como
- * "Naruto Shippuden (Dublado)". Esses sufixos são metadados daquele site e não
- * fazem parte do nome: pesquisá-los literalmente nos OUTROS providers (o
- * fallback de episódio faz isso) devolve 0 resultados e o episódio acaba sempre
- * no último da lista (o anikoto), mesmo quando os anteriores o tinham.
+ * O site devolve títulos com sufixos próprios ("Jujutsu Kaisen (TV)",
+ * "Naruto Shippuden (Dublado)"). Esses sufixos são metadados daquele site e não
+ * fazem parte do nome: pesquisá-los literalmente devolve 0 resultados e o
+ * episódio acaba por não ser encontrado.
  *
- * "Jujutsu Kaisen (TV)" passa assim a ser encontrado no AnimeHeaven e no
- * AnimesOnlineHD, e "One Piece" deixa de trazer "One Piece: Episode of Merry"
- * por o título original ter qualificado a pesquisa.
+ * "One Piece" deixa de trazer "One Piece: Episode of Merry" por o título
+ * original ter qualificado a pesquisa.
  *
  * Puro (sem rede) para poder ser testado.
  *
@@ -60,40 +58,12 @@ export function tituloDeBusca(titulo) {
 }
 
 /**
- * Escolhe o resultado que corresponde melhor ao termo pesquisado.
- *
- * O primeiro resultado de um provider não é necessariamente o título pedido: no
- * AnimeGG, pesquisar "One Piece" devolve primeiro "One Piece: Episode of Merry",
- * um especial de 1 episódio, e não a série. A correspondência EXATA (sem os
- * sufixos de site) resolve isso e não muda nada quando o primeiro resultado já
- * é o exato.
- *
- * Puro (sem rede) para poder ser testado.
- *
- * @param {Array<{title?: string}>} resultados
- * @param {string} termo
- * @returns {object|null}
- */
-export function melhorResultado(resultados = [], termo = "") {
-  const lista = Array.isArray(resultados) ? resultados : [];
-  if (!lista.length) return null;
-
-  const alvo = tituloDeBusca(termo).toLowerCase();
-  if (!alvo) return lista[0];
-
-  return (
-    lista.find((r) => tituloDeBusca(r?.title).toLowerCase() === alvo) || lista[0]
-  );
-}
-
-/**
  * Correspondência EXATA entre o termo e o título de um resultado.
  *
- * Diferente de `melhorResultado`, que cai no primeiro resultado quando não há
- * correspondência exata: aqui `null` é uma resposta legítima e importante. É
- * essa distinção que separa "o site reconheceu o que pedi" de "o site devolveu
- * o que calhou" — pesquisar "Meu Hero Academia" no meusanimes devolvia
- * "Eiyuu Kyoushitsu" (outro anime) e o fluxo seguia como se estivesse certo.
+ * `null` é uma resposta legítima e importante. É essa distinção que separa "o
+ * site reconheceu o que pedi" de "o site devolveu o que calhou" — pesquisar
+ * "Meu Hero Academia" no meusanimes devolvia "Eiyuu Kyoushitsu" (outro anime) e
+ * o fluxo seguia como se estivesse certo.
  *
  * @param {Array<{title?: string}>} resultados
  * @param {string} termo
@@ -113,8 +83,7 @@ export function correspondenciaExata(resultados = [], termo = "") {
  * O `meusanimes` (WordPress) publica as capas na busca como miniaturas
  * `-150x150.jpg`. A imagem original existe no mesmo caminho, sem o sufixo, e é
  * a única apresentável num card — a miniatura de 150px fica desfocada. Quando o
- * URL não tem o sufixo, é devolvido como está (os outros providers já dão a
- * imagem final).
+ * URL não tem o sufixo, é devolvido como está.
  *
  * @param {string} url
  * @returns {string}
@@ -146,48 +115,12 @@ export function buildCandidateRows(candidatos = []) {
 }
 
 /**
- * Escolhe, entre os episódios candidatos, o que serve o número pedido.
- *
- * Três regras, por ordem:
- *
- * 1. a faixa pedida explicitamente (o utilizador tocou em "Dublado") é
- *    REQUERIDA: um episódio sem ela não serve, porque servir outra faixa é o
- *    defeito que este fluxo existe para corrigir;
- * 2. sem escolha explícita, prefere-se o DUBLADO (`preferirDublado`): é o que a
- *    maioria dos pedidos procura, e o site que o publica é o que interessa;
- * 3. sem dublado, cai para o primeiro candidato (o legendado), para o episódio
- *    não desaparecer só por não ter dublagem.
- *
- * Puro (sem rede) para poder ser testado.
- *
- * @param {Array<{versions?: string[]}>} candidatos
- * @param {string} [audioVersion] faixa pedida, "" quando não houve escolha
- * @param {boolean} [preferirDublado]
- * @returns {object|null}
- */
-export function escolherEpisodio(candidatos = [], audioVersion = "", preferirDublado = true) {
-  const lista = Array.isArray(candidatos) ? candidatos : [];
-  const faixa = String(audioVersion || "").trim().toLowerCase();
-
-  if (faixa) {
-    return lista.find((ep) => (ep?.versions || []).includes(faixa)) || null;
-  }
-
-  if (preferirDublado) {
-    const dublado = lista.find((ep) => (ep?.versions || []).includes(AUDIO_DUBBED));
-    if (dublado) return dublado;
-  }
-
-  return lista[0] || null;
-}
-
-/**
  * true se a faixa "dublada" deste provider é em PORTUGUÊS.
  *
  * A faixa é um booleano no site ("dubbed" ou não), mas o IDIOMA dessa dublagem
- * é uma propriedade do SITE, não da faixa: o animesonlinehd e o anitube são
- * brasileiros (dublagem PT-BR), o animegg é inglês (dublagem inglesa). Sem esta
- * distinção, "Dublado" podia entregar áudio inglês com rótulo português.
+ * é uma propriedade do SITE, não da faixa: o `meusanimes` é brasileiro (dublagem
+ * PT-BR). Sem esta distinção, "Dublado" podia entregar áudio de outra língua com
+ * rótulo português.
  *
  * @param {string} provider
  * @param {string[]} [listaPt] providers PT-BR (vem de `ANIME_PT_DUB_PROVIDERS`)
@@ -200,51 +133,10 @@ export function isPortugueseDubProvider(provider, listaPt = []) {
 }
 
 /**
- * Reordena os providers para procurar a dublagem PT-BR PRIMEIRO.
- *
- * Só reordena quando a faixa pedida é a dublada: é o único caso em que o idioma
- * da dublagem importa. Os providers PT-BR mantêm a ordem relativa entre si
- * (a preferência configurada em `ANIME_PROVIDERS` é preservada) e os restantes
- * passam para trás, como rede de segurança — um título que só exista num site
- * inglês continua a ser alcançável.
- *
- * Sem faixa pedida devolve a lista intacta: a ordem configurada já tem o
- * provider PT-BR à frente, e reordenar por uma faixa que não foi pedida seria
- * impor uma escolha que o utilizador não fez.
- *
- * Puro (sem rede) para poder ser testado.
- *
- * @param {Array<{nome: string}>} providers
- * @param {string} [audioVersion] faixa pedida ("dubbed" reordena)
- * @param {string[]} [listaPt]
- * @returns {Array<{nome: string}>} nova lista (a original não é alterada)
- */
-export function ordenarProvidersParaFaixa(
-  providers = [],
-  audioVersion = "",
-  listaPt = [],
-) {
-  const lista = Array.isArray(providers) ? providers : [];
-  const faixa = String(audioVersion || "").trim().toLowerCase();
-
-  if (faixa !== AUDIO_DUBBED) return [...lista];
-
-  const pt = [];
-  const resto = [];
-
-  for (const provider of lista) {
-    if (isPortugueseDubProvider(provider?.nome, listaPt)) pt.push(provider);
-    else resto.push(provider);
-  }
-
-  return [...pt, ...resto];
-}
-
-/**
  * Nome próprio de uma faixa, para o card ("subbed" → "Legendado").
  *
- * O AnimeGG e o AniTube publicam as duas faixas em inglês; o utilizador do bot
- * fala português, pelo que o rótulo é traduzido. Um valor desconhecido é
+ * As fontes publicam as faixas em inglês ("subbed"/"dubbed"); o utilizador do
+ * bot fala português, pelo que o rótulo é traduzido. Um valor desconhecido é
  * devolvido como veio, para nunca esconder uma faixa nova do provider.
  *
  * @param {string} versao
@@ -260,10 +152,10 @@ export function audioVersionLabel(versao) {
 /**
  * Rótulo da faixa para o card, com o IDIOMA quando é dublagem confirmada PT-BR.
  *
- * A faixa dublada existe em vários sites, mas o idioma dessa dublagem é do
- * SITE: o animesonlinehd e o anitube dublam em português, o animegg em inglês.
- * Marcar "Dublado (PT-BR)" só quando é mesmo português evita prometer o idioma
- * errado; nos restantes fica "Dublado", sem afirmar um idioma que não se sabe.
+ * A faixa dublada é um booleano no site, mas o idioma dessa dublagem é do
+ * SITE: o `meusanimes` dubla em português. Marcar "Dublado (PT-BR)" só quando é
+ * mesmo português evita prometer o idioma errado; nos restantes fica "Dublado",
+ * sem afirmar um idioma que não se sabe.
  *
  * @param {string} versao
  * @param {string} provider
@@ -280,11 +172,11 @@ export function audioTrackLabel(versao, provider, listaPt = []) {
  * Aviso de IDIOMA quando a faixa dublada servida não é PT-BR.
  *
  * A faixa ("dubbed") é um booleano no site, mas o idioma dessa dublagem é uma
- * propriedade do SITE: o animesonlinehd e o anitube dublam em português, o
- * animegg em inglês. Sem este aviso, quem pede "Dublado" pode receber áudio
- * inglês com o card a dizer "Dublado" — o utilizador só o descobre pelo som.
+ * propriedade do SITE: o `meusanimes` dubla em português. Sem este aviso, quem
+ * pede "Dublado" numa fonte que não dubla em PT-BR pode receber outro idioma com
+ * o card a dizer "Dublado" — o utilizador só o descobre pelo som.
  *
- * Devolve "" sempre que não há nada a dizer: faixa legendada, ou provider que
+ * Devolve "" sempre que não há nada a dizer: faixa legendada, ou fonte que
  * dubla em PT-BR. Só fala quando há uma diferença real a comunicar.
  *
  * Puro (sem rede) para poder ser testado.
@@ -341,10 +233,8 @@ export function availableAudioVersions(episodes = []) {
  * Monta as linhas da escolha de faixa.
  *
  * A linha do dublado promete "PT-BR sempre que existir", não "português": a
- * escolha acontece ANTES de a fonte ser conhecida e nem todo o site que publica
- * dublado o faz em português (o animegg dubla em inglês). A procura tenta os
- * sites PT-BR primeiro, mas afirmar o idioma aqui seria prometer o que a fonte
- * ainda não confirmou — o card final é que diz o idioma real.
+ * escolha acontece ANTES de a fonte ser conhecida e nem toda a fonte que publica
+ * dublado o faz em português. O card final é que diz o idioma real.
  *
  * @param {string[]} versions
  * @returns {Array<{id: string, title: string, description: string}>}
@@ -363,25 +253,14 @@ export function buildAudioRows(versions = []) {
 }
 
 /**
- * Nomes próprios dos providers, para o card não mostrar "Animeheaven".
+ * Nomes próprios dos providers, para o card não mostrar "Meusanimes".
  */
 const PROVIDER_LABELS = {
-  anikoto: "Anikoto",
-  animeheaven: "AnimeHeaven",
-  animegg: "AnimeGG",
-  anitube: "AniTube",
-  animeunity: "AnimeUnity",
-  animepahe: "AnimePahe",
-  hianime: "HiAnime",
-  animekai: "AnimeKai",
-  kickassanime: "KickAssAnime",
-  animesaturn: "AnimeSaturn",
-  animesama: "AnimeSama",
   meusanimes: "Meus Animes",
 };
 
 /**
- * Rótulo legível de um provider de animes ("animeunity" → "AnimeUnity").
+ * Rótulo legível de um provider de animes ("meusanimes" → "Meus Animes").
  *
  * @param {string} provider
  * @returns {string}

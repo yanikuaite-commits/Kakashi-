@@ -19,14 +19,11 @@ import {
   capaEmTamanhoGrande,
   correspondenciaExata,
   episodePageCount,
-  escolherEpisodio,
   identitiesOverlap,
   isPortugueseDubProvider,
   jidDigits,
   jidIdentities,
-  melhorResultado,
   normalizeSources,
-  ordenarProvidersParaFaixa,
   tituloDeBusca,
   audioTrackLabel,
 } from "../utils/animeFormat.js";
@@ -36,9 +33,8 @@ test("animeSessionKey junta chat e autor", () => {
 });
 
 test("animeProviderLabel usa o nome próprio de cada provider", () => {
-  assert.equal(animeProviderLabel("animeheaven"), "AnimeHeaven");
-  assert.equal(animeProviderLabel("anikoto"), "Anikoto");
-  assert.equal(animeProviderLabel("AnimeHeaven"), "AnimeHeaven");
+  assert.equal(animeProviderLabel("meusanimes"), "Meus Animes");
+  assert.equal(animeProviderLabel("MeusAnimes"), "Meus Animes");
   assert.equal(animeProviderLabel(""), "Animes");
   assert.equal(animeProviderLabel(null), "Animes");
   // Desconhecido continua a capitalizar em vez de desaparecer.
@@ -191,7 +187,7 @@ test("availableAudioVersions devolve a UNIÃO das faixas da lista", () => {
     ["subbed", "dubbed"],
   );
 
-  // Sem informação de faixa (anikoto/animeheaven): o menu não pergunta nada.
+  // Sem informação de faixa: o menu não pergunta nada.
   assert.deepEqual(availableAudioVersions([{ number: 1 }, { number: 2 }]), []);
   assert.deepEqual(availableAudioVersions([]), []);
   assert.deepEqual(availableAudioVersions([{ versions: [] }]), []);
@@ -301,182 +297,58 @@ test("tituloDeBusca lida com entradas vazias", () => {
   assert.equal(tituloDeBusca("   Naruto   "), "Naruto");
 });
 
-test("escolherEpisodio exige a faixa pedida explicitamente", () => {
-  const candidatos = [
-    { id: "a", versions: ["subbed"] },
-    { id: "b", versions: ["subbed", "dubbed"] },
-  ];
-
-  assert.equal(escolherEpisodio(candidatos, "dubbed").id, "b");
-  assert.equal(escolherEpisodio(candidatos, "subbed").id, "a");
-});
-
-test("escolherEpisodio prefere o dublado sem escolha do utilizador", () => {
-  const candidatos = [
-    { id: "leg", versions: ["subbed"] },
-    { id: "dub", versions: ["subbed", "dubbed"] },
-  ];
-
-  assert.equal(escolherEpisodio(candidatos).id, "dub");
-  assert.equal(escolherEpisodio(candidatos, "", false).id, "leg");
-});
-
-test("escolherEpisodio não falha quando não há dublado", () => {
-  const candidatos = [{ id: "leg", versions: ["subbed"] }];
-
-  assert.equal(
-    escolherEpisodio(candidatos).id,
-    "leg",
-    "sem dublagem o episódio não pode desaparecer",
-  );
-});
-
-test("escolherEpisodio devolve null quando a faixa pedida não existe", () => {
-  const candidatos = [{ id: "leg", versions: ["subbed"] }];
-
-  assert.equal(
-    escolherEpisodio(candidatos, "dubbed"),
-    null,
-    "servir outra faixa é o defeito que este fluxo corrige",
-  );
-  assert.equal(escolherEpisodio([], "dubbed"), null);
-  assert.equal(escolherEpisodio(undefined), null);
-});
-
-test("melhorResultado prefere o título exato ao primeiro da lista", () => {
-  const resultados = [
-    { id: "1", title: "One Piece: Episode of Merry" },
-    { id: "2", title: "One Piece" },
-  ];
-
-  assert.equal(
-    melhorResultado(resultados, "one piece").id,
-    "2",
-    "o especial não pode esconder a série",
-  );
-});
-
-test("melhorResultado mantém o primeiro quando nada corresponde", () => {
-  const resultados = [{ id: "1", title: "Kaiju Girls" }];
-
-  assert.equal(melhorResultado(resultados, "kaiju girls").id, "1");
-  assert.equal(melhorResultado(resultados, "outro titulo").id, "1");
-  assert.equal(melhorResultado([], "naruto"), null);
-  assert.equal(melhorResultado(undefined, "naruto"), null);
-});
-
-test("melhorResultado compara ignorando os sufixos de site", () => {
-  const resultados = [
-    { id: "1", title: "Jujutsu Kaisen (TV)" },
-    { id: "2", title: "Jujutsu Kaisen 0" },
-  ];
-
-  assert.equal(
-    melhorResultado(resultados, "Jujutsu Kaisen").id,
-    "1",
-    "(TV) não impede a correspondência",
-  );
-});
-
 /* ═══════════ DUBLAGEM PT-BR PRIMEIRO ═══════════ */
 
-const PT = ["animesonlinehd", "anitube"];
+const PT = ["meusanimes"];
 
 test("isPortugueseDubProvider só reconhece os sites de dublagem PT-BR", () => {
-  assert.equal(isPortugueseDubProvider("animesonlinehd", PT), true);
-  assert.equal(isPortugueseDubProvider("anitube", PT), true);
+  assert.equal(isPortugueseDubProvider("meusanimes", PT), true);
   assert.equal(
-    isPortugueseDubProvider("animegg", PT),
+    isPortugueseDubProvider("outrafonte", PT),
     false,
-    "o animegg dubla em inglês, não em português",
+    "uma fonte que não está na lista PT-BR não é reconhecida",
   );
-  assert.equal(isPortugueseDubProvider("anikoto", PT), false);
   assert.equal(isPortugueseDubProvider("", PT), false);
   assert.equal(isPortugueseDubProvider(undefined, PT), false);
   assert.equal(
-    isPortugueseDubProvider("AnimesOnlineHD", PT),
+    isPortugueseDubProvider("MeusAnimes", PT),
     true,
     "a comparação ignora a caixa",
   );
 });
 
-test("ordenarProvidersParaFaixa põe os PT-BR à frente no dublado", () => {
-  const providers = [
-    { nome: "anikoto" },
-    { nome: "animegg" },
-    { nome: "animesonlinehd" },
-    { nome: "anitube" },
-  ];
-
-  const ordenados = ordenarProvidersParaFaixa(providers, "dubbed", PT);
-
-  assert.deepEqual(
-    ordenados.map((p) => p.nome),
-    ["animesonlinehd", "anitube", "anikoto", "animegg"],
-    "os PT-BR primeiro e a ordem relativa preservada nos dois grupos",
-  );
-  assert.deepEqual(
-    providers.map((p) => p.nome),
-    ["anikoto", "animegg", "animesonlinehd", "anitube"],
-    "a lista original não é alterada",
-  );
-});
-
-test("ordenarProvidersParaFaixa não mexe na lista fora do dublado", () => {
-  const providers = [{ nome: "anikoto" }, { nome: "animesonlinehd" }];
-
-  for (const faixa of ["", "subbed", undefined]) {
-    assert.deepEqual(
-      ordenarProvidersParaFaixa(providers, faixa, PT).map((p) => p.nome),
-      ["anikoto", "animesonlinehd"],
-      `faixa "${faixa}" mantém a ordem configurada`,
-    );
-  }
-});
-
-test("ordenarProvidersParaFaixa aguenta lista vazia e nomes ausentes", () => {
-  assert.deepEqual(ordenarProvidersParaFaixa([], "dubbed", PT), []);
-  assert.deepEqual(ordenarProvidersParaFaixa(undefined, "dubbed", PT), []);
-  assert.deepEqual(
-    ordenarProvidersParaFaixa([{ nome: "x" }, {}], "dubbed", PT).map((p) => p.nome),
-    ["x", undefined],
-  );
-});
-
 test("audioTrackLabel só afirma PT-BR quando o site dubla em português", () => {
-  assert.equal(audioTrackLabel("dubbed", "animesonlinehd", PT), "Dublado (PT-BR)");
-  assert.equal(audioTrackLabel("dubbed", "anitube", PT), "Dublado (PT-BR)");
+  assert.equal(audioTrackLabel("dubbed", "meusanimes", PT), "Dublado (PT-BR)");
   assert.equal(
-    audioTrackLabel("dubbed", "animegg", PT),
+    audioTrackLabel("dubbed", "outrafonte", PT),
     "Dublado",
-    "não pode prometer português numa fonte que dubla em inglês",
+    "não pode prometer português numa fonte fora da lista PT-BR",
   );
   assert.equal(
-    audioTrackLabel("subbed", "animesonlinehd", PT),
+    audioTrackLabel("subbed", "meusanimes", PT),
     "Legendado",
     "o idioma só qualifica a dublagem",
   );
-  assert.equal(audioTrackLabel("", "animesonlinehd", PT), "");
+  assert.equal(audioTrackLabel("", "meusanimes", PT), "");
 });
 
 test("avisoIdiomaDublagem avisa só quando a dublagem não é PT-BR", () => {
   assert.equal(
-    avisoIdiomaDublagem("dubbed", "animesonlinehd", PT),
+    avisoIdiomaDublagem("dubbed", "meusanimes", PT),
     "",
     "dublagem PT-BR não tem nada a avisar",
   );
-  assert.equal(avisoIdiomaDublagem("dubbed", "anitube", PT), "");
 
-  const ingles = avisoIdiomaDublagem("dubbed", "animegg", PT);
+  const ingles = avisoIdiomaDublagem("dubbed", "outrafonte", PT);
   assert.match(ingles, /inglês/i);
   assert.match(ingles, /PT-BR/i, "diz o que vai tentar fazer a seguir");
 
   assert.equal(
-    avisoIdiomaDublagem("subbed", "animegg", PT),
+    avisoIdiomaDublagem("subbed", "outrafonte", PT),
     "",
     "o idioma só é uma questão na dublagem",
   );
-  assert.equal(avisoIdiomaDublagem("", "animegg", PT), "");
+  assert.equal(avisoIdiomaDublagem("", "outrafonte", PT), "");
 });
 
 

@@ -256,7 +256,10 @@ test("mensagens de créditos explicam saldo, reset e recarga com o dono", () => 
   });
   assert.match(message, /MINHA CONTA/);
   assert.match(message, /Ana/);
-  assert.match(message, /Saldo:\* 30 créditos/);
+  assert.match(
+    message,
+    new RegExp(`Saldo:\\* ${DAILY_FREE_CREDITS} créditos`),
+  );
   assert.match(message, /Faltam: 1min/);
   assert.match(message, /\.conta custos/);
 
@@ -442,44 +445,42 @@ test("download real cobra créditos extras de mídia longa no contexto do usuár
 
 test("remoção gasta o diário primeiro e chega aos recarregados", () => {
   const jid = testJid("remove");
+  const pago = 10;
+  const pequeno = 5; // dentro do diário
 
-  // Saldo: 30 do dia + 10 recarregados.
-  addCredits(jid, 10, { note: "pix", now: middayInMozambique });
+  // Saldo: o diário + 10 recarregados.
+  addCredits(jid, pago, { note: "pix", now: middayInMozambique });
 
-  const parcial = removeCredits(jid, 12, { note: "punição", now: middayInMozambique });
+  const parcial = removeCredits(jid, pequeno, { note: "punição", now: middayInMozambique });
   assert.equal(parcial.ok, true);
-  assert.equal(parcial.removed, 12);
-  assert.equal(getAccount(jid, middayInMozambique).dailyCredits, DAILY_FREE_CREDITS - 12);
+  assert.equal(parcial.removed, pequeno);
+  assert.equal(getAccount(jid, middayInMozambique).dailyCredits, DAILY_FREE_CREDITS - pequeno);
   assert.equal(
     getAccount(jid, middayInMozambique).paidCredits,
-    10,
+    pago,
     "dentro do diário, os recarregados ficam intactos",
   );
 
-  // 40 pedidos com 28 de saldo: estrito, não remove nada.
-  const exagerado = removeCredits(jid, 40, { now: middayInMozambique });
+  // Mais do que o saldo total: estrito, não remove nada.
+  const saldo = accountBalance(getAccount(jid, middayInMozambique));
+  const exagerado = removeCredits(jid, saldo + 1, { now: middayInMozambique });
   assert.equal(exagerado.ok, false);
   assert.equal(exagerado.reason, "saldo insuficiente");
   assert.equal(exagerado.removed, 0);
-  assert.equal(
-    accountBalance(getAccount(jid, middayInMozambique)),
-    DAILY_FREE_CREDITS - 12 + 10,
-  );
+  assert.equal(accountBalance(getAccount(jid, middayInMozambique)), saldo);
 
   // Remover mais do que resta no diário passa a tocar nos recarregados.
-  const fundo = removeCredits(jid, 25, { now: middayInMozambique });
-  assert.equal(fundo.removed, 25);
+  const restanteDiario = getAccount(jid, middayInMozambique).dailyCredits;
+  const fundo = removeCredits(jid, restanteDiario + 3, { now: middayInMozambique });
+  assert.equal(fundo.removed, restanteDiario + 3);
   assert.equal(getAccount(jid, middayInMozambique).dailyCredits, 0);
-  assert.equal(
-    getAccount(jid, middayInMozambique).paidCredits,
-    10 - (25 - (DAILY_FREE_CREDITS - 12)),
-  );
+  assert.equal(getAccount(jid, middayInMozambique).paidCredits, pago - 3);
 
   // O registo fica na conta (mais recente primeiro), para uma reclamação de
   // "os meus créditos desapareceram" ter resposta.
   const registos = getAccount(jid, middayInMozambique).adjustments;
-  assert.equal(registos[0].removed, 25);
-  assert.equal(registos[1].removed, 12);
+  assert.equal(registos[0].removed, restanteDiario + 3);
+  assert.equal(registos[1].removed, pequeno);
   assert.equal(registos[1].note, "punição");
 });
 
@@ -512,12 +513,15 @@ test("remoção com valor inválido não mexe no saldo", () => {
 
 test("o diário removido volta no reset das 00h00 e os recarregados não", () => {
   const jid = testJid("remove-reset");
+  const pago = 20;
 
-  addCredits(jid, 20, { note: "pix", now: middayInMozambique });
-  // 50 remove os 30 do dia e 20 dos recarregados.
-  const resultado = removeCredits(jid, 50, { now: middayInMozambique });
+  addCredits(jid, pago, { note: "pix", now: middayInMozambique });
+  // Remove o diário inteiro e ainda toca nos recarregados.
+  const resultado = removeCredits(jid, DAILY_FREE_CREDITS + pago, {
+    now: middayInMozambique,
+  });
 
-  assert.equal(resultado.removed, 50);
+  assert.equal(resultado.removed, DAILY_FREE_CREDITS + pago);
   assert.equal(accountBalance(getAccount(jid, middayInMozambique)), 0);
 
   // Passou a meia-noite: os diários renovam, os recarregados ficaram a zero.
@@ -539,16 +543,17 @@ test("dono remove créditos pelo comando e o usuário fica sem saldo", async () 
     const antes = accountBalance(getAccount(memberJid));
     assert.equal(antes, DAILY_FREE_CREDITS + 40);
 
+    // Remover dentro do diário: o saldo sai do diário, os recarregados ficam.
     const remocao = await runCommand(
       OWNER_LID,
       remoteJid,
-      `.remover-creditos 25 ${mention}`,
+      `.remover-creditos 5 ${mention}`,
     );
     assert.match(remocao.text, /Créditos removidos/);
-    assert.equal(accountBalance(getAccount(memberJid)), antes - 25);
+    assert.equal(accountBalance(getAccount(memberJid)), antes - 5);
 
     // O saldo removido do diário não pode reaparecer como recarregado.
-    assert.equal(getAccount(memberJid).dailyCredits, DAILY_FREE_CREDITS - 25);
+    assert.equal(getAccount(memberJid).dailyCredits, DAILY_FREE_CREDITS - 5);
     assert.equal(getAccount(memberJid).paidCredits, 40);
 
     // "tudo" esvazia a conta.

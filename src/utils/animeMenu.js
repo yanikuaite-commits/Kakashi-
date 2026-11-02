@@ -1,5 +1,5 @@
 /**
- * Fluxo de animes (providers vivos via @consumet/extensions) — Parte 3 do sistema de downloads.
+ * Fluxo de animes (fonte única: meusanimes) — Parte 3 do sistema de downloads.
  *
  * Passos:
  *   1. o utilizador escolhe "Animes" no menu (ou usa `.anime <nome>`) → o bot
@@ -27,7 +27,7 @@
  * A resolução do download depende do tipo de fonte. Um m3u8 traz vários degraus
  * no mesmo URL, por isso o yt-dlp é limitado a `ANIME_MAX_HEIGHT` (480p) — sem
  * limite escolhia 1080p e estourava o teto. Uma fonte MP4 direta já É o degrau
- * escolhido no menu (o animesonlinehd publica 360p e 720p como URLs distintos),
+ * escolhido no menu (o meusanimes publica 360p e 720p como URLs distintos),
  * por isso não leva filtro de altura: o teto de MB é que decide.
  *
  * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
@@ -37,8 +37,8 @@
  * @author Dev Yanik
  */
 import fs from "node:fs";
-import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_GG_MAX_HEIGHT, ANIME_HEAVEN_MAX_HEIGHT, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, ANIME_PT_DUB_PROVIDERS, MAIN_MENU_CHANNEL_URL, OWNER_LID } from "../config.js";
-import { getAnimeInfo, getAnimeSeasons, getEpisodeSourcesWithFallback, getSeasonEpisodes, searchAnimeCandidates } from "../services/anime.js";
+import { ANIME_DOCUMENT_LIMIT_MB, ANIME_EPISODE_CREDITS, ANIME_MAX_DOWNLOAD_BYTES, ANIME_MAX_HEIGHT, ANIME_PT_DUB_PROVIDERS, MAIN_MENU_CHANNEL_URL, OWNER_LID } from "../config.js";
+import { getAnimeInfo, getAnimeSeasons, getEpisodeSources, getSeasonEpisodes, searchAnimeCandidates } from "../services/anime.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withDownloadSlot } from "../services/downloadQueue.js";
 import {
@@ -95,7 +95,7 @@ const CANCEL_TOKEN = "anm:cancel";
 /**
  * Cabeçalhos que o CDN do Google Video (Blogger) exige: o `Referer` do Blogger e
  * um User-Agent de browser. Sem o User-Agent responde 403 mesmo com o Referer
- * certo. Partilhado pelo animesonlinehd e pelo anitube no formato novo.
+ * certo. É o formato servido pelo meusanimes.
  */
 const ARGS_BLOGGER = [
   "--referer",
@@ -422,9 +422,8 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
   touch(session);
 
   try {
-    // A faixa escolhida vai já para a pesquisa: com "dublado", os providers de
-    // dublagem PT-BR são procurados primeiro, para o título não cair num site
-    // que só dubla em inglês com o PT-BR disponível noutro.
+    // A faixa escolhida vai já para a pesquisa: o `meusanimes` publica o
+    // dublado como entrada própria, pelo que a escolha muda o que é procurado.
     //
     // `searchAnimeCandidates` (e não `searchAnime`) porque um título em
     // português pode não ter correspondência exata no catálogo do site:
@@ -663,24 +662,23 @@ async function loadEpisodesAndSend({ socket, session, id }) {
  * o que vai receber.
  *
  * A verificação é feita sobre as FAIXAS PUBLICADAS na lista devolvida, e não
- * sobre o sucesso da chamada: há providers que ignoram a faixa pedida e
- * devolvem sempre a lista inteira (o animegg), pelo que "veio lista" não prova
- * que a faixa pedida existe. Sem esta verificação, pedir dublado num título só
- * legendado devolvia o legendado em silêncio — exatamente o defeito a corrigir.
+ * sobre o sucesso da chamada: "veio lista" não prova que a faixa pedida existe.
+ * Sem esta verificação, pedir dublado num título só legendado devolvia o
+ * legendado em silêncio — exatamente o defeito a corrigir.
  *
  * Três desfechos, por ordem:
  *
  * 1. a fonte serve a faixa pedida → nada a dizer;
  * 2. a fonte publica faixas mas não a pedida → avisa e fixa a que existe;
- * 3. a fonte não publica faixa nenhuma (`[]`, como o anikoto) → fica em
- *    silêncio: não há nada para comparar, e um aviso com rótulo vazio seria
- *    pior do que não dizer nada. A escolha segue para o provider, que a ignora.
+ * 3. a fonte não publica faixa nenhuma (`[]`) → fica em silêncio: não há nada
+ *    para comparar, e um aviso com rótulo vazio seria pior do que não dizer
+ *    nada. A escolha segue para a fonte, que a ignora.
  *
  * À parte da faixa, a DUBLAGEM tem uma questão de idioma que a faixa não
  * resolve: "dubbed" é um booleano no site, mas o idioma depende do SITE (o
- * animesonlinehd e o anitube dublam em PT-BR, o animegg em inglês). Quando a
- * faixa servida é a dublada e a fonte não é PT-BR, o aviso diz que o áudio é
- * inglês — para o utilizador não receber português na etiqueta e inglês no som.
+ * meusanimes dubla em PT-BR). Quando a faixa servida é a dublada e a fonte não é
+ * PT-BR, o aviso diz que o áudio é inglês — para o utilizador não receber
+ * português na etiqueta e inglês no som.
  *
  * @returns {Promise<{lista: Array<object>, faixaAviso: string}>}
  */
@@ -730,8 +728,8 @@ async function carregarEpisodiosComFaixa({ session, carregar, contexto }) {
  *
  * Pergunta a faixa (Legendado/Dublado) só quando a lista inteira publica as
  * duas — perguntar por um episódio que só tem uma delas seria uma escolha falsa.
- * Quando há uma só faixa, fica logo fixada sem incomodar o utilizador; quando o
- * provider não distingue faixas (`[]`), o fluxo segue como sempre.
+ * Quando há uma só faixa, fica logo fixada sem incomodar o utilizador; quando a
+ * fonte não distingue faixas (`[]`), o fluxo segue como sempre.
  *
  * @returns {Promise<boolean>}
  */
@@ -798,8 +796,8 @@ async function askAudioBeforeSearch({ socket, session }) {
  *
  * - ANTES de pesquisar (`pendingName` preenchido): a faixa é fixada e a pesquisa
  *   arranca já com ela. É o caminho normal.
- * - DEPOIS de a lista existir: recarrega os episódios na faixa nova. Só os
- *   providers que publicam ids por faixa (animesonlinehd) ganham com isto.
+ * - DEPOIS de a lista existir: recarrega os episódios na faixa nova. O
+ *   `meusanimes` publica ids por faixa, pelo que a lista muda com a escolha.
  *
  * A validação muda com o caminho. Antes da pesquisa oferecem-se sempre as duas
  * faixas, pelo que qualquer uma é aceitável — é a fonte que dirá se a tem. Com a
@@ -841,8 +839,7 @@ async function chooseAudioVersion({ socket, session, version }) {
 /**
  * Recarrega os episódios com a faixa já fixada.
  *
- * Só os providers que publicam ids por faixa (animesonlinehd) ganham com isto;
- * os restantes devolvem a mesma lista, pelo que o custo é uma chamada extra.
+ * O `meusanimes` publica ids por faixa, pelo que a lista muda com a escolha.
  *
  * @returns {Promise<boolean>}
  */
@@ -864,8 +861,8 @@ async function reloadEpisodesForAudio({ socket, session }) {
 
     if (lista?.length) session.episodes = lista;
   } catch (error) {
-    // A lista antiga continua válida para os providers que não distinguem ids
-    // por faixa; só os que distinguem precisam mesmo desta recarga.
+    // A lista antiga continua válida se a recarga falhar; a faixa fica como
+    // estava em vez de deixar o utilizador sem lista.
     errorLog(`[anime] recarga da faixa "${session.audioVersion}" falhou: ${error.message}`);
   }
 
@@ -990,35 +987,19 @@ async function sendQualityList({ socket, session, episodeIndex }) {
   touch(session);
 
   try {
-    // O fallback reencontra este episódio nos providers seguintes quando o
-    // provider de origem não tem vídeo (o AnimeGG falha ~1 em 8 episódios).
-    // O provider vencedor substitui o da sessão: os argumentos do yt-dlp e a
-    // resolução máxima dependem dele.
-    const resolvido = await getEpisodeSourcesWithFallback(
+    // Fonte única: o id do episódio é o da própria fonte, pelo que não há
+    // fallback para reencontrar o episódio noutro site.
+    const sources = await getEpisodeSources(
       episode.id,
       session.provider,
-      {
-        titulo: session.anime?.title || "",
-        numero: episode.number,
-        audioVersion: session.audioVersion || "",
-      },
+      session.audioVersion || "",
     );
-
-    const sources = resolvido.sources;
-
-    if (resolvido.provider !== session.provider) {
-      infoLog(
-        `[anime] episódio servido por ${resolvido.provider} (fallback de ${session.provider})`,
-      );
-    }
-
-    session.provider = resolvido.provider;
 
     session.episode = {
       index: episodeIndex,
       number: episode.number ?? episodeIndex + 1,
       title: episode.title || "",
-      id: resolvido.episodeId,
+      id: episode.id,
     };
     session.sources = sources;
     session.stage = "qualidades";
@@ -1059,82 +1040,17 @@ async function sendQualityList({ socket, session, episodeIndex }) {
 /* ═══════════ PASSO 4 · BAIXAR E ENVIAR ═══════════ */
 
 /**
- * Argumentos extra do yt-dlp consoante o provider.
+ * Argumentos extra do yt-dlp.
  *
- * O CDN do anikoto (`fetch.nexabloom.top`) entrega o m3u8 apenas a pedidos que
- * pareçam um browser: o yt-dlp tem de imitar o TLS/HTTP de um Chrome
- * (`generic:impersonate`) e enviar o `Referer` do player, senão responde 403
- * (desafio Cloudflare). O AnimeHeaven serve o MP4 direto e aceita o pedido sem
- * impersonation, mas o mirror confere o `Referer` do `gate.php`. O AnimeGG serve
- * o MP4 direto do CDN `vidcache.net`, que só exige o `Referer` do site.
+ * O meusanimes serve o episódio pelo CDN do Google Video (Blogger), que exige o
+ * `Referer` do Blogger E um User-Agent de browser: sem o User-Agent responde 403
+ * mesmo com o Referer certo. Os MP4 são degraus diretos (360p/720p), pelo que
+ * não há `impersonate` nem `Referer` de player a acrescentar.
  *
- * O anitube serve o episódio em dois formatos, e o cabeçalho depende disso: o
- * m3u8 antigo vem do CDN do site e exige o `Referer` do anitube, enquanto o
- * formato novo é um MP4 do Blogger que exige o `Referer` do Blogger e um
- * User-Agent de browser. Por isso a fonte é consultada.
- *
- * @param {string} provider
- * @param {{isM3U8?: boolean}} [source] fonte escolhida no menu
  * @returns {string[]}
  */
-function animeDownloadArgs(provider, source) {
-  const nome = String(provider || "").toLowerCase();
-
-  if (nome === "anikoto") {
-    return [
-      "--extractor-args",
-      "generic:impersonate",
-      "--referer",
-      "https://megaplay.buzz/",
-    ];
-  }
-
-  if (nome === "animeheaven") {
-    return ["--referer", "https://animeheaven.me/gate.php"];
-  }
-
-  if (nome === "animegg") {
-    return ["--referer", "https://www.animegg.org/"];
-  }
-
-  if (nome === "anitube") {
-    return source?.isM3U8
-      ? ["--referer", "https://www.anitube.zip/"]
-      : ARGS_BLOGGER;
-  }
-
-  if (nome === "animesonlinehd" || nome === "meusanimes") {
-    return ARGS_BLOGGER;
-  }
-
-  return [];
-}
-
-/**
- * Altura máxima por provider.
- *
- * O anikoto só publica 1080p, por isso o download é limitado a 480p para caber
- * no limite de envio. O AnimeHeaven já publica 720p nativo (~112–164 MB, dentro
- * do teto de 500 MB): limitar a 480p só degradaria a imagem sem ganhar nada. O
- * AnimeGG é fixado em 480p (ANIME_GG_MAX_HEIGHT) porque o 720p já pesa mais.
- *
- * @param {string} provider
- * @returns {number}
- */
-function animeMaxHeight(provider) {
-  const nome = String(provider || "").toLowerCase();
-  if (nome === "animeheaven") return ANIME_HEAVEN_MAX_HEIGHT;
-  if (nome === "animegg") return ANIME_GG_MAX_HEIGHT;
-  return ANIME_MAX_HEIGHT;
-}
-
-/**
- * O CDN dos animes (anikoto) limita pedidos concorrentes: com fragmentos HLS em
- * paralelo ele responde 429 e o yt-dlp perde fragmentos, falhando com
- * "No such file ...-FragN". Baixar em sequência é mais lento e mais confiável.
- */
-function animeConcurrentFragments(provider) {
-  return String(provider || "").toLowerCase() === "anikoto" ? 1 : undefined;
+function animeDownloadArgs() {
+  return ARGS_BLOGGER;
 }
 
 async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile }) {
@@ -1149,7 +1065,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
 
   const episode = session.episode;
   const animeTitulo = session.anime?.title || "Anime";
-  const alturaMaxima = animeMaxHeight(session.provider);
+  const alturaMaxima = ANIME_MAX_HEIGHT;
 
   // Cada episódio baixado custa ANIME_EPISODE_CREDITS. A verificação é feita
   // ANTES de arrancar o download: o dono do bot não gasta e um episódio não
@@ -1212,13 +1128,12 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
         () =>
           downloadWithYtDlp(source.url, {
             // A fonte HLS traz vários degraus no mesmo URL, por isso o limite de
-            // altura escolhe o degrau. Uma fonte MP4 direta (animesonlinehd,
-            // animeheaven) já É o degrau escolhido no menu: filtrar por altura
+            // altura escolhe o degrau. Uma fonte MP4 direta (meusanimes) já É o
+            // degrau escolhido no menu: filtrar por altura
             // não teria efeito e podia descartar o formato único disponível.
             height: source.isM3U8 ? alturaMaxima : "best",
             maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
-            extraArgs: animeDownloadArgs(session.provider, source),
-            concurrentFragments: animeConcurrentFragments(session.provider),
+            extraArgs: animeDownloadArgs(),
           }),
         { priority: session.ownerId === OWNER_LID },
       ),

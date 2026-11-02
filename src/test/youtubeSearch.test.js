@@ -36,7 +36,7 @@ test("filtra canais, vídeos inválidos e retorna no máximo cinco resultados", 
   assert.match(formatted, /📌 \*Título:\* Vídeo 1/);
   assert.match(formatted, /⏳ \*Duração:\* 3:00/);
   assert.match(formatted, /🔗 \*Link:\* https:\/\/www.youtube.com\/watch\?v=sample00000/);
-  assert.ok(formatted.endsWith("© Made by Yanik Uaite"));
+  assert.ok(formatted.endsWith("✦ Constelado por Yanik Uaite ✦"));
 });
 
 test("cada resultado envia foto e texto separados e continua sem foto", async () => {

@@ -16,12 +16,15 @@
   "engines": {
     "node": ">=22.8.0"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys"
+  ],
+  "author": "Dev Yanik <yanikuaite-commits>",
   "license": "ISC",
   "dependencies": {
     "@cacheable/node-cache": "^3.0.0",
-    "@consumet/extensions": "^1.8.8",
     "@libsql/client": "^0.18.0",
     "axios": "^1.14.0",
     "baileys": "7.0.0-rc14",

@@ -16,7 +16,7 @@ import { extractUserLid, onlyNumbers } from "../utils/index.js";
 import { errorLog } from "../utils/logger.js";
 
 /**
- * Aplica o molde visual único (e o rodapé "© Made by Yanik Uaite") à mensagem
+ * Aplica o molde visual único (e o rodapé `RODAPE`) à mensagem
  * de boas-vindas/despedida, preenchendo {grupo} e {prefixo} quando presentes.
  */
 async function frameParticipantMessage(socket, remoteJid, text, titulo) {

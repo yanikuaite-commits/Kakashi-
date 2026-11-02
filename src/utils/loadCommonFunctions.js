@@ -231,7 +231,7 @@ export function loadCommonFunctions({ socket, webMessage }) {
   };
 
   // Todos os helpers de resposta passam pelos templates do formatMessage e
-  // terminam com o rodapé "© Made by Yanik Uaite" (molde nunca é duplicado).
+  // terminam com o rodapé `RODAPE` (molde nunca é duplicado).
   const sendSuccessReply = async (text, mentions) => {
     await sendSuccessReact();
     return await sendReply(

@@ -127,7 +127,7 @@ export function mainMenuVelocity(timestampSeconds, now = Date.now()) {
 }
 
 /**
- * Corpo do card (molde visual pedido, com as variáveis preenchidas).
+ * Corpo do card (tema Galáxia, com as variáveis preenchidas).
  */
 export function buildMainMenuBody({
   usuario = "usuario",
@@ -140,27 +140,24 @@ export function buildMainMenuBody({
   rodape = MAIN_MENU_FOOTER,
 } = {}) {
   return [
-    "┏━━━༺ 🌐 ༻━━━┓",
-    `          ${String(botName).toUpperCase()}`,
-    "      ┗━━━༺ ⚡ ༻━━━┛",
+    "  ☄️ · ✦ ·  ˚  ✧ · ☾ · ✦ · ˚ · ✧ · ☄️",
+    `      ⋆｡°✩  🌌 ${String(botName).toUpperCase()} 🌌  ✩°｡⋆`,
+    "  ✧ · ˚ · ✦ · ☄️ · ˚ · ✧ · ✦ · ˚ · ✧",
     "",
-    "╭┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈",
+    "      ╭────────  🪐  ────────╮",
     "",
-    "   ╭─『 🌙 INFORMAÇÕES 』─╮",
+    `        👽 @${usuario}`,
+    `        🌍 ${data}  🌙 ${hora}`,
+    `        ⭐ ${diaSemana}`,
+    `        🚀 ${velocidade}`,
+    `        👑 ${criador}`,
     "",
-    `   👤 You Name: @${usuario}`,
-    `   📅 Data: ${data}`,
-    `   🕒 Horário: ${hora}`,
-    `   📆 Hoje é: ${diaSemana}`,
-    `   ⚡ Velocidade: ${velocidade}`,
-    `   👑 Criador: ${criador}`,
+    "      ╰──────────────────────╯",
     "",
-    "   ╰┈┈┈┈┈┈┈┈┈┈┈┈┈╯",
-    "",
-    "༺━━━━━━━━━━━━━━━━━━༻",
+    "   ✧ · ˚ · ✦ · ☄️ · ˚ · ✧ · ✦ · ˚ · ✧",
     "",
     `  ${rodape}`,
-    `  『 ⚡ Desenvolvido por ${criador} 』`,
+    `  ✦ Constelado por ${criador} ✦`,
   ].join("\n");
 }
 

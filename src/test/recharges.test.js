@@ -566,7 +566,10 @@ test("confirmar avisa o usuário no grupo e manda a tabela de créditos", async 
   );
   assert.ok(aviso, `esperava o aviso ao usuário: ${JSON.stringify(enviados.map((e) => e.jid))}`);
   assert.match(aviso.content.text, /65/);
-  assert.match(aviso.content.text, /95 créditos/);
+  assert.match(
+    aviso.content.text,
+    new RegExp(`${DAILY_FREE_CREDITS + 65} créditos`),
+  );
   assert.deepEqual(aviso.content.mentions, [senderLid], "menciona quem pagou");
 
   // E a tabela de créditos foi enviada a seguir (rich response).

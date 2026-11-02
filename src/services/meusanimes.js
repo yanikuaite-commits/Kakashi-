@@ -1,14 +1,13 @@
 /**
  * Provider "meusanimes": extrai o vídeo do site, sem API de terceiros.
  *
- * PORQUÊ: é o provider PT-BR mais completo testado — responde a IPs de datacenter
+ * PORQUÊ: é a FONTE ÚNICA do fluxo de animes — responde a IPs de datacenter
  * SEM qualquer desafio Cloudflare, publica temporadas
  * agrupadas na própria página e serve o episódio pelo player do Blogger, que o
  * projeto já sabe ler. Os sites PT-BR mais conhecidos (goyabu, animefire,
- * animesonlinecc) estão atrás de Cloudflare e o `animesonlinehd` publica um
- * catálogo mais estreito. Aqui cada episódio traz 360p (~89 MB num episódio de
- * 23 min, dentro do teto) e 720p (~285 MB, no limite) como degraus separados,
- * para o menu de qualidades deixar o utilizador escolher.
+ * animesonlinecc) estão atrás de Cloudflare. Aqui cada episódio traz 360p
+ * (~89 MB num episódio de 23 min, dentro do teto) e 720p (~285 MB, no limite)
+ * como degraus separados, para o menu de qualidades deixar o utilizador escolher.
  *
  * COMO: o site é WordPress e o player é uma SPA React noutro domínio. A cadeia:
  *
@@ -24,16 +23,15 @@
  *
  * O último passo é um link do Blogger cuja página traz o `videoplayback` do
  * Google Video. O extractor `blogger` do yt-dlp falha neste formato ("Unable to
- * extract JSON data"), por isso o URL é lido em `bloggerVideo.js` (partilhado
- * com o animesonlinehd e o anitube) e o yt-dlp recebe o googlevideo direto.
+ * extract JSON data"), por isso o URL é lido em `bloggerVideo.js` e o yt-dlp
+ * recebe o googlevideo direto.
  *
- * ÁUDIO: ao contrário do animesonlinehd (que traz as duas faixas no mesmo id), o
- * dublado é uma ENTRADA separada (`/a/<base>-dublado/`). O sufixo é a convenção
- * do site, mas não é uma garantia — `naruto-shippuden` serve dublado sem o
- * sufixo —, por isso a faixa real é confirmada na página do PRIMEIRO episódio
- * (`span.qualidade`) antes de rotular a lista. Sem essa confirmação o provider
- * podia dizer "legendado" de um episódio dublado, que é exatamente o defeito que
- * o fluxo de faixa existe para corrigir.
+ * ÁUDIO: o dublado é uma ENTRADA separada (`/a/<base>-dublado/`). O sufixo é a
+ * convenção do site, mas não é uma garantia — `naruto-shippuden` serve dublado
+ * sem o sufixo —, por isso a faixa real é confirmada na página do PRIMEIRO
+ * episódio (`span.qualidade`) antes de rotular a lista. Sem essa confirmação o
+ * provider podia dizer "legendado" de um episódio dublado, que é exatamente o
+ * defeito que o fluxo de faixa existe para corrigir.
  *
  * @author Dev Yanik
  */

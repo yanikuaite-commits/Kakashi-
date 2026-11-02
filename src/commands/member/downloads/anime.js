@@ -3,7 +3,7 @@ import { startAnimeFlow } from "../../../utils/animeMenu.js";
 
 export default {
   name: "anime",
-  description: "Baixa episódios de animes (providers via @consumet/extensions)",
+  description: "Baixa episódios de animes (fonte: Meus Animes)",
   commands: ["anime", "animes"],
   usage: `${PREFIX}anime <nome do anime>`,
   /**

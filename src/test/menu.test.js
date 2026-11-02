@@ -12,7 +12,7 @@ test("menu principal mostra navegação curta e pesquisa fica nos downloads", ()
   const main = menuMessage(chatId, "", "Pessoa *legal*");
   assert.match(main, /\*Usuário:\* Pessoa legal/);
   assert.match(main, /┌─〔 🌐 \*KAKASHI BOT • MENU\* 〕─┐/);
-  assert.ok(main.endsWith("© Made by Yanik Uaite"));
+  assert.ok(main.endsWith("✦ Constelado por Yanik Uaite ✦"));
   assert.match(main, /\.menu download/);
   assert.doesNotMatch(main, /\.yt-mp4/);
   assert.match(menuMessage(chatId, "download"), /\.yt <termo>/);
@@ -84,5 +84,15 @@ test("cada comando apresentado no menu pode ser resolvido pelo bot", async () =>
       const name = usage.split(" ")[0];
       assert.ok(available.has(formatCommand(name)), `${category.key}: ${name} não existe`);
     }
+  }
+});
+
+test("nenhum submenu passa o limite de legenda do WhatsApp", () => {
+  for (const { key } of MENU_CATEGORIES) {
+    const caption = menuMessage(chatId, key, "Pessoa");
+    assert.ok(
+      caption.length <= 1024,
+      `${key}: legenda com ${caption.length} caracteres (limite 1024)`,
+    );
   }
 });

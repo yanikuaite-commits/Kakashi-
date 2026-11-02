@@ -17,7 +17,7 @@ export const BOT_NAME = "Kakashi Bot";
 // mostra ao ver o pacote). Aparece por baixo do nome de quem criou a figurinha.
 export const STICKER_PACK_PUBLISHER =
   process.env.STICKER_PACK_PUBLISHER ||
-  `✨ Kakashi Bot 💙 por Dev Yanik`;
+  "✦ ☄️ Constelado por Dev Yanik 🪐 ✦";
 
 // LID do bot (no caso, o que você rodará o bot).
 // Para obter o LID do bot, use o comando <prefixo>lid respondendo em cima de uma mensagem do número do bot
@@ -564,65 +564,26 @@ export const TURSO_BACKUP_TABLE =
   process.env.TURSO_BACKUP_TABLE || "kakashi_backups";
 
 // ==========================================================================
-// ANIMES (fontes de streaming via @consumet/extensions, em processo)
+// ANIMES (fonte única: meusanimes)
 // ==========================================================================
-// A API pública `api.consumet.org` foi DESATIVADA e o provider HiAnime fechou
-// em definitivo (março de 2026), pelo que apontar para um servidor Consumet já
-// não resolveria. Em vez disso, a biblioteca `@consumet/extensions` corre
-// DENTRO do bot (sem servidor) e extrai os links de streaming de providers
-// vivos; o yt-dlp baixa o m3u8 resultante.
+// O fluxo de animes usa UMA fonte: `meusanimes` (`src/services/meusanimes.js`).
+// Responde a IPs de datacenter sem desafio Cloudflare, agrupa temporadas na
+// própria página e serve o episódio pelo player do Blogger (que o projeto já
+// lê). Publica 360p (~89 MB num episódio de 23 min) e 720p (~285 MB) como
+// degraus separados, pelo que o menu de qualidades deixa o utilizador escolher.
 //
-// ANIME_PROVIDERS aceita uma lista separada por vírgulas, por ordem de
-// preferência. Cada provider é tentado até um devolver o episódio.
+// Os outros providers (anikoto, animegg, anitube, animeheaven, animesonlinehd e
+// os da biblioteca `@consumet/extensions`) foram removidos a pedido do dono do
+// bot. Se um dia voltarem, o ponto de entrada é `src/services/anime.js`.
 //
-// A lista predefinida é `meusanimes` APENAS: os restantes providers estão
-// DESATIVADOS por agora, para o fluxo depender de uma só fonte e os erros serem
-// atribuíveis. Os providers continuam implementados e registados — reativar é
-// só acrescentar nomes a esta lista (ou à variável de ambiente ANIME_PROVIDERS),
-// sem tocar em código.
-//
-// Os nomes conhecidos e a razão de cada um:
-//
-// - `meusanimes` (ATIVO) responde a IPs de datacenter sem qualquer desafio
-//   Cloudflare, agrupa temporadas na própria página e serve o episódio pelo
-//   player do Blogger (que o projeto já lê). Publica 360p (~89 MB num episódio
-//   de 23 min) e 720p (~285 MB) como degraus separados, pelo que o menu de
-//   qualidades deixa o utilizador escolher;
-// - `animesonlinehd` tem DUBLAGEM PT-BR real e é estável: responde a IPs de
-//   datacenter sem Cloudflare e serve 360p (~75 MB num episódio de 24 min). A
-//   imagem é menor do que a dos outros;
-// - `animegg` é o mais rápido (HTML estático, sem browser) e entrega H.264 num
-//   MP4 direto; falha em ~1 de cada 8 episódios com `videoSources = []`;
-// - `anitube` serve HLS H.264, mas só publica 720p (~257 MB num episódio de
-//   24 min): só resolve episódios curtos;
-// - `animeheaven` publica MP4 720p nativo (~95–128 MB);
-// - `anikoto` só publica 1080p (HLS), o que obriga a baixar grande e a reduzir
-//   localmente.
-//
-// `animegg`, `anitube`, `anikoto`, `animeheaven`, `animesonlinehd` e
-// `meusanimes` são extraídos diretamente pelo bot (`src/services/*.js`) e
-// respondem a IPs de datacenter. Os restantes vêm da biblioteca e servem de
-// alternativa (AnimeUnity funciona de IP residencial e de alguns datacenters).
-export const ANIME_PROVIDERS = (
-  process.env.ANIME_PROVIDERS || "meusanimes"
-)
-  .split(",")
-  .map((nome) => nome.trim().toLowerCase())
-  .filter(Boolean);
-
-// A biblioteca NÃO define User-Agent, pelo que o axios envia "axios/1.x" — e o
-// Cloudflare (que está à frente de todos estes sites) bloqueia esse agente em
-// IPs de datacenter. Sem estes cabeçalhos a pesquisa falha com
-// "nenhuma fonte respondeu". Isto é o mesmo tipo de bloqueio que o YouTube já
-// faz a IPs de datacenter.
+// `ANIME_USER_AGENT` é o cabeçalho aplicado a todos os pedidos à fonte, e o
+// `ANIME_ACCEPT_LANGUAGE` o idioma preferido. `ANIME_PROXY_URL` é a saída de
+// emergência para quando o IP do host é desafiado pelo Cloudflare: um proxy HTTP
+// residencial, no formato http://user:pass@host:port.
 export const ANIME_USER_AGENT =
   process.env.ANIME_USER_AGENT ||
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 export const ANIME_ACCEPT_LANGUAGE = process.env.ANIME_ACCEPT_LANGUAGE || "en-US,en;q=0.9";
-
-// Escape hatch para quando o IP do host está bloqueado de vez (Cloudflare
-// desafia datacenter mesmo com User-Agent de browser): um proxy HTTP
-// residencial, no formato http://user:pass@host:port.
 export const ANIME_PROXY_URL = process.env.ANIME_PROXY_URL || "";
 
 export const ANIME_API_TIMEOUT_MS = 30 * 1000;
@@ -720,34 +681,16 @@ export const ANIME_PREFER_DUBBED =
 
 // Providers cuja faixa "dublada" é PORTUGUÊS (PT-BR), e não inglês.
 //
-// A faixa é um booleano nos sites ("dubbed" ou não), mas o IDIOMA dessa dublagem
-// depende do site: o `meusanimes`, o `animesonlinehd` e o `anitube` são sites
-// brasileiros (a dublagem é PT-BR), enquanto o `animegg` é um site inglês — o
-// "Dubbed" dele é dublagem inglesa. Sem esta distinção, pedir "Dublado" podia
-// entregar áudio em inglês com o rótulo em português.
-//
-// É esta lista que permite procurar a dublagem PT-BR PRIMEIRO: com a faixa
-// dublada pedida, estes providers passam à frente na pesquisa e no fallback.
-// Ajuste se um site mudar de idioma ou se um provider PT-BR novo for adicionado.
+// A faixa é um booleano no site ("dubbed" ou não), mas o IDIOMA dessa dublagem
+// depende do site. Com a fonte única atual (`meusanimes`, um site brasileiro) a
+// lista só tem esse nome; o mecanismo mantém-se porque o rótulo do card e o
+// aviso de idioma ainda o consultam.
 export const ANIME_PT_DUB_PROVIDERS = (
-  process.env.ANIME_PT_DUB_PROVIDERS || "meusanimes,animesonlinehd,anitube"
+  process.env.ANIME_PT_DUB_PROVIDERS || "meusanimes"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())
   .filter(Boolean);
-
-// Teto do provider AnimeHeaven, que publica 720p nativo (~112–164 MB): o
-// episódio já cabe no teto de 500 MB, por isso não há razão para o degradar
-// para 480p. Mantém-se configurável para o caso de episódios mais pesados.
-export const ANIME_HEAVEN_MAX_HEIGHT =
-  Number(process.env.ANIME_HEAVEN_MAX_HEIGHT) || 720;
-
-// Resolução preferida no provider AnimeGG, que publica 360p/480p/720p.
-//
-// 480p por padrão: o mesmo episódio mede 31 MB em 360p, 80 MB em 480p e 201 MB
-// em 720p. O provider mede cada degrau por `Content-Length` e só desce/sobe se
-// o preferido não couber — ver `escolherDegrau` em `src/services/animegg.js`.
-export const ANIME_GG_MAX_HEIGHT = Number(process.env.ANIME_GG_MAX_HEIGHT) || 480;
 
 export const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 export const AI_TIMEOUT_MS = 30 * 1000;

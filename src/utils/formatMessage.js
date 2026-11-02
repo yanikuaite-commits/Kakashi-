@@ -4,21 +4,30 @@
  * TODA resposta de texto passa por aqui — diretamente pelo comando ou pelos
  * helpers centrais de loadCommonFunctions — e termina com o rodapé exato:
  *
- *   © Made by Yanik Uaite
+ *   ✦ Constelado por Yanik Uaite ✦
+ *
+ * Tema visual "Galáxia": cabeçalho cósmico, secção em caixa e rodapé de
+ * constelação.
  *
  * Molde padrão:
  *
- *   ┌─〔 ícone *KAKASHI BOT • TÍTULO* 〕─┐
+ *   ☄️ · ✦ ·  ˚  ✧ · ☾ · ✦ · ˚ · ✧ · ☄️
+ *         ⋆｡°✩  KAKASHI BOT  ✩°｡⋆
+ *   ✧ · ˚ · ✦ · ☄️ · ˚ · ✧ · ✦ · ˚ · ✧
+ *
+ *   ┌─〔 🎛️ *KAKASHI BOT • TÍTULO* 〕─┐
  *   │
  *   │ linha de conteúdo
  *   └──────────────────┘
+ *
+ *   ✦ Constelado por Yanik Uaite ✦
  *
  * Nunca monte o molde à mão num comando: use formatMessage ou os templates
  * prontos abaixo.
  */
 import { BOT_NAME } from "../config.js";
 
-export const RODAPE = "© Made by Yanik Uaite";
+export const RODAPE = "✦ Constelado por Yanik Uaite ✦";
 
 /** Marca de molde aplicado — evita emoldurar a mesma mensagem duas vezes. */
 export const FRAME_MARK = "┌─〔";
@@ -44,7 +53,7 @@ function linesOf(value) {
  * @param {string} [options.icone] emoji da categoria (default 🎛️)
  * @param {string} [options.titulo] título da seção (fica em caixa alta)
  * @param {Array<string>} [options.campos] linhas de conteúdo (aceita \n)
- * @param {string|null} [options.rodape] rodapé exato (default "© Made by Yanik Uaite")
+ * @param {string|null} [options.rodape] rodapé exato (default `RODAPE`)
  * @param {string} [options.extra] bloco extra após os campos
  * @returns {string}
  */
@@ -60,7 +69,14 @@ export function formatMessage({
     ? `┌─〔 ${icone} *${nome} • ${String(titulo).toUpperCase()}* 〕─┐`
     : `┌─〔 ${icone} *${nome}* 〕─┐`;
 
-  const linhas = [`🎛️ *${BOT_NAME}*`, "", secao, "│"];
+  const linhas = [
+    "☄️ · ✦ ·  ˚  ✧ · ☾ · ✦ · ˚ · ✧ · ☄️",
+    `       ⋆｡°✩  ${nome}  ✩°｡⋆`,
+    "☄️ · ✦ ·  ˚  ✧ · ☾ · ✦ · ˚ · ✧ · ☄️",
+    "",
+    secao,
+    "│",
+  ];
 
   const push = (valor) => {
     const partes = linesOf(valor);
@@ -280,7 +296,7 @@ export function downloadMessage({
  * @param {string} [options.qualidade]
  * @param {string} [options.extra] linha extra opcional no fim
  * @param {string|null} [options.rodape] rodapé do corpo (null quando o card já
- *   leva `footer`, para não imprimir "© Made by Yanik Uaite" duas vezes)
+ *   leva `footer`, para não imprimir o `RODAPE` duas vezes)
  */
 export function mediaCaption({
   titulo,

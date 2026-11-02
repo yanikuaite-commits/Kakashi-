@@ -2,13 +2,12 @@
  * Leitura do player "Google Blogger" (`blogger.com/video.g`), partilhada por
  * vários providers PT-BR.
  *
- * PORQUÊ: o animesonlinehd e o anitube servem o episódio pelo mesmo player, e o
- * anitube migrou do HLS antigo para ele. O `playerUrl` é um link do Blogger cuja
- * página traz o `videoplayback` do Google Video no HTML. O extractor `blogger`
- * do yt-dlp falha neste formato ("Unable to extract JSON data"), por isso o URL
- * é lido aqui e o yt-dlp recebe o googlevideo direto. Esse CDN exige `Referer`
- * do Blogger E um User-Agent de browser: sem o User-Agent responde 403 mesmo
- * com o Referer certo.
+ * PORQUÊ: o meusanimes serve o episódio por este player. O `playerUrl` é um link
+ * do Blogger cuja página traz o `videoplayback` do Google Video no HTML. O
+ * extractor `blogger` do yt-dlp falha neste formato ("Unable to extract JSON
+ * data"), por isso o URL é lido aqui e o yt-dlp recebe o googlevideo direto.
+ * Esse CDN exige `Referer` do Blogger E um User-Agent de browser: sem o
+ * User-Agent responde 403 mesmo com o Referer certo.
  *
  * Estas funções são puras (sem rede) para poderem ser testadas com HTML real
  * capturado dos sites.
