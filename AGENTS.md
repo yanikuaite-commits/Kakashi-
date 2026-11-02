@@ -682,6 +682,48 @@ innocent members. The failure mode is always conservative — when in doubt, do 
 punish. Do not punish based on undecryptable messages without a new signal that
 actually proves payment content.
 
+## API_KEYS
+
+Every credential the bot uses can be set over WhatsApp by the owner, instead of
+editing `src/config.js` on the host. The registry lives in `src/utils/database.js`
+(`API_KEYS`) and the behaviour in `src/utils/apiKeyCommand.js`.
+
+| Command | Key | Used by |
+| --- | --- | --- |
+| `.set-github-token` | `github_token` | `.backup` upload |
+| `.set-spider-api-token` | `spider_api_token` | `spider-x-api.js` (downloads, AI, Pinterest, Brat) |
+| `.set-linker-api-token` | `linker_api_key` | `linker.js` (`gerar-link`) |
+| `.set-groq-api-token` | `groq_api_key` | `ai.js` (chat, transcription) and `suporte.js` |
+| `.set-gemini-api-token` | `gemini_api_key` | `gemini.js` (image generation) |
+| `.set-hf-token` | `hf_token` | Hugging Face |
+
+- `.api-keys` lists every key with its state (`definida no WhatsApp`, `vinda do
+  ambiente`, `ausente`) and how to get each one. It is the guided entry point;
+  the per-API commands are the shortcuts
+- **the value is never printed back**: the confirmation shows only the last 4
+  characters (`••••abcd`). The chat can be read by someone else, and the
+  `config.json` goes into the backup
+- the value defined over WhatsApp **wins over the environment**. That is
+  deliberate: `database/config.json` is not versioned, so an owner who sets a key
+  by chat should not have it silently replaced by the host's `GROQ_API_KEY` on
+  the next boot. `removeApiKey` (the word `remover` in place of the key) drops
+  the stored value and lets the environment one apply again
+- `getApiKey(name)` resolves stored → environment; `listApiKeys()` reports which
+  one is in force. The old `getSpiderApiToken` / `getGithubToken` are thin
+  wrappers and keep working
+- the commands come from one factory (`buildApiKeyCommand`), so validation is
+  identical everywhere: a key that is too short for that provider or that
+  contains whitespace is refused with `InvalidParameterError` before anything is
+  written
+- **services read the key at call time, not at import time.** A key set over
+  WhatsApp takes effect without a restart: `ai.js`, `gemini.js`, `linker.js` and
+  `suporte.js` call `getApiKey` inside the function, and `linker.js` still falls
+  back to the Spider token when it has none
+- the registry is the single place to add a new credential: declare it in
+  `API_KEYS` and create the thin command in `src/commands/owner/`
+- `LINKER_API_KEY` in `src/config.js` no longer carries a placeholder — it reads
+  the environment, because the repository is public
+
 ## SERVICES
 
 ### Spider X API
@@ -696,7 +738,7 @@ actually proves payment content.
 It depends on `SPIDER_API_TOKEN`, which can come from:
 
 - `src/config.js`
-- runtime database config through `/set-spider-api-token`
+- runtime database config through `/set-spider-api-token` (or `.api-keys`)
 
 ### yt-dlp
 
@@ -1017,12 +1059,15 @@ Agents working in this repository should follow these rules:
 - never modify `assets/auth/` manually
 - when supporting users, stay read-only unless explicitly asked to change code
 - when support needs extra context, load only the relevant sections or files
-- never expose the values of `OPENAI_API_KEY`, `LINKER_API_KEY`, or `SPIDER_API_TOKEN`
+- never expose the values of any credential (`GROQ_API_KEY`, `GEMINI_API_KEY`,
+  `HF_TOKEN`, `GITHUB_TOKEN`, `SPIDER_API_TOKEN`, `LINKER_API_KEY`): the API key
+  commands always answer with the key masked
 - never put a secret value in a versioned file: this repository is **public**, and
   GitHub auto-revokes any token it finds in a public repo (that is what killed the
   `GITHUB_TOKEN` in `src/config.js` and made `.backup` answer HTTP 401). Read
-  secrets from the environment, or from `database/config.json` via
-  `.set-github-token` / `.set-spider-api-token` — that file is now gitignored
+  secrets from the environment, or from `database/config.json` via the API key
+  commands (`.api-keys`, `.set-github-token`, `.set-spider-api-token`, ...) —
+  that file is now gitignored
 - the backup carries the `.env` and the customer data in `database/`, so it must
   never be sent to a public repository. `src/services/backup.js` refuses it; do
   not remove that guard

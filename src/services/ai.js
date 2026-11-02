@@ -1,6 +1,5 @@
 import {
   AI_TIMEOUT_MS,
-  GROQ_API_KEY,
   GROQ_CHAT_URL,
   GROQ_HISTORY_SIZE,
   GROQ_MAX_TOKENS,
@@ -11,6 +10,7 @@ import {
   GROQ_TRANSCRIPTION_MODEL,
   GROQ_TRANSCRIPTION_URL,
 } from "../config.js";
+import { getApiKey } from "../utils/database.js";
 import { errorLog } from "../utils/logger.js";
 
 const histories = new Map();
@@ -19,7 +19,7 @@ const histories = new Map();
 const RETRYABLE_STATUS = [429, 500, 502, 503];
 
 const MISSING_KEY_MESSAGE =
-  "A IA está indisponível: preencha GROQ_API_KEY em src/config.js (ou defina GROQ_API_KEY no ambiente do bot).";
+  "A IA está indisponível: configure a chave da Groq com `.api-keys groq <chave>` (ou defina GROQ_API_KEY no ambiente do bot).";
 
 /**
  * Conversa com a IA da Groq (chat completions), mantendo um histórico curto
@@ -30,7 +30,9 @@ const MISSING_KEY_MESSAGE =
  * @returns {Promise<string>} resposta da IA
  */
 export async function askGroq(chatId, question) {
-  if (!GROQ_API_KEY) {
+  const apiKey = getApiKey("groq_api_key");
+
+  if (!apiKey) {
     throw new Error(MISSING_KEY_MESSAGE);
   }
 
@@ -48,7 +50,7 @@ export async function askGroq(chatId, question) {
       const response = await fetch(GROQ_CHAT_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${GROQ_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -109,7 +111,9 @@ export async function transcribeAudio(
   mimeType = "audio/ogg",
   fileName = "audio.ogg",
 ) {
-  if (!GROQ_API_KEY) {
+  const apiKey = getApiKey("groq_api_key");
+
+  if (!apiKey) {
     throw new Error(MISSING_KEY_MESSAGE);
   }
 
@@ -125,7 +129,7 @@ export async function transcribeAudio(
 
     const response = await fetch(GROQ_TRANSCRIPTION_URL, {
       method: "POST",
-      headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+      headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
       signal: controller.signal,
     });

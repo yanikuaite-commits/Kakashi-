@@ -38,10 +38,9 @@ import {
   systemStatus,
 } from "../../services/dashboard.js";
 import {
-  getGithubToken,
   getPrivateWhitelist,
-  getSpiderApiToken,
   isBotEnabled,
+  listApiKeys,
 } from "../../utils/database.js";
 import { barra, barraDeEstado, sendPanel, sparkline } from "../../utils/dashboardMenu.js";
 import { panelMessage } from "../../utils/formatMessage.js";
@@ -347,15 +346,20 @@ function abaConfig() {
     campos: [
       `⚡ Prefixo padrão: ${PREFIX}`,
       `🤖 Bot global: ${isBotEnabled() ? "✅ ativado" : "⛔ desativado"}`,
-      `🔑 Token Spider X: ${getSpiderApiToken() ? "✅ configurado" : "❌ ausente"}`,
-      `🐙 Token GitHub: ${getGithubToken() ? "✅ configurado" : "❌ ausente"}`,
       `✅ Whitelist privada: ${getPrivateWhitelist().length} autorizado(s)`,
+      "",
+      `🔐 *Chaves de API:* ${listApiKeys().filter((c) => c.configured).length}/${listApiKeys().length} configuradas`,
+      ...listApiKeys().map(
+        (c) =>
+          `${c.configured ? "✅" : "❌"} ${c.label}${
+            c.origin === "whatsapp" ? " (WhatsApp)" : c.origin === "ambiente" ? " (ambiente)" : ""
+          }`,
+      ),
       "",
       "Comandos:",
       `${PREFIX}set-prefix <caractere> — prefixo deste grupo`,
       `${PREFIX}bot-on | ${PREFIX}bot-off — liga/desliga o bot`,
-      `${PREFIX}set-spider-api-token <token>`,
-      `${PREFIX}set-github-token <token>`,
+      `${PREFIX}api-keys — ver e configurar todas as chaves`,
       `${PREFIX}private-whitelist add <lid>`,
     ],
   });

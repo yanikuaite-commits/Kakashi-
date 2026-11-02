@@ -5,11 +5,13 @@
  */
 import axios from "axios";
 import FormData from "form-data";
-import { LINKER_API_KEY, LINKER_BASE_URL, PREFIX } from "../config.js";
-import { getSpiderApiToken } from "../utils/database.js";
+import { LINKER_BASE_URL, PREFIX } from "../config.js";
+import { getApiKey } from "../utils/database.js";
 
 /**
- * Não configure o token do Linker aqui, configure em: src/config.js
+ * Não configure a chave do Linker no config: defina-a pelo WhatsApp com
+ * `.api-keys linker <chave>`, que a guarda em `database/config.json`. Sem ela, o
+ * token da Spider X API é usado como alternativa.
  */
 function isApiKeyConfigured(apiKey) {
   return (
@@ -20,19 +22,12 @@ function isApiKeyConfigured(apiKey) {
 }
 
 const messageIfKeyNotConfigured = `API Key do Linker ou token da Spider X API não configurado!
-      
-Para configurar, entre na pasta: \`src\` 
-e edite o arquivo \`config.js\`:
 
-Procure por:
+Para configurar pelo WhatsApp, use:
 
-\`export const LINKER_API_KEY = "seu_token_aqui";\`
+\`${PREFIX}api-keys linker sua_chave_aqui\`
 
-Ou configure o token da Spider X API com:
-
-\`export const SPIDER_API_TOKEN = "seu_token_aqui";\`
-
-ou pelo comando:
+ou, para usar o token da Spider X API como alternativa:
 
 \`${PREFIX}set-spider-api-token seu_token_aqui\`
 
@@ -45,11 +40,13 @@ Para obter uma API Key do Linker:
 Para usar a Spider X API, crie uma conta em: https://api.spiderx.com.br`;
 
 function getUploadApiKey() {
-  if (isApiKeyConfigured(LINKER_API_KEY)) {
-    return LINKER_API_KEY;
+  const linkerKey = getApiKey("linker_api_key");
+
+  if (isApiKeyConfigured(linkerKey)) {
+    return linkerKey;
   }
 
-  const spiderApiToken = getSpiderApiToken();
+  const spiderApiToken = getApiKey("spider_api_token");
 
   if (isApiKeyConfigured(spiderApiToken)) {
     return spiderApiToken;

@@ -8,11 +8,15 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   DATABASE_DIR,
+  GEMINI_API_KEY,
+  GITHUB_TOKEN,
+  GROQ_API_KEY,
+  HF_TOKEN,
+  LINKER_API_KEY,
   MONGODB_FLUSH_DEBOUNCE_MS,
   MONGODB_FLUSH_RETRY_MS,
   PREFIX,
   SESSION_STATE_NAME,
-  GITHUB_TOKEN,
   SPIDER_API_TOKEN,
 } from "../config.js";
 import {
@@ -296,9 +300,10 @@ function readJSONFromDiskLocal(jsonFile) {
 /**
  * Remove do que vai para o destino remoto o que nunca deve lá estar.
  *
- * `config.json` é espelhado porque guarda tokens que o dono define pelo
- * WhatsApp (`github_token`, `spider_api_token`) e que devem sobreviver a um
- * deploy. As exceções são as credenciais do próprio destino
+ * `config.json` é espelhado porque guarda as chaves que o dono define pelo
+ * WhatsApp (o registo `API_KEYS`: `github_token`, `spider_api_token`,
+ * `groq_api_key`, ...) e que devem sobreviver a um deploy. As exceções são as
+ * credenciais do próprio destino
  * (`mongodb_uri`, `turso_url`, `turso_auth_token`): copiar a password da base
  * de dados para dentro dela própria transformaria um acesso de leitura num
  * acesso total, e vazaria a credencial em qualquer export.
@@ -960,22 +965,151 @@ export function removeAutoResponderItemByKey(key) {
   return true;
 }
 
+/**
+ * Chaves de API que o dono pode configurar pelo WhatsApp.
+ *
+ * A mesma ideia do token do GitHub e da Spider: o valor guardado em
+ * `database/config.json` (não versionado, e espelhado para o destino remoto)
+ * tem prioridade sobre o valor do ambiente, para o que o dono define pelo
+ * WhatsApp não ser substituído em silêncio no arranque seguinte.
+ *
+ * `env` é o nome da variável de ambiente e também a chave guardada no
+ * `config.json`, o que mantém uma só convenção para tudo.
+ */
+export const API_KEYS = {
+  github_token: {
+    label: "GitHub (backup)",
+    env: "GITHUB_TOKEN",
+    fallback: GITHUB_TOKEN,
+    // Token clássico `ghp_`/`github_pat_`: 40+ caracteres. O mínimo de 20 só
+    // recusa o que é manifestamente curto demais para ser um token.
+    minLength: 20,
+    hint: "usado pelo .backup para enviar o arquivo ao repositório privado",
+    where: "https://github.com/settings/tokens",
+  },
+  spider_api_token: {
+    label: "Spider X API",
+    env: "SPIDER_API_TOKEN",
+    fallback: SPIDER_API_TOKEN,
+    minLength: 8,
+    hint: "downloads, IA, Pinterest, Brat e o comando gerar-link",
+    where: "https://api.spiderx.com.br",
+  },
+  linker_api_key: {
+    label: "Linker",
+    env: "LINKER_API_KEY",
+    fallback: LINKER_API_KEY,
+    minLength: 8,
+    hint: "comando gerar-link (tem prioridade sobre o token da Spider)",
+    where: "https://linker.devyaniik.dev",
+  },
+  groq_api_key: {
+    label: "Groq (IA)",
+    env: "GROQ_API_KEY",
+    fallback: GROQ_API_KEY,
+    minLength: 20,
+    hint: "chat do .kakashi, .transcrever e .suporte",
+    where: "https://console.groq.com/keys",
+  },
+  gemini_api_key: {
+    label: "Google Gemini (imagem)",
+    env: "GEMINI_API_KEY",
+    fallback: GEMINI_API_KEY,
+    minLength: 20,
+    hint: "geração de imagem dos comandos de IA",
+    where: "https://aistudio.google.com/apikey",
+  },
+  hf_token: {
+    label: "Hugging Face",
+    env: "HF_TOKEN",
+    fallback: HF_TOKEN,
+    minLength: 10,
+    hint: "modelos e inferência da Hugging Face",
+    where: "https://huggingface.co/settings/tokens",
+  },
+};
+
+/** Um valor que conta como "configurado" — nem vazio nem o marcador do molde. */
+function isKeyConfigured(value) {
+  return (
+    typeof value === "string" &&
+    value.trim() !== "" &&
+    value !== "seu_token_aqui"
+  );
+}
+
+export function getApiKey(name) {
+  const definition = API_KEYS[name];
+
+  if (!definition) return "";
+
+  const config = readJSON(CONFIG_FILE, {});
+  const stored = config[name];
+
+  if (isKeyConfigured(stored)) return stored.trim();
+  if (isKeyConfigured(definition.fallback)) return String(definition.fallback).trim();
+
+  return "";
+}
+
+export function setApiKey(name, value) {
+  const definition = API_KEYS[name];
+
+  if (!definition) return false;
+
+  const config = readJSON(CONFIG_FILE, {});
+
+  config[name] = String(value).trim();
+
+  writeJSON(CONFIG_FILE, config, {});
+
+  return true;
+}
+
+export function removeApiKey(name) {
+  const definition = API_KEYS[name];
+
+  if (!definition) return false;
+
+  const config = readJSON(CONFIG_FILE, {});
+
+  const had = isKeyConfigured(config[name]);
+  delete config[name];
+
+  writeJSON(CONFIG_FILE, config, {});
+
+  return had;
+}
+
+/** Todas as chaves conhecidas, com o estado e a origem do valor atual. */
+export function listApiKeys() {
+  const config = readJSON(CONFIG_FILE, {});
+
+  return Object.entries(API_KEYS).map(([name, definition]) => {
+    const stored = isKeyConfigured(config[name]);
+    const value = getApiKey(name);
+
+    return {
+      name,
+      label: definition.label,
+      configured: Boolean(value),
+      origin: stored ? "whatsapp" : value ? "ambiente" : null,
+      hint: definition.hint,
+      where: definition.where,
+    };
+  });
+}
+
+export function isApiKeyConfigured(name) {
+  return Boolean(getApiKey(name));
+}
+
 export function setSpiderApiToken(token) {
-  const filename = CONFIG_FILE;
-
-  const config = readJSON(filename, {});
-
-  config.spider_api_token = token;
-
-  writeJSON(filename, config, {});
+  setApiKey("spider_api_token", token);
 }
 
 export function getSpiderApiToken() {
-  const filename = CONFIG_FILE;
-
-  const config = readJSON(filename, {});
-
-  return config.spider_api_token || SPIDER_API_TOKEN;
+  return getApiKey("spider_api_token");
 }
 
 /**
@@ -987,21 +1121,11 @@ export function getSpiderApiToken() {
  * pelo WhatsApp não é silenciosamente substituído pelo ambiente.
  */
 export function setGithubToken(token) {
-  const filename = CONFIG_FILE;
-
-  const config = readJSON(filename, {});
-
-  config.github_token = token;
-
-  writeJSON(filename, config, {});
+  setApiKey("github_token", token);
 }
 
 export function getGithubToken() {
-  const filename = CONFIG_FILE;
-
-  const config = readJSON(filename, {});
-
-  return config.github_token || GITHUB_TOKEN;
+  return getApiKey("github_token");
 }
 
 /**

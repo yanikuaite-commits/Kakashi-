@@ -111,8 +111,10 @@ export const LINKER_BASE_URL =
   process.env.LINKER_BASE_URL || "https://linker.devyaniik.dev/api";
 
 // Obtenha sua chave em: https://linker.devyaniik.dev.
-// Se não configurar esta chave, o bot usa automaticamente o token da Spider X API.
-export const LINKER_API_KEY = "seu_token_aqui";
+// Não tem valor fixo aqui de propósito (o repositório é público): defina
+// `LINKER_API_KEY` no ambiente ou use `.set-linker-api-token` no WhatsApp.
+// Sem esta chave, o bot usa automaticamente o token da Spider X API.
+export const LINKER_API_KEY = process.env.LINKER_API_KEY || "";
 
 // Caso queira responder apenas um grupo específico,
 // coloque o ID dele na configuração abaixo.

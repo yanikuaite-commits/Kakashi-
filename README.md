@@ -61,9 +61,12 @@ Isto não é só organização: este repositório é **público**, e o GitHub re
 sozinho qualquer token que encontre num ficheiro versionado de um repositório
 público. Foi o que aconteceu ao token que estava em `src/config.js` — o `.backup`
 passou a responder HTTP 401 porque a credencial já tinha sido revogada. O
-`GITHUB_TOKEN` também pode ser definido pelo WhatsApp com `.set-github-token`, e
-o token da Spider com `.set-spider-api-token` (ambos ficam em
-`database/config.json`, que não é versionado).
+Qualquer uma delas pode ser definida pelo WhatsApp, sem mexer no código: use
+`.api-keys` para ver o estado e os comandos, ou `.set-github-token`,
+`.set-spider-api-token`, `.set-linker-api-token`, `.set-groq-api-token`,
+`.set-gemini-api-token` e `.set-hf-token` para configurar cada uma (ficam em
+`database/config.json`, que não é versionado). Envie `remover` no lugar da chave
+para apagar o valor guardado.
 
 ## Migração gratuita no Termux
 
@@ -74,7 +77,8 @@ pkg install ffmpeg
 npm i fluent-ffmpeg canvas jimp dotenv
 ```
 
-As chaves da IA, GitHub e pareamento estão configuradas em `src/config.js`.
+As chaves da IA, GitHub e pareamento podem ficar no ambiente do host ou ser
+definidas pelo WhatsApp com `.api-keys` (guardadas em `database/config.json`).
 Não é necessário criar um `.env`.
 
 O segredo da página `/pairing` também está em `src/config.js`, na constante

@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 import {
   CATEGORIES,
@@ -9,31 +7,34 @@ import {
   listFunctions,
 } from "../interactive/menuRegistry.js";
 import { MENU_CATEGORIES } from "../menu.js";
+import { readCommandImports } from "../utils/index.js";
 
-/** Todos os nomes de comando publicados pelos ficheiros de `src/commands`. */
-function comandosDisponiveis() {
+/**
+ * Todos os nomes de comando publicados pelos ficheiros de `src/commands`.
+ *
+ * Usa o mesmo carregador do bot em vez de analisar o texto dos ficheiros: os
+ * comandos de chave de API são construídos por uma fábrica, pelo que não têm um
+ * `commands: [...]` literal para uma expressão regular encontrar.
+ */
+async function comandosDisponiveis() {
   const disponiveis = new Set();
-  const walk = (dir) => {
-    for (const entrada of fs.readdirSync(dir, { withFileTypes: true })) {
-      const alvo = path.join(dir, entrada.name);
-      if (entrada.isDirectory()) {
-        walk(alvo);
-      } else if (entrada.name.endsWith(".js")) {
-        const fonte = fs.readFileSync(alvo, "utf8");
-        const lista = (fonte.match(/\bcommands:\s*\[([^\]]*)\]/) || [])[1] || "";
-        for (const [, nome] of lista.matchAll(/["'`]([^"'`]+)["'`]/g)) {
-          disponiveis.add(nome.toLowerCase());
-        }
+  const importados = await readCommandImports();
+
+  for (const comandos of Object.values(importados)) {
+    for (const comando of comandos) {
+      if (!comando) continue;
+      if (comando.name) disponiveis.add(comando.name.toLowerCase());
+      for (const alias of comando.commands || []) {
+        disponiveis.add(String(alias).toLowerCase());
       }
     }
-  };
+  }
 
-  walk(path.join(process.cwd(), "src", "commands"));
   return disponiveis;
 }
 
-test("toda entrada do menu aponta para um comando que existe", () => {
-  const disponiveis = comandosDisponiveis();
+test("toda entrada do menu aponta para um comando que existe", async () => {
+  const disponiveis = await comandosDisponiveis();
 
   for (const funcao of FUNCTIONS) {
     assert.ok(

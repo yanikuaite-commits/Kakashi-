@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
 import {
   BOT_EMOJI,
-  GROQ_API_KEY,
   GROQ_BASE_URL,
   GROQ_SUPPORT_MAX_TOKENS,
   GROQ_SUPPORT_MODEL,
@@ -13,6 +12,7 @@ import {
   PREFIX,
 } from "../../config.js";
 import { DangerError, WarningError } from "../../errors/index.js";
+import { getApiKey } from "../../utils/database.js";
 import {
   getRandomName,
   normalizeWhatsAppCodeBlocks,
@@ -44,7 +44,9 @@ Você também pode escrever o texto e responder a mensagem com o comando ${PREFI
     downloadImage,
     webMessage,
   }) => {
-    if (!GROQ_API_KEY) {
+    const groqApiKey = getApiKey("groq_api_key");
+
+    if (!groqApiKey) {
       throw new WarningError(
         "O suporte inteligente não está disponível no momento. Entre em contato com o administrador do bot!",
       );
@@ -124,7 +126,7 @@ Faça sua pergunta sobre mim que eu te ajudarei!
 
     // O SDK da OpenAI é compatível: aqui ele fala com a Groq.
     const openai = new OpenAI({
-      apiKey: GROQ_API_KEY,
+      apiKey: groqApiKey,
       baseURL: GROQ_BASE_URL,
     });
 

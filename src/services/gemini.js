@@ -1,11 +1,11 @@
 import {
-  GEMINI_API_KEY,
   GEMINI_IMAGE_API,
   GEMINI_IMAGE_ASPECT_RATIO,
   GEMINI_IMAGE_MODEL,
   GEMINI_IMAGE_SIZE,
   GEMINI_IMAGE_TIMEOUT_MS,
 } from "../config.js";
+import { getApiKey } from "../utils/database.js";
 import { errorLog } from "../utils/logger.js";
 
 /**
@@ -16,10 +16,18 @@ import { errorLog } from "../utils/logger.js";
  * @returns {boolean}
  */
 export function isGeminiConfigured() {
-  return Boolean(GEMINI_API_KEY);
+  return Boolean(getApiKey("gemini_api_key"));
 }
 
 async function generateContent({ api, model, body, timeoutMs, label }) {
+  const apiKey = getApiKey("gemini_api_key");
+
+  if (!apiKey) {
+    throw new Error(
+      "A geração de imagem está indisponível: configure a chave do Gemini com `.api-keys gemini <chave>` (ou defina GEMINI_API_KEY no ambiente do bot).",
+    );
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -27,7 +35,7 @@ async function generateContent({ api, model, body, timeoutMs, label }) {
     const response = await fetch(`${api}/${model}:generateContent`, {
       method: "POST",
       headers: {
-        "x-goog-api-key": GEMINI_API_KEY,
+        "x-goog-api-key": apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -68,12 +76,6 @@ async function generateContent({ api, model, body, timeoutMs, label }) {
  * @returns {Promise<{ buffer: Buffer, mimeType: string }>}
  */
 export async function generateImage(prompt) {
-  if (!GEMINI_API_KEY) {
-    throw new Error(
-      "A geração de imagem está indisponível: preencha GEMINI_API_KEY em src/config.js (ou defina GEMINI_API_KEY no ambiente do bot).",
-    );
-  }
-
   return generateContent({
     api: GEMINI_IMAGE_API,
     model: GEMINI_IMAGE_MODEL,
