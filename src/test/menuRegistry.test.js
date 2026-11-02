@@ -104,3 +104,52 @@ test("a whitelist privada exige um LID válido", () => {
   assert.equal(whitelist.validador("275381038891241"), true);
   assert.equal(whitelist.validador("123"), false);
 });
+
+/**
+ * Comandos que de propósito não entram no menu, com a razão.
+ *
+ * `menu` é o próprio menu: listá-lo seria listar o menu dentro do menu.
+ * Qualquer outra exceção aqui é um comando que ficou sem porta de entrada, e
+ * o teste abaixo falha até ser adicionado ao registo — que é o objetivo.
+ */
+const SEM_MENU = new Set(["menu"]);
+
+test("todo comando carregado tem entrada no menu guiado", async () => {
+  const disponiveis = new Set();
+  const importados = await readCommandImports();
+
+  for (const comandos of Object.values(importados)) {
+    for (const comando of comandos) {
+      if (!comando) continue;
+      const nomes = [
+        comando.name,
+        ...(comando.commands || []),
+      ].filter(Boolean).map((n) => String(n).toLowerCase());
+      if (nomes.length) disponiveis.add(nomes);
+    }
+  }
+
+  const noMenu = new Set(
+    FUNCTIONS.map((funcao) => String(funcao.comando).toLowerCase()),
+  );
+
+  const fora = [];
+  for (const nomes of disponiveis) {
+    const lista = [...nomes];
+    if (lista.some((nome) => SEM_MENU.has(nome))) continue;
+    if (!lista.some((nome) => noMenu.has(nome))) fora.push(lista[0]);
+  }
+
+  assert.deepEqual(
+    fora.sort(),
+    [],
+    `comandos sem entrada no menu guiado: ${fora.sort().join(", ")}`,
+  );
+});
+
+test("toda categoria do menu de texto existe no fluxo guiado", () => {
+  const ids = new Set(CATEGORIES.map((categoria) => categoria.id));
+  for (const categoria of MENU_CATEGORIES) {
+    assert.ok(ids.has(categoria.key), `categoria "${categoria.key}" fora do guiado`);
+  }
+});

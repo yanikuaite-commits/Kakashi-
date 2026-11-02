@@ -93,10 +93,11 @@ export const MENU_CATEGORIES = [
     commands: [
       ["abrir"], ["fechar"], ["ban", "responda ao membro"],
       ["promover"], ["rebaixar"], ["mute"], ["unmute"],
-      ["warn"], ["unwarn"], ["revelar"],
+      ["warn"], ["unwarn"], ["warn-reactivate"], ["revelar"],
       ["delete", "responda à mensagem"], ["limpar-chat"], ["link-grupo"],
       ["hide-tag <texto>"], ["saldo"], ["set-name <nome>"],
       ["afk <motivo>"], ["agendar-mensagem"],
+      ["block-wpp <número>", "bloqueia no WhatsApp do bot"],
       ["auto-responder <1/0>"], ["add-auto-responder"],
       ["delete-auto-responder"], ["list-auto-responder"],
     ],
