@@ -695,11 +695,17 @@ editing `src/config.js` on the host. The registry lives in `src/utils/database.j
 | `.set-linker-api-token` | `linker_api_key` | `linker.js` (`gerar-link`) |
 | `.set-groq-api-token` | `groq_api_key` | `ai.js` (chat, transcription) and `suporte.js` |
 | `.set-gemini-api-token` | `gemini_api_key` | `gemini.js` (image generation) |
-| `.set-hf-token` | `hf_token` | Hugging Face |
+| `.set-hf-token` | `hf_token` | reserved (no consumer today; the AI moved to Groq/Gemini) |
 
 - `.api-keys` lists every key with its state (`definida no WhatsApp`, `vinda do
   ambiente`, `ausente`) and how to get each one. It is the guided entry point;
   the per-API commands are the shortcuts
+- **`.api-keys <nome> <chave>` is the shortcut the error messages announce**
+  (`.api-keys groq <chave>`): it resolves the short name (`groq`) or the registry
+  name (`groq_api_key`) and runs the same action as the dedicated command, so the
+  two paths cannot drift. With the name alone it shows that key's state, and
+  `remover` in place of the value deletes it. The action lives in
+  `runApiKeyAction` (`apiKeyCommand.js`); the factory and `.api-keys` both call it
 - **the value is never printed back**: the confirmation shows only the last 4
   characters (`••••abcd`). The chat can be read by someone else, and the
   `config.json` goes into the backup

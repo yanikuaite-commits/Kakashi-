@@ -41,6 +41,11 @@ Qualquer uma delas pode ser definida pelo WhatsApp, sem mexer no código: use
 `database/config.json`, que não é versionado). Envie `remover` no lugar da chave
 para apagar o valor guardado.
 
+Há ainda o atalho direto `.api-keys <nome> <chave>` (ex.: `.api-keys groq
+gsk_...`), que faz o mesmo que o comando dedicado; com só o nome mostra o estado
+daquela chave. A chave `HF_TOKEN` está reservada: a IA do bot usa a Groq (texto) e
+a Gemini (imagem), por isso nenhum comando lê a chave da Hugging Face hoje.
+
 ## Migração gratuita no Termux
 
 No Termux, instale as ferramentas do sistema e as dependências do Kakashi:

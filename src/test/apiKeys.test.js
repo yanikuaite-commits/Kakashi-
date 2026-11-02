@@ -206,6 +206,104 @@ describe("API keys configuráveis", () => {
       removeApiKey("spider_api_token");
     });
 
+    it("o atalho .api-keys <nome> <chave> guarda a chave, como as mensagens de erro prometem", async () => {
+      const comando = (await import("../commands/owner/api-keys.js")).default;
+      const chave = "gsk_" + "c".repeat(40);
+      const saida = [];
+
+      await comando.handle({
+        args: ["groq " + chave],
+        fullArgs: `groq ${chave}`,
+        sendReply: async (t) => saida.push(t),
+        sendSuccessReply: async (t) => saida.push(t),
+      });
+
+      assert.equal(getApiKey("groq_api_key"), chave);
+      assert.ok(!saida.join("\n").includes(chave), "não revela a chave");
+
+      removeApiKey("groq_api_key");
+    });
+
+    it("o atalho aceita o nome do registo e o nome curto", async () => {
+      const comando = (await import("../commands/owner/api-keys.js")).default;
+      const chave = "gsk_" + "d".repeat(40);
+
+      for (const nome of ["groq", "groq_api_key"]) {
+        await comando.handle({
+          args: [nome + " " + chave],
+          fullArgs: `${nome} ${chave}`,
+          sendReply: async () => {},
+          sendSuccessReply: async () => {},
+        });
+
+        assert.equal(getApiKey("groq_api_key"), chave, `nome "${nome}" guardou`);
+        removeApiKey("groq_api_key");
+      }
+    });
+
+    it("o atalho com só o nome mostra o estado, sem apagar nada", async () => {
+      const comando = (await import("../commands/owner/api-keys.js")).default;
+      const chave = "gsk_" + "e".repeat(40);
+      const saida = [];
+
+      setApiKey("groq_api_key", chave);
+      await comando.handle({
+        args: ["groq"],
+        fullArgs: "groq",
+        sendReply: async (t) => saida.push(t),
+        sendSuccessReply: async (t) => saida.push(t),
+      });
+
+      assert.match(saida.join("\n"), /Groq/);
+      assert.equal(getApiKey("groq_api_key"), chave, "a chave continua lá");
+
+      removeApiKey("groq_api_key");
+    });
+
+    it("o atalho com 'remover' apaga a chave", async () => {
+      const comando = (await import("../commands/owner/api-keys.js")).default;
+
+      setApiKey("groq_api_key", "gsk_" + "f".repeat(40));
+      await comando.handle({
+        args: ["groq remover"],
+        fullArgs: "groq remover",
+        sendReply: async () => {},
+        sendSuccessReply: async () => {},
+      });
+
+      assert.equal(getApiKey("groq_api_key"), "");
+    });
+
+    it("o atalho recusa um nome de chave desconhecido", async () => {
+      const comando = (await import("../commands/owner/api-keys.js")).default;
+
+      await assert.rejects(
+        () =>
+          comando.handle({
+            args: ["inexistente chave"],
+            fullArgs: "inexistente chave",
+            sendReply: async () => {},
+            sendSuccessReply: async () => {},
+          }),
+        /desconhecida/i,
+      );
+    });
+
+    it("o atalho recusa uma chave curta demais", async () => {
+      const comando = (await import("../commands/owner/api-keys.js")).default;
+
+      await assert.rejects(
+        () =>
+          comando.handle({
+            args: ["groq curta"],
+            fullArgs: "groq curta",
+            sendReply: async () => {},
+            sendSuccessReply: async () => {},
+          }),
+        /curta demais/,
+      );
+    });
+
     it("um membro comum não consegue chamar os comandos de chave", async () => {
       const { dynamicCommand } = await import("../utils/dynamicCommand.js");
       const { extractDataFromMessage } = await import("../utils/index.js");
