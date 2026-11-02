@@ -1,6 +1,6 @@
 # 🤖 Kakashi Bot
 
-![Kakashi Bot](./assets/images/Kakashi-bot.png)
+![Kakashi Bot](./assets/images/kakashi-bot.png)
 
 [![Version](https://img.shields.io/badge/Vers%C3%A3o-9.0.0-beta-blue)](https://github.com/yanikuaite-commits/Kakashi-)
 
@@ -13,34 +13,6 @@
 ## Base multifuncional para WhatsApp
 
 ![Logger](./assets/images/logger.png)
-
-## 📋 Sumário
-
-1. [Idiomas Disponíveis](#-outros-idiomas)
-2. [Atenção](#-atenção)
-3. [Sobre o Projeto](#sobre-este-projeto)
-4. [Instalação](#instalação-no-termux)
-    - [No Termux](#instalação-no-termux)
-    - [Nas principais hosts do Brasil](#instalação-nas-principais-hosts-do-brasil)
-    - [No Windows](#instalação-no-windows)
-    - [Em VPS (Debian/Ubuntu)](#instalação-em-vps-debianubuntu)
-5. [Diagrama de conexão](#diagrama-de-conexão)
-6. [Alguns comandos necessitam de API](#alguns-comandos-necessitam-de-api)
-7. [Funcionalidades](#funcionalidades-gerais)
-    - [Funcionalidades gerais](#funcionalidades-gerais)
-8. [Auto responder](#auto-responder)
-9. [Menu do bot](#onde-fica-o-menu-do-bot)
-10. [Mensagens de boas vindas](#onde-modifico-a-mensagem-de-boas-vindas-e-quando-alguém-sai-do-grupo)
-11. [Diagrama de como os comandos funcionam](#diagrama-de-como-os-comandos-funcionam)
-12. [Diagrama de como funcionam os middlewares](#diagrama-de-como-funcionam-os-middlewares-interceptadores-de-recepção-e-saída)
-13. [Custom Middleware - Personalize o bot sem modificar arquivos principais](#custom-middleware---personalize-o-bot-sem-modificar-arquivos-principais)
-14. [Estrutura de pastas](#estrutura-de-pastas)
-15. [Atualizar o bot](#atualizar-o-bot)
-16. [Testes](#testes)
-17. [Erros comuns](#erros-comuns)
-18. [Inscreva-se no canal](#inscreva-se-no-canal)
-19. [Contribuindo com o projeto](#contribuindo-com-o-projeto)
-20. [Licença e Disclaimer](#licença)
 
 ## ⚠ Atenção
 
