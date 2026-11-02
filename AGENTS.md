@@ -973,6 +973,12 @@ authenticated channel.
 - EXIF metadata
 - WebP packaging
 
+The pack publisher is `STICKER_PACK_PUBLISHER` (`src/config.js`, default
+`⋆｡°✩ Feito por Dev Yanik ✩°｡⋆`), written into the EXIF of every sticker by
+`addStickerMetadata`. `sticker`, `brat`, `bratvid` and `removebg` all read it
+from `src/config.js`; changing it in one place is enough. `stickerMetadata.test.js`
+guards that the caption mentions Dev Yanik.
+
 ## STACK
 
 Runtime and dependency snapshot is in the root `package.json`

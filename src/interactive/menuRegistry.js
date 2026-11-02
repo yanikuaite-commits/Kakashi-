@@ -51,7 +51,7 @@ const DESCRICOES = {
   imagem: "🖼️ Efeitos em imagem: responda a uma foto com o comando.",
   midia: "📲 Converte mídia: áudio, GIF, imagem e transcrição.",
   download: "📥 Baixe vídeos e músicas das redes sociais, sem marca d'água quando possível.",
-  anime: "🍿 Animes (HiAnime): escolha o episódio e a qualidade para baixar.",
+  anime: "🍿 Animes (Meus Animes): escolha o episódio e a qualidade para baixar.",
   protecao: "🛡️ Admin: anti-link, anti-porn e outras travas do grupo.",
   admin: "👮 Administração do grupo: ban, mute, avisos e limpeza.",
   sticker: "🎨 Figurinhas: cria, renomeia e gera com IA.",
@@ -219,9 +219,9 @@ export const FUNCTIONS = [
 
   /* ═══════════ ANIMES ═══════════ */
   entry("anime", "anime", "anime", {
-    titulo: "Animes (HiAnime)",
+    titulo: "Animes (Meus Animes)",
     icone: "🍿",
-    descricao: "Pesquisa no HiAnime e baixa o episódio na qualidade escolhida.",
+    descricao: "Pesquisa no Meus Animes e baixa o episódio na qualidade escolhida.",
     guia: "Envie o nome do anime (ex: Naruto).",
     aceita: "texto",
     exemplo: "Naruto",

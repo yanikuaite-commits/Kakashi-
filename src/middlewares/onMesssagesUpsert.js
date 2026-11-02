@@ -168,7 +168,7 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
           priority: isBotOwner({ userLid: commonFunctions.userLid }),
         });
 
-      // Fluxo de animes (HiAnime): antes do fluxo guiado, porque com uma
+      // Fluxo de animes (Meus Animes): antes do fluxo guiado, porque com uma
       // sessão de anime aberta o próximo texto é o NOME do anime.
       if (await comFila(() => handleAnimeReply({
         socket,
