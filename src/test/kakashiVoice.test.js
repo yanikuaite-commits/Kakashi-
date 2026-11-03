@@ -5,8 +5,11 @@
  */
 import assert from "node:assert";
 import { after, describe, it } from "node:test";
+import { OWNER_LID } from "../config.js";
 import { announceDownload, withKakashiVoice } from "../services/kakashiVoice.js";
 import { downloadAudio, downloadVideo } from "../services/downloader.js";
+import { dynamicCommand } from "../utils/dynamicCommand.js";
+import { extractDataFromMessage } from "../utils/index.js";
 
 // Aponta a API de fallback para uma porta local fechada: a ligação é recusada
 // de imediato, por isso os testes não fazem rede real nem esperam pelo timeout
@@ -103,5 +106,38 @@ describe("o downloader anuncia antes de baixar", () => {
 
     assert.strictEqual(enviados.length, 1, "a música devia ter anunciado");
     assert.match(enviados[0], /kakashi-baixar-musica\.mp3$/);
+  });
+});
+
+describe("cadeia completa: dispatcher -> contexto -> downloader", () => {
+  // Prova que o contexto que o dispatcher abre é o mesmo que o downloader lê.
+  // O teste chama o `dynamicCommand` de verdade e intercepta o
+  // `sendAudioFromFile`; a URL inválida só serve para o download falhar depois
+  // de o anúncio já ter saído.
+  it("um comando de download dispara a fala do vídeo", async () => {
+    const falas = [];
+    const remoteJid = "voice-chain@s.whatsapp.net";
+    const webMessage = {
+      key: { remoteJid },
+      pushName: "Pessoa",
+      message: { conversation: ".play-video https://exemplo.invalido/media" },
+    };
+
+    await dynamicCommand(
+      {
+        ...extractDataFromMessage(webMessage),
+        userLid: OWNER_LID,
+        webMessage,
+        sendSuccessReact: async () => {},
+        sendAudioFromFile: async (p) => falas.push(p),
+        sendErrorReply: async () => {},
+        sendReply: async () => {},
+        sendVideoFromFile: async () => {},
+      },
+      Date.now(),
+    );
+
+    assert.strictEqual(falas.length, 1, "o comando devia anunciar uma vez");
+    assert.match(falas[0], /kakashi-baixar-video\.mp3$/);
   });
 });
