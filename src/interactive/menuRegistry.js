@@ -422,7 +422,7 @@ export const FUNCTIONS = [
       exemplo: "",
     }),
   ),
-  entry("diversao", "kakashi", "kakashi", {
+  entry("diversao", "falas", "falas", {
     titulo: "Falas do Kakashi",
     icone: "🎧",
     descricao: "Envia uma fala do Kakashi (chidori, pedido, video, musica).",

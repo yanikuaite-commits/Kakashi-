@@ -7,7 +7,7 @@ import {
 } from "../../../services/kakashiAudio.js";
 import { formatMessage } from "../../../utils/formatMessage.js";
 
-const COMANDO = `${PREFIX}kakashi`;
+const COMANDO = `${PREFIX}falas`;
 
 function listaDeFalas() {
   return KAKASHI_AUDIOS.map(
@@ -17,10 +17,10 @@ function listaDeFalas() {
 }
 
 export default {
-  name: "kakashi",
-  description: "Envia uma fala do Kakashi.",
-  commands: ["kakashi", "fala", "falas"],
-  usage: `${PREFIX}kakashi <nome>`,
+  name: "falas",
+  description: "Envia uma fala gravada do Kakashi.",
+  commands: ["falas", "fala"],
+  usage: `${PREFIX}falas <nome>`,
   /**
    * @param {CommandHandleProps} props
    */

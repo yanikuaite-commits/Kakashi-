@@ -5,7 +5,11 @@ import { test } from "node:test";
 import { DATABASE_DIR, OWNER_LID } from "../config.js";
 import { addPrivateWhitelist, setBotEnabled } from "../utils/database.js";
 import { dynamicCommand } from "../utils/dynamicCommand.js";
-import { extractDataFromMessage, findCommandInMessage } from "../utils/index.js";
+import {
+  extractDataFromMessage,
+  findCommandInMessage,
+  readCommandImports,
+} from "../utils/index.js";
 
 function extract(text, remoteJid = "aliases@g.us") {
   return extractDataFromMessage({ key: { remoteJid }, message: { conversation: text } });
@@ -34,6 +38,30 @@ test("comandos com espaços, acentos, hífen e sem prefixo preservam argumentos"
     const resolved = await findCommandInMessage(parsed.commandName, parsed.fullArgs);
     assert.equal(resolved.command, null, text);
   }
+});
+
+test("nenhum alias é reclamado por dois comandos", async () => {
+  const imports = await readCommandImports();
+  const dono = new Map();
+
+  for (const comandos of Object.values(imports)) {
+    for (const comando of comandos) {
+      for (const alias of comando?.commands || []) {
+        const chave = String(alias).toLowerCase();
+        if (!dono.has(chave)) dono.set(chave, new Set());
+        dono.get(chave).add(comando.name);
+      }
+    }
+  }
+
+  // Dois comandos no mesmo alias não dão erro: o primeiro que o loader
+  // encontra responde e o outro fica inalcançável, em silêncio. Foi assim que
+  // o `.kakashi` da IA foi tapado pelas falas.
+  const colisoes = [...dono.entries()]
+    .filter(([, nomes]) => nomes.size > 1)
+    .map(([alias, nomes]) => `${alias}: ${[...nomes].join(", ")}`);
+
+  assert.deepEqual(colisoes, [], "aliases em conflito");
 });
 
 test("menu sem prefixo navega normalmente; texto comum não responde", async () => {

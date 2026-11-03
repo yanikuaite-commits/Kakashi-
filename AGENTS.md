@@ -1116,11 +1116,16 @@ authenticated channel.
 - the activity/blacklist JSON files are **gitignored**: they hold real user LIDs,
   and versioning them would publish who uses the bot and who was banned.
 
-### Falas do Kakashi (`.kakashi`)
+### Falas do Kakashi (`.falas`)
 
 `src/services/kakashiAudio.js` é o catálogo (só dados) das falas gravadas do
 Kakashi; o comando é `src/commands/member/funny/kakashi.js`.
 
+- o comando chama-se **`falas`** (aliases `fala`), **não** `kakashi`: o
+  `.kakashi` já é o alias do chat de IA (`src/commands/member/ia/gemini.js`) e
+  o `ia/` ordena depois de `funny/`, pelo que registar aqui o `kakashi` tapava a
+  IA em silêncio. O `commandAliases.test.js` agora falha se dois comandos
+  reclamarem o mesmo alias
 - os MP3 vivem em `assets/audios/` (`kakashi-chidori.mp3`,
   `kakashi-realizando-pedido.mp3`, `kakashi-baixar-video.mp3`,
   `kakashi-baixar-musica.mp3`). Foram enviados com o miolo do nome substituído

@@ -11,7 +11,7 @@ import {
   caminhoDoAudio,
   encontrarAudio,
 } from "../services/kakashiAudio.js";
-import kakashiCommand from "../commands/member/funny/kakashi.js";
+import falasCommand from "../commands/member/funny/kakashi.js";
 
 function makeCtx({ args = [] } = {}) {
   const audios = [];
@@ -75,11 +75,11 @@ describe("encontrarAudio", () => {
   });
 });
 
-describe("comando kakashi", () => {
+describe("comando falas", () => {
   it("envia a fala pedida", async () => {
     const { ctx, audios, replies } = makeCtx({ args: ["chidori"] });
 
-    await kakashiCommand.handle(ctx);
+    await falasCommand.handle(ctx);
 
     assert.strictEqual(audios.length, 1);
     assert.match(audios[0], /kakashi-chidori\.mp3$/);
@@ -89,7 +89,7 @@ describe("comando kakashi", () => {
   it("envia a fala de vídeo com o acento", async () => {
     const { ctx, audios } = makeCtx({ args: ["vídeo"] });
 
-    await kakashiCommand.handle(ctx);
+    await falasCommand.handle(ctx);
 
     assert.match(audios[0], /kakashi-baixar-video\.mp3$/);
   });
@@ -97,18 +97,18 @@ describe("comando kakashi", () => {
   it("sem argumento mostra a lista e não envia áudio", async () => {
     const { ctx, audios, replies } = makeCtx();
 
-    await kakashiCommand.handle(ctx);
+    await falasCommand.handle(ctx);
 
     assert.strictEqual(audios.length, 0);
     assert.strictEqual(replies.length, 1);
     assert.match(replies[0], /FALAS DO KAKASHI/);
-    assert.match(replies[0], /kakashi chidori/);
+    assert.match(replies[0], /falas chidori/);
   });
 
   it("com um nome desconhecido mostra a lista e avisa", async () => {
     const { ctx, audios, replies } = makeCtx({ args: ["rasengan"] });
 
-    await kakashiCommand.handle(ctx);
+    await falasCommand.handle(ctx);
 
     assert.strictEqual(audios.length, 0);
     assert.match(replies[0], /Não conheço "rasengan"/);
