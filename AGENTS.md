@@ -1116,6 +1116,31 @@ authenticated channel.
 - the activity/blacklist JSON files are **gitignored**: they hold real user LIDs,
   and versioning them would publish who uses the bot and who was banned.
 
+### Falas do Kakashi (`.kakashi`)
+
+`src/services/kakashiAudio.js` é o catálogo (só dados) das falas gravadas do
+Kakashi; o comando é `src/commands/member/funny/kakashi.js`.
+
+- os MP3 vivem em `assets/audios/` (`kakashi-chidori.mp3`,
+  `kakashi-realizando-pedido.mp3`, `kakashi-baixar-video.mp3`,
+  `kakashi-baixar-musica.mp3`). Foram enviados com o miolo do nome substituído
+  por pontos (`[Kakashi]Acabe......ntes .mp3`) e renomeados pelo conteúdo depois
+  de transcritos; o SHA-256 não mudou no rename
+- cada fala declara `id`, `arquivo`, `nomes` (os aliases por que responde),
+  `descricao` e `transcricao`. A `transcricao` é documentação: serve para o
+  comando listar as falas e para quem editar o catálogo saber o que cada uma diz
+- `encontrarAudio()` normaliza o nome (minúsculas, sem acentos), por isso
+  `música`, `MUSICA` e `musica` resolvem a mesma fala
+- sem argumento (ou com um nome desconhecido) o comando mostra a lista com o
+  `formatMessage`; com um nome válido envia o áudio como ficheiro normal
+  (`sendAudioFromFile`, `asVoice = false`), não como nota de voz
+- o comando está na categoria **Diversão** do menu (`src/menu.js`) e no
+  `menuRegistry.js` com `aceita: "texto"` e um `validador` que aceita só nomes
+  do catálogo; `entrada` nomeia o que se espera na mensagem de erro
+- `kakashiAudio.test.js` guarda o essencial: cada fala aponta para um ficheiro
+  que existe, ids/ficheiros/nomes não se repetem, a resolução ignora acentos, e
+  o comando envia o áudio certo (ou a lista quando não há correspondência)
+
 ### Media Services
 
 `src/services/ffmpeg.js` handles media conversion, including audio normalization and voice-note friendly formats.

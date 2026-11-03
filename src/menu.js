@@ -36,7 +36,10 @@ export const MENU_CATEGORIES = [
   },
   {
     key: "diversao", label: "Diversão", icon: "😁", aliases: ["cdiv", "brincadeiras"],
-    commands: ["abracar", "beijar", "dado", "jantar", "lutar", "matar", "socar", "tapa"].map((name) => [name]),
+    commands: [
+      ...["abracar", "beijar", "dado", "jantar", "lutar", "matar", "socar", "tapa"].map((name) => [name]),
+      ["kakashi <nome>", "falas do Kakashi"],
+    ],
   },
   {
     key: "imagem", label: "Imagem", icon: "🖼️", aliases: ["cimg", "canvas"],

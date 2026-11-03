@@ -40,6 +40,7 @@
  * @author Dev Yanik
  */
 import { MENU_CATEGORIES } from "../menu.js";
+import { encontrarAudio } from "../services/kakashiAudio.js";
 
 /** Mini descrição de cada categoria (obrigatória para todas). */
 const DESCRICOES = {
@@ -421,6 +422,16 @@ export const FUNCTIONS = [
       exemplo: "",
     }),
   ),
+  entry("diversao", "kakashi", "kakashi", {
+    titulo: "Falas do Kakashi",
+    icone: "🎧",
+    descricao: "Envia uma fala do Kakashi (chidori, pedido, video, musica).",
+    guia: "Escolha a fala pelo nome.",
+    aceita: "texto",
+    exemplo: "chidori",
+    validador: (valor) => Boolean(encontrarAudio(valor)),
+    entrada: "uma fala (chidori, pedido, video ou musica)",
+  }),
   entry("creditos", "conta", "conta", {
     titulo: "Meu saldo",
     icone: "💳",
