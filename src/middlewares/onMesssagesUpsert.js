@@ -24,6 +24,7 @@ import { handleAfkReferences } from "./afkHandler.js";
 import { onGroupParticipantsUpdate } from "./onGroupParticipantsUpdate.js";
 import { handlePendingDocOffer } from "../services/downloader.js";
 import { withDownloadNotifier } from "../services/downloadQueue.js";
+import { withKakashiVoice } from "../services/kakashiVoice.js";
 import { handleAudioFormatReply } from "../utils/audioFormatMenu.js";
 import { handleInteractiveMenuReply } from "../utils/interactive.js";
 import { handleVideoFormatReply } from "../utils/videoFormatMenu.js";
@@ -168,6 +169,13 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
           priority: isBotOwner({ userLid: commonFunctions.userLid }),
         });
 
+      // Os menus de formato (qualidade do vídeo / formato do áudio) só baixam
+      // depois da escolha do usuário, fora do `dynamicCommand`: o contexto do
+      // anúncio das falas tem de ser aberto aqui também, senão o download do
+      // menu arrancava em silêncio.
+      const comFala = (callback) =>
+        comFila(() => withKakashiVoice(commonFunctions.sendAudioFromFile, callback));
+
       // Fluxo de animes (Meus Animes): antes do fluxo guiado, porque com uma
       // sessão de anime aberta o próximo texto é o NOME do anime.
       if (await comFila(() => handleAnimeReply({
@@ -257,7 +265,7 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         continue;
       }
 
-      if (await comFila(() => handleAudioFormatReply({
+      if (await comFala(() => handleAudioFormatReply({
         chatId: commonFunctions.remoteJid,
         senderLid: commonFunctions.userLid,
         senderName: webMessage?.pushName,
@@ -281,7 +289,7 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         continue;
       }
 
-      if (await comFila(() => handleVideoFormatReply({
+      if (await comFala(() => handleVideoFormatReply({
         chatId: commonFunctions.remoteJid,
         senderLid: commonFunctions.userLid,
         senderName: webMessage?.pushName,

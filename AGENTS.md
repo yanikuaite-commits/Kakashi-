@@ -1146,6 +1146,38 @@ Kakashi; o comando é `src/commands/member/funny/kakashi.js`.
   que existe, ids/ficheiros/nomes não se repetem, a resolução ignora acentos, e
   o comando envia o áudio certo (ou a lista quando não há correspondência)
 
+#### Anúncio automático nos downloads
+
+Duas das falas tocam sozinhas quando um download arranca: `video` no início de
+um download de vídeo, `musica` no de uma música.
+
+- `src/services/kakashiVoice.js` é o contexto (`withKakashiVoice`) e o gatilho
+  (`announceDownload`). Mesmo padrão do `withCreditsContext` e do
+  `withDownloadNotifier`: o dispatcher abre o contexto com o `sendAudioFromFile`
+  do chat e o `downloader.js` usa-o quando começa a baixar. Sem isso, o helper
+  teria de ser passado por todas as camadas de download
+- o gatilho fica no `downloader.js` (o ponto por onde passa todo o download de
+  link), não em cada comando: `downloadMedia` (vídeo e áudio) e
+  `downloadYouTubeVideo` anunciam. **Uma vez por download, não por comando** —
+  um comando que baixe duas mídias anuncia duas vezes
+- o anúncio sai **dentro da vaga da fila** (`withDownloadSlot`): dizer "vou
+  baixar" e só depois esperar na fila prometeria uma coisa que ainda não começou
+- o middleware também abre o contexto, nas flows que baixam fora do
+  `dynamicCommand`: os menus de qualidade de vídeo e de formato de áudio
+  (`handleVideoFormatReply` / `handleAudioFormatReply`). Sem isso, um download
+  escolhido no menu arrancava em silêncio
+- **o anúncio nunca pode travar o download**: um envio falhado ou a ausência de
+  contexto devolvem `false` e o download segue. Fora de um contexto (testes,
+  chamadas internas) o anúncio é simplesmente ignorado
+- o anúncio é do tipo de mídia, não do comando: `downloadVideo`/`downloadMedia`
+  anunciam vídeo (Instagram, Facebook, TikTok...), `downloadAudio` anuncia
+  música. A conversão de uma mídia já recebida (`to-mp3`, `revelar`,
+  `transcrever`) **não** anuncia, porque o `downloadVideo` desses vem do
+  `loadCommonFunctions`, não do `downloader.js`
+- `kakashiVoice.test.js` cobre o contexto, o tipo sem fala, o envio falhado e o
+  anúncio real no `downloader.js`; aponta `GENDOWNLOAD_API_URL` para uma porta
+  fechada para não fazer rede nem esperar pelo timeout da API pública
+
 ### Media Services
 
 `src/services/ffmpeg.js` handles media conversion, including audio normalization and voice-note friendly formats.

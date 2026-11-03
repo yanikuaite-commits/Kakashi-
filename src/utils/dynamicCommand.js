@@ -35,6 +35,7 @@ import {
 } from "../services/credits.js";
 import { badMacHandler } from "./badMacHandler.js";
 import { withDownloadNotifier } from "../services/downloadQueue.js";
+import { withKakashiVoice } from "../services/kakashiVoice.js";
 import { isBanned } from "../services/blacklist.js";
 import {
   recordCommandUsage,
@@ -343,12 +344,16 @@ export async function dynamicCommand(paramsHandler, startProcess) {
       withDownloadNotifier(
         sendReply,
         () =>
-          command.handle({
-            ...invocation,
-            type,
-            startProcess,
-            isOwner,
-          }),
+          withKakashiVoice(
+            paramsHandler.sendAudioFromFile,
+            () =>
+              command.handle({
+                ...invocation,
+                type,
+                startProcess,
+                isOwner,
+              }),
+          ),
         // O dono tem prioridade na fila: um ajuste urgente não fica atrás de
         // downloads de membros.
         { priority: isOwner },

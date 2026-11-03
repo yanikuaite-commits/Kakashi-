@@ -8,6 +8,7 @@ import { downloadWithGenDownload } from "../utils/genDownloader.js";
 import { errorLog } from "../utils/logger.js";
 import { chargeMediaCredits } from "./credits.js";
 import { withDownloadSlot } from "./downloadQueue.js";
+import { announceDownload } from "./kakashiVoice.js";
 import { searchYouTube } from "./youtube-search.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "./ytdlp.js";
 
@@ -108,7 +109,12 @@ async function settleMediaCredits(command, result) {
  * (que é rápida) não ocupe uma vaga.
  */
 async function downloadMedia(source, options, queueOptions) {
-  return withDownloadSlot(() => runDownloader(source, options), queueOptions);
+  return withDownloadSlot(async () => {
+    // O anúncio sai já dentro da vaga: dizer "vou baixar" e depois esperar na
+    // fila prometeria uma coisa que ainda não começou.
+    await announceDownload(options.audio ? "audio" : "video");
+    return runDownloader(source, options);
+  }, queueOptions);
 }
 
 /** O downloader em si: yt-dlp quando disponível, senão a API GenDownload. */
@@ -141,7 +147,10 @@ export async function downloadVideo(source, height = DEFAULT_VIDEO_HEIGHT) {
  * `decideYouTubeSend`.
  */
 export async function downloadYouTubeVideo(source, height = DEFAULT_VIDEO_HEIGHT) {
-  const result = await withDownloadSlot(() => runYouTubeDownloader(source, height));
+  const result = await withDownloadSlot(async () => {
+    await announceDownload("video");
+    return runYouTubeDownloader(source, height);
+  });
 
   return settleMediaCredits("vídeo", result);
 }
