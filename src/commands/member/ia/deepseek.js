@@ -1,7 +1,6 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
-import { askGroq } from "../../../services/ai.js";
-import { aiMessage } from "../../../utils/formatMessage.js";
+import { runAiChat } from "../../../utils/aiChat.js";
 
 export default {
   name: "deepseek",
@@ -11,8 +10,8 @@ export default {
   /**
    * @param {CommandHandleProps} props
    */
-  handle: async ({ sendSuccessReply, sendWaitReply, args, remoteJid }) => {
-    const text = args.join(" ");
+  handle: async (props) => {
+    const text = props.args.join(" ");
 
     if (!text) {
       throw new InvalidParameterError(
@@ -20,10 +19,6 @@ export default {
       );
     }
 
-    await sendWaitReply();
-
-    const responseText = await askGroq(remoteJid, text);
-
-    await sendSuccessReply(aiMessage({ pergunta: text, resposta: responseText }));
+    await runAiChat(props, text, props.remoteJid);
   },
 };

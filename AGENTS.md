@@ -682,6 +682,154 @@ innocent members. The failure mode is always conservative — when in doubt, do 
 punish. Do not punish based on undecryptable messages without a new signal that
 actually proves payment content.
 
+## AI_CHAT
+
+The chat commands (`.gpt`, `.gemini`, `.deepseek`, `.kakashi`) all go through
+`askGroq` in `src/services/ai.js`.
+
+- **the AI has a personality**: it greets and answers simple small talk ("tudo
+  bem?" → "Tudo bem! E contigo?"), then stays on the bot and simple maths. The
+  rule lives in `GROQ_SYSTEM_PROMPT` (`src/config.js`), so the owner can widen
+  it without touching the service
+- the system prompt is **prepended on every request**, not stored in the
+  history: the history keeps only the conversation, so after a few messages the
+  instruction would fall outside the sliding window and the scope would drift
+- **answers are short on purpose**: `GROQ_MAX_TOKENS` (512) and
+  `GROQ_TEMPERATURE` (0.3, down from 0.6). High temperature made the model pad
+  every answer; a factual assistant wants a low one
+- `askGroq` still falls back through `GROQ_MODELS` on a retryable status
+  (429/500/502/503) and keeps a short per-chat history (`GROQ_HISTORY_SIZE`)
+
+### Bot knowledge (all users)
+
+The AI answers command and recharge questions with the **real** data because
+`askGroq` injects a knowledge block as a second system message.
+
+- `src/services/botKnowledge.js` builds it: `commandCatalogText()` (one line per
+  command, "name: description"), `paymentGuideText()` (the recharge steps plus
+  both pricing tables) and `botKnowledgeText()` (both, plus a short intro)
+- the command list comes from **the same loader the dispatcher uses**
+  (`readCommandImports` in `src/utils/index.js`), so it cannot drift from the
+  commands that actually exist; the prices come from `TABELAS`
+  (`src/utils/tabelaPrecos.js`) and the numbers from `src/config.js`
+- **the developer samples are filtered out** (`EXEMPLOS_DEV`): `enviar-*`,
+  `exemplo*`, `funcoes-*`, `obter-*`, `raw-message` live in the `member` folder
+  but belong to the `dev` category, which is owner-only. Listing them to a
+  common member would promise features he does not have. Owner-only commands are
+  never listed either, except the ones that describe a public flow
+  (`recargas-pendentes`)
+- the block is **shared, not per-user**, so it goes to every member: a member
+  must be able to ask "how do I recharge?". The owner's state block is separate
+  and still owner-only
+- **it is built once and cached** (the promise, so two simultaneous first
+  questions do not import the ~175 command files twice). A failed build is not
+  cached, so the next question retries
+- the read is wrapped in `try/catch`: if the catalog fails, the AI answers
+  without the guide instead of the command breaking
+- keep the block small: it is sent on every chat request. It is ~2.5k tokens
+  today; adding whole files would raise the cost of every question
+
+### Live bot state (owner only)
+
+The owner can ask the AI about real numbers ("quantos usuários estão na
+whitelist?") because the command injects a **state block** as an extra system
+message.
+
+- `src/services/botSnapshot.js` builds it: `botCounts()` (whitelist, bans,
+  muted, subscriptions, credit accounts, pending recharges, auto-answers,
+  blocked commands, API keys configured), `botSnapshotText()` (the text block),
+  `ownerSnapshotContext()` (sync, `null` for non-owners) and
+  `resolveOwnerContext()` (async, also asks the socket for the group count and
+  the current group's name/size)
+- **the block is injected only for the owner.** A common member gets
+  `context: null`, so a member cannot read the bot's internals through the AI
+- the three commands pass `isOwner`, `socket`, `isGroup`, `getGroupName` and
+  `getGroupParticipants` to `resolveOwnerContext`, which returns `null` for a
+  member **before** touching the socket — no wasted call
+- **the state is never written to the history**: it is a system message rebuilt
+  per request. Storing it would pin a stale snapshot to the conversation and
+  leak it into later member-facing replies
+- the block **never contains secret values**, only names and
+  configured/missing state, because it is sent inside the HTTP request to Groq
+- `GROQ_OWNER_CONTEXT_PROMPT` tells the model to answer with the real values and
+  not to invent or round them; a metric the host cannot provide comes back
+  `n/d` rather than a fabricated number
+- reads go through the `database.js` accessors (`readMutedMembers` was added
+  for the muted count), never `fs` directly, and a failure to read any part of
+  the state returns the snapshot without it instead of breaking the command
+
+### Executing commands (owner and group admin)
+
+The AI can also *run* a command when the request is explicit ("Kakashi, ativar
+anti status"). The whole design is "the AI asks, the dispatcher decides":
+
+- `askGroq` returns `{ text, action }`, not a bare string. With
+  `allowCommands: true` it adds two system messages: `aiActionHelpText()` (the
+  exact list of what exists) and `GROQ_ACTION_PROMPT` (answer with
+  `{"action":"run","command":"...","intent":"on|off"}` **only** for an explicit
+  request, text otherwise)
+- `parseAiAction` (exported, pure) reads that JSON and **never throws**: a
+  fenced block is unwrapped, and anything that is not a valid request returns
+  `null` and is treated as ordinary text
+- `resolveAiAction` maps the model's name to a real command, with an explicit
+  `args` (`1`/`0`). An unknown name, a member command or a forbidden one returns
+  `{ ok: false }` and the bot answers with a hint instead of running anything
+- **the AI never writes state.** `src/utils/aiChat.js` builds a synthetic
+  message and calls the same `dynamicCommand` a typed command goes through, so
+  `checkPermission`, the anti-flood brake, credits and the error replies are all
+  the real ones. The AI is a language front-end, not a second permission path
+- **the executable set is a small positive list**, not "everything minus the
+  dangerous ones": only the group toggles (`anti-*`, `welcome`, `exit`,
+  `auto-*`, `only-admin`) and `abrir`/`fechar`. `AI_FORBIDDEN_COMMANDS` is a
+  second, redundant barrier (ban, delete, mute, keys, backup). Member commands
+  are deliberately out: "Kakashi, anime X" would otherwise start a paid download
+  from an ambiguous sentence — whoever wants the command types it
+- `allowCommands` is `isGroup && (isOwner || isAdmin)`. A common member never
+  even receives the action prompt, so the model cannot be talked into emitting
+  one; and the dispatched command still re-checks the permission anyway
+- the action is **stored in the history as `[pedido de comando: X]`**, never as
+  the raw JSON, so a later reply does not echo the protocol
+- `src/test/aiActions.test.js` proves the layers: a common member does not
+  toggle anything, an owner and a group admin do, and a plain text answer runs
+  nothing. `src/test/botCommands.test.js` covers the catalog and the refusal of
+  forbidden/member/invented names
+
+## AFK
+
+Two layers, both stored in `database/afk-groups.json` through
+`src/utils/database.js`:
+
+| Layer | Key | Covers |
+| --- | --- | --- |
+| per group | the group JID | only the group where it was set |
+| global | `__global__` | every group |
+
+The reserved `__global__` key cannot collide with a real group, because a group
+JID always ends in `@g.us`.
+
+- `.afk <motivo>` is admin-scoped. A **common member** sets only the per-group
+  absence; the **owner** (`isOwner`, injected into `handle()`) sets both layers
+  and the bot broadcasts the notice to every group it is in
+- the broadcast (`src/utils/afkBroadcast.js`) lists the groups from the socket
+  itself (`groupFetchAllParticipating`), not from disk: a stored list goes stale
+  as groups are created or left. It skips the group where the command was typed
+  (that one already got the reply), marks the absent member (`mentions` plus the
+  `@<number>` token in the text) and waits `BROADCAST_DELAY_MS` between groups,
+  because blasting the same message to many groups is what WhatsApp reads as
+  spam. A group that fails is logged and skipped, never fatal
+- `handleAfkReferences` (`src/middlewares/afkHandler.js`) answers when a message
+  **mentions or quotes** an absent member, in any group the global layer covers.
+  The reply carries the mention (`mentions` plus the `@<number>` token in the
+  text, without which the mention does not render)
+- **any message from the absent member cancels the absence** (per group and
+  global), which is the "I'm back" signal. The `.afk` command is exempt, so
+  writing `.afk <motivo>` renews instead of cancelling
+- cancelling as owner clears **both** layers; clearing only the global would
+  leave the per-group record behind and the member would still be "absent" in
+  that group
+- the handler reads both layers in one call (`getAfkSnapshot`), because it runs
+  on every group message and two file reads per message would be wasted I/O
+
 ## API_KEYS
 
 Every credential the bot uses can be set over WhatsApp by the owner, instead of

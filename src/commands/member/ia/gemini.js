@@ -1,7 +1,6 @@
 import { PREFIX } from "../../../config.js";
 import { InvalidParameterError } from "../../../errors/index.js";
-import { askGroq } from "../../../services/ai.js";
-import { aiMessage } from "../../../utils/formatMessage.js";
+import { runAiChat } from "../../../utils/aiChat.js";
 
 export default {
   name: "gemini",
@@ -11,8 +10,8 @@ export default {
   /**
    * @param {CommandHandleProps} props
    */
-  handle: async ({ sendSuccessReply, sendWaitReply, sendEditedReply, args, remoteJid }) => {
-    const text = args.join(" ");
+  handle: async (props) => {
+    const text = props.args.join(" ");
 
     if (!text) {
       throw new InvalidParameterError(
@@ -20,16 +19,6 @@ export default {
       );
     }
 
-    const waitingMessage = await sendWaitReply("🤔 Pensando...");
-
-    const responseText = await askGroq(remoteJid, text);
-
-    const framedResponse = aiMessage({ pergunta: text, resposta: responseText });
-
-    if (waitingMessage) {
-      await sendEditedReply(framedResponse, waitingMessage);
-    } else {
-      await sendSuccessReply(framedResponse);
-    }
+    await runAiChat(props, text, props.remoteJid);
   },
 };

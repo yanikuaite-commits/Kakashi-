@@ -35,6 +35,10 @@ const databasePath = DATABASE_DIR;
 fs.mkdirSync(databasePath, { recursive: true });
 
 const AFK_GROUPS_FILE = "afk-groups";
+// Chave reservada da ausência global dentro de `afk-groups.json`. Os IDs de
+// grupo terminam sempre em `@g.us`, por isso `__global__` nunca colide com um
+// grupo real.
+const GLOBAL_AFK_KEY = "__global__";
 const ANTI_LINK_GROUPS_FILE = "anti-link-groups";
 const AUTO_RESPONDER_FILE = "auto-responder";
 const AUTO_RESPONDER_GROUPS_FILE = "auto-responder-groups";
@@ -465,6 +469,24 @@ export function listAfkMembers(groupId) {
   return { ...(afkGroups[groupId] || {}) };
 }
 
+/**
+ * Lê as duas camadas de ausência de uma vez (grupo + global).
+ *
+ * O middleware corre isto em cada mensagem de grupo; ler o ficheiro duas vezes
+ * (uma por camada) duplicaria o I/O sem necessidade.
+ *
+ * @param {string} groupId
+ * @returns {{ group: Record<string, string>, global: Record<string, string> }}
+ */
+export function getAfkSnapshot(groupId) {
+  const afkGroups = readJSON(AFK_GROUPS_FILE, {});
+
+  return {
+    group: { ...(afkGroups[groupId] || {}) },
+    global: { ...(afkGroups[GLOBAL_AFK_KEY] || {}) },
+  };
+}
+
 export function removeAfkMember(groupId, memberId) {
   const afkGroups = readJSON(AFK_GROUPS_FILE, {});
 
@@ -476,6 +498,47 @@ export function removeAfkMember(groupId, memberId) {
 
   if (!Object.keys(afkGroups[groupId]).length) {
     delete afkGroups[groupId];
+  }
+
+  writeJSON(AFK_GROUPS_FILE, afkGroups, {});
+
+  return true;
+}
+
+// ── AFK GLOBAL ───────────────────────────────────────────────────────────────
+// Uma ausência global vale em TODOS os grupos (o dono avisa que vai ficar fora
+// e qualquer grupo que o marque recebe a resposta). Vive no mesmo ficheiro das
+// ausências por grupo, sob a chave reservada `GLOBAL_AFK_KEY`.
+
+export function setGlobalAfkMember(memberId, reason) {
+  const afkGroups = readJSON(AFK_GROUPS_FILE, {});
+
+  if (!afkGroups[GLOBAL_AFK_KEY]) {
+    afkGroups[GLOBAL_AFK_KEY] = {};
+  }
+
+  afkGroups[GLOBAL_AFK_KEY][memberId] = reason.trim();
+
+  writeJSON(AFK_GROUPS_FILE, afkGroups, {});
+}
+
+export function getGlobalAfkReason(memberId) {
+  const afkGroups = readJSON(AFK_GROUPS_FILE, {});
+
+  return afkGroups[GLOBAL_AFK_KEY]?.[memberId] || null;
+}
+
+export function removeGlobalAfkMember(memberId) {
+  const afkGroups = readJSON(AFK_GROUPS_FILE, {});
+
+  if (!afkGroups[GLOBAL_AFK_KEY]?.[memberId]) {
+    return false;
+  }
+
+  delete afkGroups[GLOBAL_AFK_KEY][memberId];
+
+  if (!Object.keys(afkGroups[GLOBAL_AFK_KEY]).length) {
+    delete afkGroups[GLOBAL_AFK_KEY];
   }
 
   writeJSON(AFK_GROUPS_FILE, afkGroups, {});
@@ -814,8 +877,17 @@ export function checkIfMemberIsMuted(groupId, memberId) {
   if (!mutedMembers[groupId]) {
     return false;
   }
-
   return mutedMembers[groupId]?.includes(memberId);
+}
+
+/**
+ * Mapa completo de silenciados (`{ "<grupo>": [jid, ...] }`).
+ *
+ * Existe para o painel e para o instantâneo da IA contarem os silenciados sem
+ * ler o ficheiro com `fs` direto (regra do projeto).
+ */
+export function readMutedMembers() {
+  return readJSON(MUTE_FILE, {});
 }
 
 export function activateOnlyAdmins(groupId) {
