@@ -76,8 +76,8 @@ High-value architectural notes:
 | `src/services/anime.js` | Anime service layer over the single source: search, episodes, streaming sources. |
 | `src/services/meusanimes.js` | Single anime source: WordPress search, seasons, and Blogger sources via the player API. |
 | `src/services/bloggerVideo.js` | Blogger/Google Video reader (iframe, token, itags) used by `meusanimes`. |
-| `src/services/megacine.js` | Megacine scraper: series/dorama search (films filtered out), seasons, episodes and the m3u8 stream. |
-| `src/utils/megacineMenu.js` | Interactive Megacine flow: title → seasons → episodes → download. |
+| `src/services/megacine.js` | Megacine scraper: series/dorama search (films filtered via `MEGACINE_TIPOS_EXCLUIDOS`, empty by default), seasons, episodes and the m3u8 stream. |
+| `src/utils/megacineMenu.js` | Interactive flow for séries/doramas/filmes: title → (faixa →) seasons/episodes, or faixa → quality → compress for a film. |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
 | `src/services/ffmpeg.js` | Media conversion and audio/video processing. |
 
@@ -1084,14 +1084,10 @@ command is `src/commands/member/downloads/megacine.js` (aliases `serie`, `series
 - **this is a SEPARATE command (`.megacine`), not an anime provider.** The catalogue
   is episodic series with seasons, which the `.anime` flow does not cover; mixing the
   two would conflate catalogues with different rules.
-- **films are deliberately excluded** (`MEGACINE_TIPOS_EXCLUIDOS`, default `filmes`).
-  The site does NOT separate films from series in the URL — both live at
-  `/series/<slug>` — so the type is decided by two signals: the search card's
-  `card-meta` (`"2026 • Filmes"`) and, as a safety net, the title page itself
-  ("Assistir Filme" vs "Assistir Agora"). The page is the source of truth; the
-  season count is NOT a signal, because single-season series exist
-  (`duna-a-profecia-dublado` is 1 season with 6 episodes). A title that slips past
-  the search filter is refused when opened.
+- **films are now INCLUDED** (`MEGACINE_TIPOS_EXCLUIDOS` is empty by default; set it
+  to `filmes` to restore the old episodic-only behaviour). A film is a single
+  download with no seasons, so it takes a different, shorter path — see "Filmes"
+  below. The search returns `tipo: "filme"` and `chooseCandidate` branches on it.
 - the chain is: `/search/?q=` → `/series/<slug>` → `/series/<slug>/temporada-NN/episodio-NN`
   → the page's `urlConfig` → `<S>/<slug>/<NN>-temporada/<NN>/stream.m3u8`
   (`<S>` is the slug's first letter, uppercased). `buildStreamPath` mirrors the
@@ -1128,11 +1124,54 @@ Newer additions to the flow:
   download time `getEpisodeStream(slug, temporada, episodio, faixa)` serves the
   requested track and **falls back to the one that exists, warning the user** instead
   of switching in silence. The caption shows the track that was actually sent.
-- films stay OUT of the search on purpose (`tipo === "f"` is skipped). The saimo
-  catalogue does separate them (`filmes-<L>.txt`), but the command is for episodic
-  content (séries, doramas and animes) — a film has no seasons/episodes, so it would
-  need its own branch in the flow. Keep the exclusion; do not add films without an
-  explicit request.
+- films are handled by their own branch (see "Filmes" below); the search no longer
+  skips `tipo === "f"`.
+
+### Filmes (single download, with compression)
+
+A film is one MP4 with no seasons, so it skips the season/episode steps and takes a
+short path: **faixa → quality → download → compress → send**. The catalogue lives in
+`filmes-<L>.txt` (one file per letter, no index/pedaços), parsed by `parseFilmes`
+into `{ titulo, dub: [urls], leg: [urls] }`; `getFilmeInfo` reads the tracks and
+`getFilmeStream(slug, faixa)` returns the URL with the track actually served.
+
+- **the proxy mirror is dead for films; the direct CDN is what works.** A line's
+  `dub=`/`leg=` carries MIRRORS of the same content (the site's
+  `saimo-tv.pages.dev/api/stream` proxy and a direct CDN URL), not qualities.
+  Measured: the proxy answers `404 {"error":"Nenhum stream disponível..."}` for
+  films, while the direct `.mp4` answers `206 video/mp4`. `melhorUrl` prefers the
+  `.mp4`, which is the reachable one — do not "fix" it to prefer the proxy.
+  ~17.6% of film lines carry ONLY the proxy URL (2663 of 15157 measured): those
+  films cannot be served and fail the `isPlaylistReachable` check with a clear
+  message. That is a source limitation, not a bug to patch around.
+- **most films exceed the send ceiling, so compression is required.** Measured on
+  30 titles: median ~1.6 GB, max ~2.3 GB, with some small films (<100 MB) that fit
+  as-is. The flow downloads the whole file, then
+  `comprimirVideo(filePath, { height })` (`src/services/mediaPrepare.js`) reencodes
+  H.264/AAC with `-movflags +faststart`. Measured end to end: an 88.5 MB film
+  downloaded in 11 s and compressed 480p in 29 s to 21.6 MB (**−75.6%**). A
+  720p→480p reencode runs at ~17x realtime on this host with `veryfast`. The
+  quality step offers `FILME_COMPRESS_HEIGHTS` (720p, 480p) — never "original",
+  because an option that always fails at the end of a multi-minute download is a
+  trap.
+- **compression failure degrades, it does not abort.** `comprimirVideo` returns
+  `null` (never throws) when ffmpeg is missing or the run times out
+  (`FILME_COMPRESS_TIMEOUT_MS`, 45 min); the flow then sends the original if it
+  fits, otherwise warns and refunds the credits. A film already downloaded is not
+  thrown away over a failed reencode.
+- the download ceiling is `FILME_MAX_DOWNLOAD_BYTES` (5 GB), separate from the
+  episodes' `MEGACINE_MAX_DOWNLOAD_BYTES` (800 MB): a film needs the whole file on
+  disk before compressing, so the ceiling is what bounds the disk, not the send
+  limit. The process holds the original AND the compressed copy at once, so the
+  host needs ~1.4x the ceiling free.
+- the SEND ceiling is `FILME_MAX_SEND_BYTES` (1.5 GB, = `MAX_FILE_SIZE_BYTES`),
+  passed to `decideAnimeSend` as `documentLimitMb`. It is deliberately NOT the
+  anime ceiling (800 MB): a 2 h film at 720p can exceed 800 MB and would be
+  cancelled after the whole download and reencode — the exact trap the quality
+  step exists to avoid.
+- `FILME_COMPRESS_CRF` (28) and `FILME_COMPRESS_PRESET` (`veryfast`) are the
+  measured time/size balance; `ultrafast` is faster but produces a ~78% larger
+  file (measured).
 
 ### Painel de administração (`.painel`)
 

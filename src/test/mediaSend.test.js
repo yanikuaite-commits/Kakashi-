@@ -53,6 +53,27 @@ test("os limites batem com as constantes exportadas", () => {
   assert.equal(ANIME_DOCUMENT_LIMIT_MB, 800);
 });
 
+test("o teto de envio do filme é 1,5 GB, não o dos animes", async () => {
+  // Um filme a 720p pode passar dos 800 MB dos animes. Se o fluxo usasse o teto
+  // dos animes, cancelava DEPOIS do download e da compressão — a armadilha que a
+  // lista de qualidade existe para evitar. O teto próprio cobre esse caso.
+  const { FILME_MAX_SEND_BYTES } = await import("../config.js");
+  const limiteMB = FILME_MAX_SEND_BYTES / MB;
+
+  assert.equal(limiteMB, 1536);
+  assert.ok(limiteMB > ANIME_DOCUMENT_LIMIT_MB, "maior que o dos animes");
+
+  assert.equal(
+    decideAnimeSend(900 * MB, { documentLimitMb: limiteMB }),
+    "document",
+    "900 MB passa no teto do filme (seria cancelado pelo dos animes)",
+  );
+  assert.equal(
+    decideAnimeSend(1536 * MB + 1, { documentLimitMb: limiteMB }),
+    "cancel",
+  );
+});
+
 test("animes baixam em 480p por padrão (resolução fixa)", async () => {
   const { ANIME_MAX_HEIGHT } = await import("../config.js");
   assert.equal(ANIME_MAX_HEIGHT, 480);

@@ -11,14 +11,21 @@
  *   - `busca.txt`            → índice geral (título, tipo, letra, ano)
  *   - `series-<L>.txt`       → títulos da letra (título, ano, pedaço, eps)
  *   - `series-<L>-<P>.txt`   → episódios do pedaço, em blocos `@Título`
+ *   - `filmes-<L>.txt`       → filmes da letra (título, `dub=`, `leg=`)
  *   - `redeflix/links-animes.txt` → o catálogo de animes (ver `saimoAnime.js`)
  *
  * O separador é TAB (o site divide por TAB no build minificado); linhas antigas
- * de 5 espaços também são aceites. Filmes ficam de fora, como no Megacine.
+ * de 5 espaços também são aceites.
+ *
+ * FILMES: entram na pesquisa (tipo `f`), ao contrário do Megacine antigo, que os
+ * excluía. Um filme é um download único (não episódico), por isso não passa por
+ * temporadas — o menu deteta o token `f` e segue para a faixa/qualidade. O
+ * tamanho é o problema real: medidos 0,5 a 5,5 GB por ficheiro, acima do teto de
+ * envio, por isso o fluxo comprime antes de enviar (ver `mediaPrepare.js`).
  *
  * @author Dev Yanik
  */
-import { ANIME_USER_AGENT } from "../config.js";
+import { ANIME_USER_AGENT, MEGACINE_TIPOS_EXCLUIDOS } from "../config.js";
 import { AUDIO_DUBBED, AUDIO_SUBBED } from "../utils/animeFormat.js";
 import { errorLog } from "../utils/logger.js";
 
@@ -150,6 +157,48 @@ export function parseSeriesBlocos(texto) {
   }
 
   return blocos;
+}
+
+/**
+ * Linha de filme: `título  dub=<urls>  leg=<urls>`.
+ *
+ * As duas faixas são opcionais e independentes (medido: 4053 só `dub=`, 2045 só
+ * `leg=`, 1566 com ambas). Cada `=` traz uma lista de URLs separada por vírgula:
+ * são ESPELHOS do mesmo conteúdo (CDN direto e proxy do site), não qualidades —
+ * a escolha entre eles é `melhorUrl`.
+ *
+ * @param {string} texto
+ * @returns {Array<{titulo:string, dub:string[], leg:string[]}>}
+ */
+export function parseFilmes(texto) {
+  const out = [];
+
+  for (const bruto of String(texto || "").split("\n")) {
+    const linha = bruto.trim();
+    if (!linha || linha.startsWith("#")) continue;
+
+    const p = campos(linha);
+    const titulo = (p[0] || "").trim();
+    if (!titulo) continue;
+
+    const faixas = { titulo, dub: [], leg: [] };
+
+    for (const campo of p.slice(1)) {
+      const casamento = String(campo).match(/^(dub|leg)\s*=\s*(.+)$/i);
+      if (!casamento) continue;
+
+      faixas[casamento[1].toLowerCase()] = casamento[2]
+        .split(",")
+        .map((u) => u.trim())
+        .filter(Boolean);
+    }
+
+    // Um título sem URL nenhum não serve para nada.
+    if (!faixas.dub.length && !faixas.leg.length) continue;
+    out.push(faixas);
+  }
+
+  return out;
 }
 
 /** Índice geral: `título  tipo(f|s)  letra  ano`. */
@@ -355,23 +404,27 @@ export async function search(termo, limite = 20) {
   if (alvo.length < 2) return [];
 
   const indice = parseBusca(await lerArquivo("busca.txt"));
-  const series = indice.filter((item) => item.tipo === "s");
+  // Filmes entram por omissão; o dono pode voltar a excluí-los com
+  // `MEGACINE_TIPOS_EXCLUIDOS=filmes`.
+  const tipos = MEGACINE_TIPOS_EXCLUIDOS.includes("filmes") ? ["s"] : ["s", "f"];
+  const itens = indice.filter((item) => tipos.includes(item.tipo));
   const { baseCapa, fichas } = parseFichas(await lerArquivo("fichas.txt"));
 
   const out = [];
   const vistos = new Set();
 
-  for (const item of filtrarPorTermo(series, alvo, limite)) {
-    const chave = `${normalizar(item.titulo)}|${item.ano}`;
+  for (const item of filtrarPorTermo(itens, alvo, limite)) {
+    // O tipo entra na chave: um filme e uma série podem partilhar o título.
+    const chave = `${item.tipo}|${normalizar(item.titulo)}|${item.ano}`;
     if (vistos.has(chave)) continue;
     vistos.add(chave);
 
     out.push({
-      slug: token({ l: item.letra, t: item.titulo, a: item.ano }),
+      slug: token({ k: item.tipo, l: item.letra, t: item.titulo, a: item.ano }),
       title: item.titulo,
       image: posterDoTitulo(baseCapa, fichas, item.titulo),
       year: item.ano,
-      tipo: "série",
+      tipo: item.tipo === "f" ? "filme" : "série",
     });
   }
 
@@ -498,6 +551,88 @@ export async function getEpisodeStream(slug, temporada = 1, episodio = 1, faixa 
   if (!url) throw new SaimoError("A fonte não devolveu o vídeo deste episódio.");
 
   return { url, tipo: "series", referer: REFERER, faixa: faixaServida };
+}
+
+/**
+ * Faixas disponíveis de um filme, no vocabulário do menu
+ * (`AUDIO_DUBBED`/`AUDIO_SUBBED`).
+ *
+ * @param {{dub?: string[], leg?: string[]}} filme
+ * @returns {string[]}
+ */
+export function faixasDoFilme(filme) {
+  const faixas = [];
+  if (filme?.dub?.length) faixas.push(AUDIO_DUBBED);
+  if (filme?.leg?.length) faixas.push(AUDIO_SUBBED);
+  return faixas;
+}
+
+/**
+ * Encontra a linha de um filme no ficheiro da letra.
+ *
+ * Sem `series-<L>` equivalente: o ficheiro `filmes-<L>.txt` já traz os filmes
+ * todos da letra numa só página (medido: ~4,5k linhas), por isso não há índice
+ * nem pedaços.
+ *
+ * @param {{l: string, t: string}} ref
+ * @returns {Promise<object|null>}
+ */
+async function acharFilme(ref) {
+  const alvo = normalizar(ref.t);
+  const filmes = parseFilmes(await lerArquivo(`filmes-${letraArquivo(ref.l)}.txt`));
+
+  return filmes.find((f) => normalizar(f.titulo) === alvo) || null;
+}
+
+/**
+ * Faixas publicadas de um filme, para o menu perguntar antes de baixar.
+ *
+ * @param {string} slug token da pesquisa
+ * @returns {Promise<{title: string, faixas: string[]}>}
+ */
+export async function getFilmeInfo(slug) {
+  const ref = destoken(slug);
+  if (!ref?.t) throw new SaimoError("Título inválido. Envia .menu para recomeçar.");
+
+  const filme = await acharFilme(ref);
+  if (!filme) throw new SaimoError("Este filme não está disponível na fonte.");
+
+  return { title: filme.titulo, faixas: faixasDoFilme(filme) };
+}
+
+/**
+ * URL do stream de um filme (interface do `getEpisodeStream`).
+ *
+ * Sem faixa pedida serve dublado quando existe (a faixa preferida do público
+ * PT/BR); com faixa, serve a pedida e cai para a outra quando o filme só publica
+ * uma, devolvendo a faixa REAL em `faixa` para o menu poder avisar.
+ *
+ * @param {string} slug token da pesquisa
+ * @param {string} [faixa] `AUDIO_DUBBED` / `AUDIO_SUBBED`
+ * @returns {Promise<{url: string, tipo: string, referer: string, faixa: string, title: string}>}
+ */
+export async function getFilmeStream(slug, faixa = "") {
+  const ref = destoken(slug);
+  if (!ref?.t) throw new SaimoError("Título inválido. Envia .menu para recomeçar.");
+
+  const filme = await acharFilme(ref);
+  if (!filme) throw new SaimoError("Este filme não está disponível na fonte.");
+
+  const disponiveis = faixasDoFilme(filme);
+  const pedida = String(faixa || "").trim().toLowerCase();
+
+  // A ordem de preferência: a pedida (se existir) → dublado → legendado.
+  const escolhida =
+    (pedida && disponiveis.includes(pedida) ? pedida : "") ||
+    (disponiveis.includes(AUDIO_DUBBED) ? AUDIO_DUBBED : "") ||
+    disponiveis[0] ||
+    "";
+
+  const urls = escolhida === AUDIO_SUBBED ? filme.leg : filme.dub;
+  const url = melhorUrl(urls);
+  if (!url) throw new SaimoError("A fonte não devolveu o vídeo deste filme.");
+
+  return { url, tipo: "filme", referer: REFERER, faixa: escolhida, title: filme.titulo };
 }
 
 /**

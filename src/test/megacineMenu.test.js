@@ -21,6 +21,7 @@ const BUSCA = [
   "The Boys Apresenta: Diabólicos\ts\tT\t2022",
   "Duna A Profecia\ts\tD\t2024",
   "Matrix\tf\tM\t1999",
+  "Matrix Reloaded\tf\tM\t2003",
   "Dual Show\ts\tZ\t2020",
 ].join("\n");
 
@@ -34,6 +35,13 @@ const SERIES_D = "Duna A Profecia\t2024\t0\t1";
 
 // Dual Show: dois episódios na T1, o primeiro com dublado E legendado.
 const SERIES_Z = "Dual Show\t2020\t0\t2";
+
+// Filmes da letra M. "Matrix" traz as DUAS faixas (dub e leg); "Matrix Reloaded"
+// só legendado — é o caso que testa a queda sem escolha.
+const FILMES_M = [
+  "Matrix\tdub=http://cdn.saimo.test/matrix-dub.mp4,http://cdn.saimo.test/matrix-dub2.mp4\tleg=http://cdn.saimo.test/matrix-leg.mp4",
+  "Matrix Reloaded\tleg=http://cdn.saimo.test/reloaded-leg.mp4",
+].join("\n");
 
 // Fichas: base das capas e o pôster de cada título (formato do site).
 const FICHAS = [
@@ -97,6 +105,7 @@ function stubFetch({ playlistOk = true, chamadas = [], extras = {} } = {}) {
     if (alvo.endsWith("/series-T-1.txt")) return responder(EPISODIO_UNICO);
     if (alvo.endsWith("/series-D-0.txt")) return responder(EPISODIOS_DUNA);
     if (alvo.endsWith("/series-Z-0.txt")) return responder(EPISODIOS_DUAL);
+    if (alvo.endsWith("/filmes-M.txt")) return responder(FILMES_M);
 
     // CDN do vídeo: responde (ou não) conforme `playlistOk`.
     if (alvo.includes("cdn.saimo.test")) {
@@ -387,40 +396,98 @@ test("um título de episódio único salta direto para o download", async () => 
   assert.equal(session, null, "não fica preso num menu de episódio de um item só");
 });
 
-test("a pesquisa não oferece filmes", async () => {
-  stubFetch();
-  const { getMegacineSession } = await import("../utils/megacineMenu.js");
-
-  const replies = await abrir("the boys");
-  const session = getMegacineSession("mgc-test@g.us", "5511999999999@lid");
-
-  assert.deepEqual(
-    session.candidates.map((c) => c.title),
-    ["The Boys", "The Boys Apresenta: Diabólicos"],
-  );
-  assert.ok(
-    !replies.some((r) => r.includes("Matrix")),
-    "o filme não aparece nas opções",
-  );
-});
-
-test("um filme não é oferecido pela pesquisa (tipo 'f' filtrado)", async () => {
-  // O índice marca "Matrix" como filme (tipo `f`); a pesquisa de séries ignora
-  // esses títulos, por isso o filme nunca chega a aparecer nas opções.
+test("a pesquisa oferece filmes, marcados como tal", async () => {
   stubFetch();
   const { getMegacineSession } = await import("../utils/megacineMenu.js");
 
   const replies = await abrir("matrix");
+  const session = getMegacineSession("mgc-test@g.us", "5511999999999@lid");
 
-  assert.ok(
-    replies.some((r) => r.includes("Não encontrei")),
-    "o filme não é oferecido como série",
+  assert.deepEqual(
+    session.candidates.map((c) => c.title),
+    ["Matrix", "Matrix Reloaded"],
+    "o filme aparece nas opções, ao contrário do comportamento antigo",
   );
   assert.ok(
-    !replies.some((r) => r.includes("Baixando")),
-    "o download não arranca",
+    session.candidates.every((c) => c.tipo === "filme"),
+    "o tipo viaja na candidata, para o fluxo saber que não é uma série",
   );
-  assert.equal(getMegacineSession("mgc-test@g.us", "5511999999999@lid"), null);
+  assert.ok(
+    session.lastRows.some((r) => String(r.description || "").includes("🎬 Filme")),
+    "a linha distingue filme de série",
+  );
+});
+
+test("um filme salta as temporadas e pergunta a qualidade", async () => {
+  stubFetch();
+  const { handleMegacineReply, getMegacineSession } = await import(
+    "../utils/megacineMenu.js"
+  );
+
+  await abrir("matrix");
+  const replies = [];
+  await handleMegacineReply({
+    socket: fakeSocket,
+    chatId: "mgc-test@g.us",
+    senderLid: "5511999999999@lid",
+    text: "mgc:an:0",
+    sendReply: async (t) => replies.push(t),
+  });
+
+  const session = getMegacineSession("mgc-test@g.us", "5511999999999@lid");
+  // "Matrix" tem as duas faixas, por isso o passo seguinte é o áudio.
+  assert.equal(session.stage, "faixas");
+  assert.equal(session.filme, true);
+  assert.deepEqual(session.audioVersions, ["dubbed", "subbed"]);
+});
+
+test("escolhida a faixa do filme, pergunta a qualidade", async () => {
+  stubFetch();
+  const { handleMegacineReply, getMegacineSession } = await import(
+    "../utils/megacineMenu.js"
+  );
+
+  await abrir("matrix");
+  await handleMegacineReply({
+    socket: fakeSocket,
+    chatId: "mgc-test@g.us",
+    senderLid: "5511999999999@lid",
+    text: "mgc:an:0",
+    sendReply: async () => {},
+  });
+  const replies = [];
+  await handleMegacineReply({
+    socket: fakeSocket,
+    chatId: "mgc-test@g.us",
+    senderLid: "5511999999999@lid",
+    text: "mgc:fil:dubbed",
+    sendReply: async (t) => replies.push(t),
+  });
+
+  const session = getMegacineSession("mgc-test@g.us", "5511999999999@lid");
+  assert.equal(session.stage, "qualidade");
+  assert.equal(session.audioVersion, "dubbed");
+  assert.ok(replies.some((r) => r.includes("720p")), "oferece a qualidade 720p");
+});
+
+test("um filme só legendado não pergunta a faixa, vai direto à qualidade", async () => {
+  stubFetch();
+  const { handleMegacineReply, getMegacineSession } = await import(
+    "../utils/megacineMenu.js"
+  );
+
+  await abrir("matrix reloaded");
+  await handleMegacineReply({
+    socket: fakeSocket,
+    chatId: "mgc-test@g.us",
+    senderLid: "5511999999999@lid",
+    text: "mgc:an:0",
+    sendReply: async () => {},
+  });
+
+  const session = getMegacineSession("mgc-test@g.us", "5511999999999@lid");
+  assert.equal(session.stage, "qualidade", "sem escolha de faixa, salta o passo");
+  assert.equal(session.audioVersion, "subbed", "a única faixa fica fixada sozinha");
 });
 
 test("a pesquisa sem resultados avisa e fecha a sessão", async () => {

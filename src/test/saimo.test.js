@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { test, mock } from "node:test";
 import {
   destoken,
+  faixasDoFilme,
   filtrarPorTermo,
   getEpisodeStream,
   letraArquivo,
@@ -19,6 +20,7 @@ import {
   normalizar,
   parseBusca,
   parseFichas,
+  parseFilmes,
   parseSeriesBlocos,
   parseSeriesIndice,
   posterDoTitulo,
@@ -96,6 +98,35 @@ test("parseSeriesBlocos agrupa os episódios por título", () => {
     versao: "dub",
     urls: ["http://x/s01e01.mp4", "https://saimo/api/stream?id=1"],
   });
+});
+
+test("parseFilmes lê título e as faixas dub/leg com os URLs", () => {
+  const texto = [
+    "Matrix\tdub=http://cdn/x-dub.mp4,http://cdn/x-dub2.mp4\tleg=http://cdn/x-leg.mp4",
+    "So Legendado\tleg=http://cdn/y-leg.mp4",
+    "Sem Faixa",
+  ].join("\n");
+
+  const filmes = parseFilmes(texto);
+
+  assert.equal(filmes.length, 2, "a linha sem URL nenhum é descartada");
+  assert.deepEqual(filmes[0], {
+    titulo: "Matrix",
+    dub: ["http://cdn/x-dub.mp4", "http://cdn/x-dub2.mp4"],
+    leg: ["http://cdn/x-leg.mp4"],
+  });
+  assert.deepEqual(filmes[1], {
+    titulo: "So Legendado",
+    dub: [],
+    leg: ["http://cdn/y-leg.mp4"],
+  });
+});
+
+test("faixasDoFilme devolve só as faixas que existem", () => {
+  assert.deepEqual(faixasDoFilme({ dub: ["a"], leg: ["b"] }), ["dubbed", "subbed"]);
+  assert.deepEqual(faixasDoFilme({ dub: ["a"], leg: [] }), ["dubbed"]);
+  assert.deepEqual(faixasDoFilme({ dub: [], leg: ["b"] }), ["subbed"]);
+  assert.deepEqual(faixasDoFilme({}), []);
 });
 
 test("parseBusca lê título, tipo, letra e ano", () => {

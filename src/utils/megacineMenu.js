@@ -18,14 +18,17 @@
  *      que existe quando o episódio não tem a pedida (avisa em vez de trocar em
  *      silêncio).
  *
- * FILMES NÃO ENTRAM. A pesquisa descarta-os pelo tipo (`f`) do índice do site e,
- * como rede de segurança, um título que escape é recusado ao abrir. Ver
- * `src/services/saimo.js` para o porquê.
+ * FILMES também entram (a pesquisa devolve-os com `tipo: "filme"`). Um filme não
+ * tem temporadas nem episódios, por isso segue um caminho curto:
+ * faixa (`mgc:fil:<faixa>`) → qualidade de compressão (`mgc:q:<altura>`) →
+ * baixar → comprimir → enviar. A compressão é obrigatória: o original tem 1,2 a
+ * 5,5 GB (medido) e nunca caberia no teto de envio. O dono pode voltar a
+ * excluí-los com `MEGACINE_TIPOS_EXCLUIDOS=filmes`.
  *
- * NÃO há passo de qualidade, ao contrário dos animes: o Megacine publica UMA só
- * qualidade por episódio (uma playlist de segmentos, sem `EXT-X-STREAM-INF`),
- * por isso pedir uma escolha que não existe seria um passo a fingir. O teto de
- * tamanho continua a aplicar-se no download.
+ * NÃO há passo de qualidade nas SÉRIES, ao contrário dos animes: o Saimo publica
+ * UMA só qualidade por episódio (um MP4 direto, sem degraus), por isso pedir uma
+ * escolha que não existe seria um passo a fingir. O teto de tamanho continua a
+ * aplicar-se no download.
  *
  * As linhas guardam apenas índices (`mgc:ep:0`) porque o `rowId` do WhatsApp
  * tem limite de tamanho; os slugs e URLs reais ficam na sessão.
@@ -34,12 +37,17 @@
  */
 import fs from "node:fs";
 import {
+  FILME_COMPRESS_HEIGHTS,
+  FILME_MAX_DOWNLOAD_BYTES,
+  FILME_MAX_SEND_BYTES,
   MEGACINE_DOWNLOAD_CREDITS,
   MEGACINE_MAX_DOWNLOAD_BYTES,
   OWNER_LID,
 } from "../config.js";
 import {
   getEpisodeStream,
+  getFilmeInfo,
+  getFilmeStream,
   getSeasons,
   isPlaylistReachable,
   megacineDownloadArgs,
@@ -55,7 +63,7 @@ import {
   withCreditsContext,
 } from "../services/credits.js";
 import { mediaUploadFromFile, safeMediaFileName } from "./mediaSend.js";
-import { prepareImageForWhatsApp, withPreparedVideo } from "../services/mediaPrepare.js";
+import { prepareImageForWhatsApp, comprimirVideo, withPreparedVideo } from "../services/mediaPrepare.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
   AUDIO_DUBBED,
@@ -95,6 +103,8 @@ export const MEGACINE_TOKEN_PREFIXES = [
   "mgc:an:",
   "mgc:sea:",
   "mgc:aud:",
+  "mgc:fil:",
+  "mgc:q:",
   "mgc:ep:",
   "mgc:pg:",
   "mgc:pg2:",
@@ -202,6 +212,7 @@ function ensureSession({
       episodes: [],
       page: 0,
       episode: null,
+      filme: false,
       audioVersion: "",
       audioVersions: [],
       allCandidates: [],
@@ -237,9 +248,11 @@ function buildCandidateRows(candidatos = [], page = 0) {
   return candidatos.slice(inicio, inicio + RESULTS_PER_PAGE).map((item, offset) => ({
     id: `mgc:an:${inicio + offset}`,
     title: String(item.title || item.slug).slice(0, 60),
-    // A pesquisa já só devolve conteúdo episódico (séries, doramas e animes),
-    // por isso o tipo não precisa de aparecer; o ano desempata títulos iguais.
-    description: item.year ? String(item.year) : "Abrir",
+    // Filme e série partilham a lista: o rótulo diz qual é qual, senão um filme
+    // pareceria uma série sem episódios. O ano desempata títulos iguais.
+    description: [item.tipo === "filme" ? "🎬 Filme" : "📺 Série", item.year]
+      .filter(Boolean)
+      .join(" · "),
   }));
 }
 
@@ -276,6 +289,30 @@ function buildEpisodeRows(episodes = [], page = 0) {
       description: "Ver e baixar",
     };
   });
+}
+
+/** Linhas de faixa de um filme (`mgc:fil:<faixa>`). */
+function buildFilmeAudioRows(faixas = []) {
+  return faixas.map((faixa) => ({
+    id: `mgc:fil:${faixa}`,
+    title: audioVersionLabel(faixa),
+    description: "Escolher esta faixa",
+  }));
+}
+
+/**
+ * Linhas de qualidade da compressão (`mgc:q:<altura>`).
+ *
+ * A altura-alvo é uma escolha de COMPRESSÃO, não da fonte (a fonte só publica
+ * um ficheiro grande): o utilizador aceita perder qualidade para caber no
+ * envio. Por isso o rótulo diz "comprimir para", e não "qualidade".
+ */
+function buildQualityRows(alturas = FILME_COMPRESS_HEIGHTS) {
+  return alturas.map((altura) => ({
+    id: `mgc:q:${altura}`,
+    title: `${altura}p`,
+    description: altura <= 480 ? "Mais leve" : "Melhor imagem",
+  }));
 }
 
 async function sendCard({ socket, session, text, title, rows, fallbackPrompt, image = null }) {
@@ -374,7 +411,7 @@ export async function startMegacineFlow({
       session,
       text:
         `📺 *SAIMO TV*\n\n` +
-        `Escreve o nome da série que queres ver.\n\n` +
+        `Escreve o nome da série ou do filme que queres ver.\n\n` +
         `_Ex.: .megacine the boys_`,
       title: "Saimo TV",
       rows: [cancelRow()],
@@ -480,25 +517,16 @@ async function chooseCandidate({ socket, session, index }) {
   touch(session);
   await session.sendReply(`📺 Abrindo "${candidato.title}"...`).catch(() => {});
 
+  // FILME: não tem temporadas nem episódios, por isso o fluxo é outro
+  // (faixa → qualidade → comprimir → enviar). Detetado pelo tipo da pesquisa.
+  if (candidato.tipo === "filme") {
+    return abrirFilme({ socket, session, candidato });
+  }
+
   let seasons;
 
   try {
     const resultado = await getSeasons(candidato.slug);
-
-    // Rede de segurança: a pesquisa já filtra filmes pelo `card-meta`, mas se o
-    // meta faltar (ou mudar de formato) é aqui que o filme é travado. A página
-    // é a fonte de verdade — "Assistir Filme" vs "Assistir Agora".
-    if (resultado.isFilme) {
-      dropSession(session);
-      await session
-        .sendReply(
-          "🎬 Este título é um *filme*, e o comando serve só séries, doramas e " +
-            "animes. Tenta outro título.",
-        )
-        .catch(() => {});
-      return true;
-    }
-
     seasons = resultado.seasons;
   } catch (error) {
     dropSession(session);
@@ -613,6 +641,304 @@ async function openSeasons({ socket, session }) {
   });
 }
 
+/* ═══════════ FILME (download único + compressão) ═══════════ */
+
+/**
+ * Abre um filme: pergunta a faixa (se houver escolha) e depois a qualidade.
+ *
+ * Um filme não tem temporadas nem episódios, por isso salta os passos 2 e 3 do
+ * fluxo das séries. O que sobra é o que importa para um ficheiro grande: QUE
+ * faixa (dublado/legendado) e QUE altura de compressão (o original tem 1,2 a
+ * 5,5 GB e não cabe no envio).
+ *
+ * @returns {Promise<boolean>}
+ */
+async function abrirFilme({ socket, session, candidato }) {
+  let info;
+
+  try {
+    info = await getFilmeInfo(candidato.slug);
+  } catch (error) {
+    dropSession(session);
+    errorLog(`[megacine] falha ao abrir o filme: ${error.message}`);
+    await session.sendReply("❌ Não consegui abrir este filme agora. Tenta novamente.").catch(() => {});
+    return true;
+  }
+
+  session.title = candidato;
+  session.filme = true;
+  session.audioVersion = "";
+  session.audioVersions = info.faixas || [];
+
+  // Com as duas faixas, pergunta; com uma só, fixa-a sem incomodar.
+  if (session.audioVersions.length > 1) {
+    session.stage = "faixas";
+    touch(session);
+
+    const rows = [...buildFilmeAudioRows(session.audioVersions), cancelRow()];
+
+    return sendCard({
+      socket,
+      session,
+      text:
+        `🎬 *${candidato.title}*\n\n` +
+        `🔊 Este filme tem *dublado* e *legendado*.\n` +
+        `Escolhe a faixa que queres.`,
+      title: "Áudio",
+      rows,
+      image: candidato.image || null,
+    });
+  }
+
+  session.audioVersion = session.audioVersions[0] || "";
+  return askQuality({ socket, session });
+}
+
+/**
+ * Pergunta a qualidade da compressão.
+ *
+ * O original NÃO é oferecido: ele não cabe no envio (medido, 1,2 a 5,5 GB), por
+ * isso seria uma opção que falha no fim de um download de vários minutos.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function askQuality({ socket, session }) {
+  session.stage = "qualidade";
+  touch(session);
+
+  const rows = [...buildQualityRows(), cancelRow()];
+
+  return sendCard({
+    socket,
+    session,
+    text:
+      `🎬 *${session.title?.title || "Saimo TV"}*\n\n` +
+      `🗜️ O ficheiro original é grande (mais de 1 GB).\n` +
+      `Escolhe a qualidade para comprimir antes de enviar.\n\n` +
+      `_720p mantém boa imagem; 480p gera o ficheiro mais leve._`,
+    title: "Qualidade",
+    rows,
+    image: session.title?.image || null,
+  });
+}
+
+/**
+ * Aplica a faixa escolhida num filme e segue para a qualidade.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function chooseFilmeAudio({ socket, session, version }) {
+  const disponiveis = session.audioVersions || [];
+
+  if (!AUDIO_VERSIONS.includes(version) || !disponiveis.includes(version)) {
+    dropSession(session);
+    await session
+      .sendReply("❌ Essa faixa já não está disponível. Envia .menu para recomeçar.")
+      .catch(() => {});
+    return true;
+  }
+
+  session.audioVersion = version;
+  return askQuality({ socket, session });
+}
+
+/**
+ * Baixa o filme, comprime para a altura pedida e envia.
+ *
+ * A compressão acontece DEPOIS do download e ANTES do envio, porque o original
+ * nunca cabe. Se a compressão falhar (sem ffmpeg, timeout), o original é
+ * enviado quando couber no teto de envio; se não couber, o utilizador é avisado
+ * e os créditos devolvidos.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function baixarFilme({ socket, session, altura, sendVideoFromFile }) {
+  const titulo = session.title?.title || "Saimo TV";
+  const nomeArquivo = safeMediaFileName(titulo);
+  session.stage = "baixando";
+  touch(session);
+
+  let stream;
+
+  try {
+    stream = await getFilmeStream(session.title.slug, session.audioVersion || "");
+  } catch (error) {
+    dropSession(session);
+    errorLog(`[megacine] falha ao resolver o filme: ${error.message}`);
+    await session.sendReply(`❌ ${error.message}`).catch(() => {});
+    return true;
+  }
+
+  const faixaPedida = session.audioVersion || "";
+  const faixaServida = stream.faixa || "";
+  if (faixaPedida && faixaServida && faixaServida !== faixaPedida) {
+    await session
+      .sendReply(
+        `⚠️ Este filme não tem ${audioVersionLabel(faixaPedida).toLowerCase()}. ` +
+          `Vou enviar ${audioVersionLabel(faixaServida).toLowerCase()}.`,
+      )
+      .catch(() => {});
+  }
+  session.audioVersion = faixaServida || faixaPedida;
+
+  if (!(await isPlaylistReachable(stream.url, stream.referer))) {
+    dropSession(session);
+    await session
+      .sendReply("❌ A fonte não respondeu a este filme agora. Tenta novamente em instantes.")
+      .catch(() => {});
+    return true;
+  }
+
+  const contaId = session.ownerId;
+  const cobrar = contaId && contaId !== OWNER_LID;
+
+  if (cobrar) {
+    const saldo = hasSufficientCredits(contaId, MEGACINE_DOWNLOAD_CREDITS);
+    if (!saldo.ok) {
+      dropSession(session);
+      await session
+        .sendReply(
+          creditsExhaustedMessage({
+            commandName: "megacine",
+            cost: MEGACINE_DOWNLOAD_CREDITS,
+            account: saldo.account,
+          }),
+        )
+        .catch(() => {});
+      return true;
+    }
+  }
+
+  dropSession(session);
+  await session
+    .sendReply(`⬇️ Baixando "${titulo}"... (o ficheiro é grande, isto demora)`)
+    .catch(() => {});
+
+  if (!(await isYtDlpAvailable())) {
+    await session
+      .sendReply("❌ O yt-dlp não está disponível neste servidor, então não consigo baixar.")
+      .catch(() => {});
+    return true;
+  }
+
+  let result;
+  let comprimido = null;
+  let pago = 0;
+
+  try {
+    if (cobrar) {
+      const charge = chargeCredits(contaId, MEGACINE_DOWNLOAD_CREDITS, {
+        reason: "megacine:filme",
+        countUsage: true,
+      });
+
+      if (!charge.ok) {
+        await session
+          .sendReply(
+            creditsExhaustedMessage({
+              commandName: "megacine",
+              cost: MEGACINE_DOWNLOAD_CREDITS,
+              account: charge.account,
+            }),
+          )
+          .catch(() => {});
+        return true;
+      }
+
+      pago = charge.charged;
+    }
+
+    result = await withCreditsContext(session.ownerId, () =>
+      withDownloadSlot(
+        () =>
+          downloadWithYtDlp(stream.url, {
+            height: "best",
+            maxBytes: FILME_MAX_DOWNLOAD_BYTES,
+            extraArgs: megacineDownloadArgs(stream.referer),
+          }),
+        { priority: session.ownerId === OWNER_LID },
+      ),
+    );
+
+    const tamanhoMB = result.fileSize / (1024 * 1024);
+    infoLog(`[megacine] filme baixado: ${tamanhoMB.toFixed(0)} MB`);
+
+    // Comprimir é a razão de existir deste fluxo: sem isto o ficheiro não cabe.
+    await session
+      .sendReply(`🗜️ Comprimindo para ${altura}p... isto pode levar alguns minutos.`)
+      .catch(() => {});
+
+    comprimido = await comprimirVideo(result.filePath, { height: altura });
+
+    const ficheiroEnvio = comprimido?.filePath || result.filePath;
+    const { size: tamanhoEnvio } = await fs.promises.stat(ficheiroEnvio);
+    const envioMB = tamanhoEnvio / (1024 * 1024);
+    const acao = decideAnimeSend(tamanhoEnvio, {
+      documentLimitMb: FILME_MAX_SEND_BYTES / (1024 * 1024),
+    });
+
+    const caption = megacineCaption({
+      titulo,
+      duracao: result.durationString,
+      faixa: session.audioVersion || "",
+      altura: comprimido?.height || 0,
+    });
+
+    if (acao === "cancel") {
+      infoLog(`[megacine] filme cancelado: ${envioMB.toFixed(0)} MB acima do limite`);
+      await session
+        .sendReply(
+          `❌ Mesmo comprimido para ${altura}p o ficheiro ficou com ` +
+            `${envioMB.toFixed(0)} MB, acima do limite de envio. ` +
+            `Tenta uma qualidade mais baixa.`,
+        )
+        .catch(() => {});
+      return true;
+    }
+
+    if (acao === "document") {
+      infoLog(`[megacine] filme como documento (${envioMB.toFixed(0)} MB)`);
+      await socket.sendMessage(session.chatId, {
+        document: mediaUploadFromFile(ficheiroEnvio),
+        mimetype: "video/mp4",
+        fileName: nomeArquivo,
+        caption,
+      });
+    } else {
+      await withPreparedVideo(ficheiroEnvio, async (filePath) => {
+        infoLog(`[megacine] filme como vídeo (${envioMB.toFixed(0)} MB)`);
+        if (typeof sendVideoFromFile === "function") {
+          await sendVideoFromFile(filePath, caption);
+        } else {
+          await socket.sendMessage(session.chatId, {
+            video: mediaUploadFromFile(filePath),
+            mimetype: "video/mp4",
+            caption,
+          });
+        }
+      });
+    }
+  } catch (error) {
+    errorLog(`[megacine] falha no filme: ${error.message}`);
+
+    if (pago > 0) {
+      refundCredits(contaId, pago);
+      pago = 0;
+    }
+
+    await session.sendReply(`❌ Não consegui baixar: ${error.message}`).catch(() => {});
+  } finally {
+    if (comprimido?.filePath) {
+      await fs.promises.rm(comprimido.filePath, { force: true }).catch(() => {});
+    }
+    if (result?.filePath) {
+      await fs.promises.rm(result.filePath, { force: true }).catch(() => {});
+    }
+  }
+
+  return true;
+}
+
 /* ═══════════ PASSO 3 · EPISÓDIOS ═══════════ */
 
 async function chooseSeason({ socket, session, index }) {
@@ -688,12 +1014,19 @@ async function sendEpisodePage({ socket, session, page }) {
  * @param {{titulo?: string, duracao?: string}} [props]
  * @returns {string}
  */
-export function megacineCaption({ titulo, duracao, faixa } = {}) {
+export function megacineCaption({ titulo, duracao, faixa, altura } = {}) {
+  const extra = [
+    faixa ? `🔊 ${audioVersionLabel(faixa)}` : "",
+    altura ? `🗜️ ${altura}p` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return mediaCaption({
     titulo,
     canal: "Saimo TV",
     duracao: duracao || "Não disponível",
-    extra: faixa ? `🔊 ${audioVersionLabel(faixa)}` : "",
+    extra,
   });
 }
 
@@ -990,6 +1323,25 @@ export async function handleMegacineReply({
         socket,
         session: sessao,
         version: value.slice("mgc:aud:".length).trim().toLowerCase(),
+      });
+    }
+
+    if (value.startsWith("mgc:fil:")) {
+      return chooseFilmeAudio({
+        socket,
+        session: sessao,
+        version: value.slice("mgc:fil:".length).trim().toLowerCase(),
+      });
+    }
+
+    const qualidade = tokenIndex(value, "mgc:q:");
+    if (qualidade >= 0) {
+      if (!sessao.filme) return false;
+      return baixarFilme({
+        socket,
+        session: sessao,
+        altura: qualidade,
+        sendVideoFromFile,
       });
     }
 

@@ -674,11 +674,15 @@ export const MEGACINE_PLAYLIST_TIMEOUT_MS = Number(
   process.env.MEGACINE_PLAYLIST_TIMEOUT_MS || 60 * 1000,
 );
 
-// O comando serve só conteúdo episódico (séries, doramas e animes). Filmes são
-// um download único de duas horas, com outro perfil de uso, e ficaram fora por
-// decisão do dono do bot. A lista é configurável para o dia em que isso mudar.
+// Tipos que a pesquisa do `.megacine` deve ignorar. Vazio por omissão: FILMES
+// ENTRAM. O comando deixou de servir só conteúdo episódico — um filme é um
+// download único, sem temporadas, e o menu deteta-o pelo tipo (`f`) para seguir
+// outro caminho (faixa → qualidade → compressão → envio).
+//
+// A lista mantém-se configurável: `MEGACINE_TIPOS_EXCLUIDOS=filmes` repõe o
+// comportamento antigo (só séries, doramas e animes episódicos).
 export const MEGACINE_TIPOS_EXCLUIDOS = (
-  process.env.MEGACINE_TIPOS_EXCLUIDOS || "filmes"
+  process.env.MEGACINE_TIPOS_EXCLUIDOS || ""
 )
   .split(",")
   .map((tipo) => tipo.trim().toLowerCase())
@@ -704,6 +708,56 @@ export const MEGACINE_DOWNLOAD_CREDITS = Number(
 // animes.
 export const MEGACINE_MAX_DOWNLOAD_BYTES =
   Number(process.env.MEGACINE_MAX_DOWNLOAD_MB || 800) * 1024 * 1024;
+
+// ==========================================================================
+// FILMES (download único, com compressão)
+// ==========================================================================
+// Um filme do catálogo é um MP4 único. Medido em 30 títulos: mediana ~1,6 GB e
+// máximo ~2,3 GB, com alguns filmes pequenos (<100 MB) que já cabem no envio. A
+// maioria excede o teto, e como o ficheiro TEM de ser baixado inteiro antes de
+// comprimir, o teto do download é o que limita o disco: o processo mantém o
+// original E a cópia comprimida em disco ao mesmo tempo.
+//
+// 5 GB cobre todo o catálogo medido com folga. O disco do host precisa de ~1,4x
+// este valor livre (original + versão comprimida, que é uma fração do original).
+export const FILME_MAX_DOWNLOAD_BYTES =
+  Number(process.env.FILME_MAX_DOWNLOAD_MB || 5120) * 1024 * 1024;
+
+// Teto de ENVIO do filme, separado do teto dos animes (`ANIME_DOCUMENT_LIMIT_MB`,
+// 800 MB). A 720p um filme de 2 h pode passar dos 800 MB e seria cancelado
+// depois de todo o download e da compressão — a mesma armadilha que a lista de
+// qualidade existe para evitar. 1,5 GB é o teto dos downloads gerais
+// (`MAX_FILE_SIZE_BYTES`) e cobre um filme comprimido.
+export const FILME_MAX_SEND_BYTES =
+  Number(process.env.FILME_MAX_SEND_MB || 1536) * 1024 * 1024;
+
+// Altura-alvo da compressão. 720p corta a maior parte do tamanho mantendo a
+// qualidade num ecrã de telemóvel; 480p corta mais e é a opção para quem quer o
+// ficheiro mais leve possível. A escolha é do utilizador no menu; estes são os
+// degraus oferecidos.
+export const FILME_COMPRESS_HEIGHTS = (
+  process.env.FILME_COMPRESS_HEIGHTS || "720,480"
+)
+  .split(",")
+  .map((v) => Number(v.trim()))
+  .filter((v) => Number.isFinite(v) && v > 0);
+
+// Qualidade da compressão (CRF do libx264): mais alto = ficheiro menor e mais
+// artefactos. 28 é o valor escolhido para 720p.
+export const FILME_COMPRESS_CRF = Number(process.env.FILME_COMPRESS_CRF || 28);
+
+// Preset do libx264. Medido neste host (720p→480p, `testsrc`): `veryfast` corre
+// a ~17x o tempo real (um filme de 90 min em ~5 min); `ultrafast` é ~21x mais
+// rápido mas gera ~78% mais bytes. `veryfast` é o equilíbrio; num host lento o
+// dono pode subir para `ultrafast` ou descer para `faster`.
+export const FILME_COMPRESS_PRESET = process.env.FILME_COMPRESS_PRESET || "veryfast";
+
+// Teto de uma só compressão. Um filme de 90 min a `veryfast` leva ~5 min neste
+// host; o teto de 45 min dá folga a um host ARM mais lento sem deixar um
+// processo preso indefinidamente. Excedido, a compressão é abortada e o original
+// é enviado (ver `comprimirVideo`), para não perder o download já feito.
+export const FILME_COMPRESS_TIMEOUT_MS =
+  Number(process.env.FILME_COMPRESS_TIMEOUT_MS || 45 * 60 * 1000);
 
 // Tradução de títulos PT → língua do catálogo (ver `src/services/translate.js`).
 //
