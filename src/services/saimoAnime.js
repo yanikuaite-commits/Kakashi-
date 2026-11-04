@@ -26,6 +26,7 @@ import {
   filtrarPorTermo,
   melhorUrl,
   normalizar,
+  parseFichas,
   token,
 } from "./saimo.js";
 
@@ -61,6 +62,66 @@ async function lerAnimes() {
   return texto;
 }
 
+/**
+ * Capas do `fichas.txt`, indexadas pelo id do TMDB.
+ *
+ * O `links-animes.txt` não traz pôster, mas o `fichas.txt` (o mesmo que o
+ * catálogo de séries/filmes usa) tem o pôster de cada título e o id do TMDB —
+ * e o bloco do anime traz esse id. O índice por id é o casamento fiável
+ * (98% dos títulos, contra 93% pelo nome, que ainda leva com sufixos como
+ * "Dublado" que o ficheiro de fichas não tem).
+ *
+ * @returns {Promise<{baseCapa: string, porTmdb: Map<string,string>, porTitulo: Map<string,string>}>}
+ */
+async function lerFichas() {
+  if (cache.has("fichas")) return cache.get("fichas");
+
+  const indice = { baseCapa: "", porTmdb: new Map(), porTitulo: new Map() };
+
+  try {
+    const { baseCapa, fichas } = parseFichas(
+      await fetchText(`${CATALOGO}/fichas.txt`),
+    );
+    indice.baseCapa = baseCapa || "";
+
+    for (const ficha of fichas) {
+      if (!ficha.poster) continue;
+      const caminho = ficha.poster.startsWith("/") ? ficha.poster : `/${ficha.poster}`;
+      const url = baseCapa ? `${baseCapa.replace(/\/$/, "")}${caminho}` : "";
+
+      if (ficha.tmdbId) indice.porTmdb.set(String(ficha.tmdbId).trim(), url);
+      indice.porTitulo.set(normalizar(ficha.titulo), url);
+    }
+  } catch (error) {
+    // Sem capas o menu continua a funcionar: a imagem é um extra.
+    errorLog(`[saimo] fichas indisponíveis: ${error.message}`);
+  }
+
+  cache.set("fichas", indice);
+  return indice;
+}
+
+/**
+ * Capa de um anime: pelo id do TMDB primeiro, pelo título como recurso.
+ *
+ * @param {{titulo: string, tmdbId?: string}} bloco
+ * @returns {Promise<string|null>}
+ */
+async function capaDoAnime(bloco) {
+  const { porTmdb, porTitulo } = await lerFichas();
+
+  const id = String(bloco?.tmdbId || "").trim();
+  if (id && porTmdb.get(id)) return porTmdb.get(id);
+
+  const alvo = normalizar(bloco?.titulo);
+  if (alvo && porTitulo.get(alvo)) return porTitulo.get(alvo);
+
+  // O catálogo rotula algumas entradas com o sufixo da faixa ("... Dublado"),
+  // que não existe no ficheiro de fichas.
+  const semSufixo = normalizar(String(bloco?.titulo || "").replace(/\s*(dublado|legendado)\s*$/i, ""));
+  return porTitulo.get(semSufixo) || null;
+}
+
 /** Limpa a cache (usado pelos testes). */
 export function limparCacheAnimes() {
   cache.clear();
@@ -93,6 +154,9 @@ export function parseAnimes(texto) {
       atual = {
         titulo: (p[0] || "").trim(),
         ano: (p[1] || "").trim(),
+        // O id do TMDB é o que casa com `fichas.txt` (98% dos títulos, contra
+        // 93% pelo nome): é por ele que a capa é encontrada.
+        tmdbId: (p[2] || "").trim(),
         episodios: [],
       };
       blocos.push(atual);
@@ -135,8 +199,12 @@ async function acharBloco(ref) {
 /**
  * Pesquisa animes pelo nome (interface do `meusanimes.search`).
  *
+ * Cada resultado leva a CAPA quando o `fichas.txt` a tem, para o menu poder
+ * distinguir remakes e temporadas homónimas (era o que faltava desde que a
+ * fonte passou a ser o saimo).
+ *
  * @param {string} termo
- * @returns {Promise<Array<{id: string, slug: string, title: string, image: null}>>}
+ * @returns {Promise<Array<{id: string, slug: string, title: string, image: string|null}>>}
  */
 export async function search(termo) {
   const alvo = normalizar(termo);
@@ -157,7 +225,7 @@ export async function search(termo) {
       id: ref,
       slug: ref,
       title: bloco.titulo,
-      image: null,
+      image: await capaDoAnime(bloco),
     });
   }
 

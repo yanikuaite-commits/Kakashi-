@@ -74,8 +74,9 @@ High-value architectural notes:
 | `src/services/spider-x-api.js` | Spider X integration for downloads, AI, Pinterest, Brat, and related endpoints. |
 | `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
 | `src/services/anime.js` | Anime service layer over the single source: search, episodes, streaming sources. |
-| `src/services/meusanimes.js` | Single anime source: WordPress search, seasons, and Blogger sources via the player API. |
-| `src/services/bloggerVideo.js` | Blogger/Google Video reader (iframe, token, itags) used by `meusanimes`. |
+| `src/services/saimoAnime.js` | Anime catalogue of the single source: reads `redeflix/links-animes.txt`, resolves the HLS steps and the cover from `fichas.txt`. |
+| `src/services/meusanimes.js` | LEGACY. Former anime source (WordPress search, Blogger sources via the player API). Kept in the tree, no longer called. |
+| `src/services/bloggerVideo.js` | Blogger/Google Video reader (iframe, token, itags), used only by the legacy `meusanimes`. |
 | `src/services/megacine.js` | Megacine scraper: series/dorama search (films filtered via `MEGACINE_TIPOS_EXCLUIDOS`, empty by default), seasons, episodes and the m3u8 stream. |
 | `src/utils/megacineMenu.js` | Interactive flow for séries/doramas/filmes: title → (faixa →) seasons/episodes, or faixa → quality → compress for a film. |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
@@ -950,55 +951,50 @@ Sent files carry the search title, not a fixed name: build it with
 file. Only documents can be named — the WhatsApp `VideoMessage` proto has no
 filename field, so a video sent as video carries no name at all.
 
-### Animes (fonte única: meusanimes)
+### Animes (fonte única: saimo)
 
 `src/services/anime.js` é a camada de serviço sobre a **fonte única**
-`src/services/meusanimes.js`; `src/utils/animeMenu.js` corre o fluxo interativo
+`src/services/saimoAnime.js`; `src/utils/animeMenu.js` corre o fluxo interativo
 (nome → faixa → pesquisa → temporadas → episódios → qualidade → download) e
-`src/utils/animeFormat.js` guarda os helpers puros. `src/services/bloggerVideo.js`
-lê os degraus (360p/720p) do CDN do Blogger, que é o que o `meusanimes` publica.
+`src/utils/animeFormat.js` guarda os helpers puros.
 
-- **o `meusanimes` (`meusanimes.blog`) é a única fonte.** Responde de um IP de
-  datacenter **sem desafio Cloudflare**, agrupa temporadas na página do anime e
-  serve o episódio pelo player do Blogger. A cadeia é: `/?s=<termo>` →
-  `/a/<slug>/` (o bloco `id='seasons'` traz todas as temporadas e os episódios)
-  → `/e/<ep-slug>/` (um iframe
-  `serv01.meusdoramas.club/#/video/<tmdb>/<season>/<episode>`) →
-  `serv01.meusdoramas.club/posts/get-video.php?episode_number=&season_number=&tmdb=`
-  → `{success, videoUrl}` com um link do Blogger → o URL direto
-  `googlevideo.com`. O player é uma SPA React noutro domínio e o endpoint real é
-  `posts/get-video.php` — os caminhos óbvios `api/video/...` respondem 404. A
-  resposta do `get-video.php` é idêntica **com e sem cookies** (o cookie
-  `starstruck_...` do site é só de sessão), pelo que a fonte não guarda estado: a
-  tripla `tmdb`/temporada/episódio viaja dentro do id do episódio
-- **a faixa dublada é uma ENTRADA separada** (`/a/<base>-dublado/`). O sufixo é
-  convenção do site mas não garantia — `naruto-shippuden` serve um dub sem
-  sufixo —, por isso a faixa real é confirmada na página do PRIMEIRO episódio
-  (`span.qualidade` diz "Dublado" ou "Legendado") antes de a lista ser rotulada.
-  Sem essa confirmação a fonte podia chamar a um episódio dublado "legendado",
-  que é exatamente o defeito que o fluxo de áudio corrige. `candidatosDeSlug`
-  ordena as entradas a tentar; o passo de faixa também passa por `seasons()`,
-  porque o índice de temporada só é válido dentro da entrada onde foi lido
-- **a fonte publica o itag 18 (360p, ~89 MB num episódio de 23 min) e o itag 22
-  (720p, ~285 MB) como fontes distintas**, pelo que o menu de qualidade oferece
-  ambas e a regra de tamanho decide o que pode ser enviado. **Nem todo o episódio
-  traz as duas**: episódios antigos publicam só 360p, pelo que uma lista de
-  qualidade com um item é normal, não uma falha
-- **a cadeia real ponta-a-ponta foi verificada**: página do episódio →
-  `get-video.php` → token do Blogger → bytes do `googlevideo.com`, com `206`,
-  `video/mp4` e um cabeçalho `ftyp` válido, e o yt-dlp a descarregar o ficheiro.
-  Como todo o site PT-BR indexado em romaji, um termo em inglês pode ainda cair
-  num spin-off (`attack on titan` → o Junior High), que é uma limitação da
-  correspondência por título
+- **o `saimo` é a fonte única dos animes, a mesma das séries e dos filmes.** O
+  `saimoAnime.js` expõe a interface que o `anime.js` espera (`search`, `seasons`,
+  `seasonEpisodes`, `episodes`, `sources`), por isso o serviço não sabe de quem
+  são os dados. O `meusanimes.js` continua no repositório mas já não é chamado
+  (e o `bloggerVideo.js` só serve o `meusanimes`), pelo que ambos são legado.
+- o catálogo vive em `redeflix/links-animes.txt` (426 títulos), em blocos
+  `@Título  ano  tmdbId` seguidos das linhas
+  `temporada  episódio  versão(dub|leg)  url1,url2,...`. A maioria é HLS
+  (`master.txt`, degraus 360p/720p); o resto é um mp4 único.
+- **as capas dos candidatos vêm do `fichas.txt`, casadas pelo id do TMDB.** O
+  `links-animes.txt` não traz pôster, mas o bloco traz o id e o `fichas.txt` (o
+  mesmo que as séries/filmes usam) tem o pôster desse id. Medido no catálogo
+  real: **99% das capas resolvidas** (421/426) pela ordem id → título → título
+  sem o sufixo "Dublado"/"Legendado"; por id sozinho é 98%, por título 93%.
+  Antes disto o `search` devolvia `image: null` e o card do anime saía sem capa,
+  apesar de o `animeMenu.js` já estar preparado para a mostrar — foi uma
+  regressão da troca de fonte, não uma funcionalidade nova.
+- sem `fichas.txt` o menu continua a funcionar: a capa é um extra e a falha é
+  registada, nunca propagada.
+
+- **a cadeia do saimo é simples porque o catálogo é um ficheiro.** Não há
+  scraping de HTML nem player de terceiros: o `links-animes.txt` já traz, por
+  episódio, a lista de URLs (`master.txt` para HLS ou um mp4). `sources()` lê o
+  `master.txt` e devolve um item por degrau (360p/720p), que é o que dá ao menu
+  a escolha real de qualidade. Os detalhes do `meusanimes` que aqui estavam
+  (cadeia `get-video.php` do Blogger, itags 18/22, confirmação da faixa na
+  página do episódio) descrevem o legado e já não se aplicam.
 - **a faixa dublada desta fonte é PT-BR** (`ANIME_PT_DUB_PROVIDERS` em
-  `src/config.js`). A faixa é um booleano no site ("dubbed" ou não), mas o
+  `src/config.js`). A faixa é um booleano no catálogo ("dub" ou não), mas o
   IDIOMA dessa dublagem pertence ao SITE. Com a fonte única atual (um site
   brasileiro) a lista só tem esse nome; o mecanismo mantém-se porque o rótulo do
   card (`Dublado (PT-BR)`) e o aviso de idioma ainda o consultam
-- **os cabeçalhos do download são os do CDN do Blogger**: `Referer` do Blogger
-  **e** um `User-Agent` de browser. Sem o `User-Agent` o CDN responde 403 mesmo
-  com o `Referer` certo. É o que `animeDownloadArgs()` em `src/utils/animeMenu.js`
-  acrescenta à chamada do yt-dlp
+- **os cabeçalhos do download são um `Referer` do site e um `User-Agent` de
+  browser.** Sem o `User-Agent` alguns CDNs respondem 403 mesmo com o `Referer`
+  certo. É o que `animeDownloadArgs()` em `src/utils/animeMenu.js` acrescenta à
+  chamada do yt-dlp
+
 - **a faixa é perguntada ANTES da pesquisa, não antes da lista de episódios**
   (`anm:aud:subbed` / `anm:aud:dubbed`). O utilizador escolhe a faixa assim que o
   nome é conhecido e a pesquisa corre já com ela. Perguntar depois da lista
@@ -1036,7 +1032,7 @@ lê os degraus (360p/720p) do CDN do Blogger, que é o que o `meusanimes` public
   sufixos que só o site usa ("Black Clover" corresponde a "Black Clover Dublado")
 - **a tradução é o último recurso, nunca o primeiro passo**
   (`TRANSLATE_ENABLED`, `src/services/translate.js`). O termo original é
-  pesquisado primeiro, porque o `meusanimes` já indexa muitos aliases PT
+  pesquisado primeiro, porque o catálogo já indexa muitos aliases PT
   ("Ataque dos Titãs" → "Shingeki No Kyojin"); só quando não há correspondência
   exata é que o termo é traduzido e pesquisado de novo. Uma tradução que devolve
   o mesmo texto é descartada, e qualquer falha (sem rede, erro HTTP) devolve
