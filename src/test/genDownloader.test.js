@@ -11,6 +11,11 @@ import command from "../commands/member/downloads/download.js";
 import playVideo from "../commands/member/downloads/play-video.js";
 import { findCommandImport, formatCommand } from "../utils/index.js";
 
+import { __setMessageThemeForTests } from "../utils/formatMessage.js";
+
+// Este ficheiro assegura o tema "galaxy" (o padrão do bot é "plain").
+__setMessageThemeForTests(false);
+
 let server;
 let baseUrl;
 const previousApiUrl = process.env.GENDOWNLOAD_API_URL;

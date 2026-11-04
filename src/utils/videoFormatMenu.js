@@ -28,7 +28,7 @@ import {
   sendInteractiveWithFallback,
   singleSelectList,
 } from "./interactive.js";
-import { RODAPE, downloadMessage, mediaCaption } from "./formatMessage.js";
+import { footerAtual, downloadMessage, mediaCaption } from "./formatMessage.js";
 import { errorLog, infoLog } from "./logger.js";
 import { withCreditsContext } from "../services/credits.js";
 import { downloadYouTubeVideo } from "../services/downloader.js";
@@ -146,7 +146,7 @@ function formatListMessage(textoLista) {
   return singleSelectList({
     text: textoLista,
     title: "Qualidade do vídeo",
-    footer: RODAPE,
+    footer: footerAtual(),
     buttonText: "Selecionar",
     sections: [
       {

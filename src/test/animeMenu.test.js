@@ -13,6 +13,11 @@ import {
 
 process.env.SAIMO_CATALOG_BASE = "https://catalogo.saimo.test";
 
+import { __setMessageThemeForTests } from "../utils/formatMessage.js";
+
+// Este ficheiro assegura o tema "galaxy" (o padrão do bot é "plain").
+__setMessageThemeForTests(false);
+
 // Os testes de fluxo abaixo substituem a rede pelo catálogo do saimo, a fonte
 // única, para exercitar o menu sem tocar em nenhum site.
 

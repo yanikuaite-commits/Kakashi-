@@ -1,6 +1,6 @@
 import { delay } from "baileys";
 import { PREFIX } from "../../../config.js";
-import { formatMessage, RODAPE } from "../../../utils/formatMessage.js";
+import { formatMessage, footerAtual } from "../../../utils/formatMessage.js";
 import {
   clearInteractiveMenu,
   createInteractiveActionId,
@@ -58,7 +58,7 @@ export default {
           rodape: null,
         }),
         title: "Menu de exemplos",
-        footer: RODAPE,
+        footer: footerAtual(),
         buttonText: "Abrir lista",
         sections: [
         {

@@ -50,7 +50,7 @@ import {
 } from "../services/credits.js";
 import { mediaUploadFromFile } from "./mediaSend.js";
 import { prepareImageForWhatsApp, withPreparedVideo } from "../services/mediaPrepare.js";
-import { RODAPE, mediaCaption } from "./formatMessage.js";
+import { footerAtual, mediaCaption } from "./formatMessage.js";
 import {
   ANIME_TOKEN_PREFIXES,
   AUDIO_VERSIONS,
@@ -316,7 +316,7 @@ async function sendCard({
           // descartada). O corpo final é `text || caption`, por isso o conteúdo é o
           // mesmo — verificado contra `generateWAMessageContent`.
           ...(capa.image ? { caption: text, image: { url: capa.image } } : { text }),
-          footer: RODAPE,
+          footer: footerAtual(),
           interactiveButtons: buttons,
           viewOnce: true,
         },

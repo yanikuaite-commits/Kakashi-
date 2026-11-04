@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { searchYouTube } from "../services/youtube-search.js";
 import { formatYouTubeResult, sendYouTubeResults } from "../commands/member/search/yt-search.js";
+import { __setMessageThemeForTests } from "../utils/formatMessage.js";
+
+// Este ficheiro assegura o tema "galaxy" (o padrão do bot é "plain").
+__setMessageThemeForTests(false);
 
 const videos = Array.from({ length: 7 }, (_, index) => ({
   type: "video",

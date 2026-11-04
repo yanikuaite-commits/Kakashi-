@@ -25,12 +25,32 @@
  * Nunca monte o molde à mão num comando: use formatMessage ou os templates
  * prontos abaixo.
  */
-import { BOT_NAME } from "../config.js";
+import { BOT_NAME, PLAIN_MESSAGE_THEME } from "../config.js";
 
 export const RODAPE = "✦ Constelado por Yanik Uaite ✦";
 
 /** Marca de molde aplicado — evita emoldurar a mesma mensagem duas vezes. */
 export const FRAME_MARK = "┌─〔";
+
+// O tema é lido do config no arranque, mas fica num estado mutável para os
+// testes poderem exercer os DOIS temas no mesmo processo — sem isto, só o tema
+// ativo era testável e o outro apodrecia em silêncio.
+let plainTheme = PLAIN_MESSAGE_THEME;
+
+/** O tema ativo é o "plain" (só conteúdo)? */
+export function isPlainTheme() {
+  return plainTheme;
+}
+
+/** Só para os testes: troca o tema ativo. */
+export function __setMessageThemeForTests(plain) {
+  plainTheme = Boolean(plain);
+}
+
+/** Rodapé efetivo: no tema "plain" o rodapé não existe. */
+export function footerAtual() {
+  return plainTheme ? "" : RODAPE;
+}
 
 // Textos gigantes (ex.: clearChat com ~1900 quebras de linha) ficam como estão:
 // emoldurar só atrapalha e pode estourar o limite de 4096 caracteres.
@@ -61,9 +81,26 @@ export function formatMessage({
   icone = "🎛️",
   titulo,
   campos = [],
-  rodape = RODAPE,
+  rodape = footerAtual(),
   extra,
 } = {}) {
+  // Tema "plain": só o conteúdo. O ícone e a assinatura "KAKASHI BOT" eram
+  // decoração, mas o título é informação (ex.: "DOWNLOADS"), por isso fica como
+  // uma linha simples em vez da caixa `┌─〔 ... 〕─┐`.
+  if (isPlainTheme()) {
+    // Um campo vazio é um separador de parágrafo (ex.: entre a pergunta e a
+    // resposta da IA): `linesOf` descarta-o, por isso aqui é tratado à parte.
+    const corpo = [...campos, extra]
+      .flatMap((valor) => (valor === "" ? [""] : linesOf(valor)))
+      .join("\n")
+      .trim();
+
+    const cabecalho = titulo ? `*${String(titulo).toUpperCase()}*` : "";
+    const partes = [cabecalho, corpo].filter(Boolean).join("\n\n");
+
+    return rodape ? `${partes}\n\n${rodape}` : partes;
+  }
+
   const nome = BOT_NAME.toUpperCase();
   const secao = titulo
     ? `┌─〔 ${icone} *${nome} • ${String(titulo).toUpperCase()}* 〕─┐`
@@ -163,15 +200,17 @@ export function withFooter(text = "") {
   if (!value) return value;
 
   const trimmed = value.trimEnd();
-  if (trimmed.endsWith(RODAPE)) return trimmed;
+  // No tema "plain" não há rodapé a anexar.
+  const rodape = footerAtual();
+  if (!rodape || trimmed.endsWith(rodape)) return trimmed;
 
-  const maxContentLength = 4096 - RODAPE.length - 2;
+  const maxContentLength = 4096 - rodape.length - 2;
   let content = trimmed;
   if (content.length > maxContentLength) {
     content = content.slice(0, maxContentLength).trimEnd();
   }
 
-  return `${content}\n\n${RODAPE}`;
+  return `${content}\n\n${rodape}`;
 }
 
 /* ════════════ TEMPLATES PRONTOS ════════════ */
@@ -264,7 +303,7 @@ export function downloadMessage({
   plataforma,
   usuario,
   extra,
-  rodape = RODAPE,
+  rodape = footerAtual(),
 } = {}) {
   const campos = [];
 
@@ -305,7 +344,7 @@ export function mediaCaption({
   duracao,
   qualidade,
   extra,
-  rodape = RODAPE,
+  rodape = footerAtual(),
 } = {}) {
   const seguidoresTexto =
     seguidores === 0 || seguidores

@@ -1,7 +1,7 @@
 import { PREFIX } from "../../config.js";
 import { InvalidParameterError } from "../../errors/index.js";
 import { getPrefix } from "../../utils/database.js";
-import { formatMessage, RODAPE } from "../../utils/formatMessage.js";
+import { formatMessage, footerAtual } from "../../utils/formatMessage.js";
 import {
   clearInteractiveMenu,
   createInteractiveActionId,
@@ -78,7 +78,7 @@ export default {
           rodape: null,
         }),
         title: "Tabelas de preços",
-        footer: RODAPE,
+        footer: footerAtual(),
         buttonText: "Ver tabelas",
         sections: [
           {

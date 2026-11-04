@@ -1,6 +1,6 @@
 import { DAILY_FREE_CREDITS } from "./config.js";
 import { getPrefix } from "./utils/database.js";
-import { RODAPE, formatMessage } from "./utils/formatMessage.js";
+import { footerAtual, formatMessage } from "./utils/formatMessage.js";
 import { formatCommand } from "./utils/index.js";
 import { numberedFallback } from "./utils/interactive.js";
 
@@ -299,7 +299,7 @@ export function buildInteractiveMenuPayload(groupJid, section = "", userName = "
           ],
         }),
     title: category ? category.label : "Menu principal",
-    footer: RODAPE,
+    footer: footerAtual(),
     buttonText: category ? "Abrir comando" : "Abrir categoria",
     sections: [{
       title: category ? category.label : "Categorias",

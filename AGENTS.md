@@ -288,20 +288,47 @@ repository paths, so a host that mounts its volume at `/data` only needs
 ## MESSAGE_THEME
 
 `src/utils/formatMessage.js` is the single template every command reply goes
-through: `formatMessage({ icone, titulo, campos })` builds the framed body,
+through: `formatMessage({ icone, titulo, campos })` builds the body,
 `ensureFrame` keeps an already-framed body from being framed twice, and
-`RODAPE` is the footer. `moderationMessage` is the thin wrapper the moderation
-commands use.
+`footerAtual()` returns the footer in force. `moderationMessage` is the thin
+wrapper the moderation commands use.
 
-- the theme is **"I · Galáxia"**: a cosmic header (`☄️ · ✦ · ˚ ✧ · ☾`), the
-  `┌─〔 icone *KAKASHI BOT • TITULO* 〕─┐` frame and the footer
-  `✦ Constelado por Yanik Uaite ✦`
-- `src/utils/mainMenu.js` builds the main card body with the same theme
-  (`╭──────── 🪐 ────────╮`), so the menu and the replies do not drift apart
+**Two themes, one switch.** `MESSAGE_THEME` in `src/config.js` (env
+`MESSAGE_THEME`) picks between them, and the default is `plain`:
+
+- **`plain` (default)** — content only. `formatMessage` drops the cosmic header
+  and the `┌─〔 ... 〕─┐` frame, and `footerAtual()` returns `""`, so
+  `withFooter` appends nothing. The `titulo` survives as a plain
+  `*TITULO*` line because it carries information ("DOWNLOADS"), not decoration;
+  the icon and the `KAKASHI BOT` signature are dropped. A member asking "who is
+  this?" now gets the answer, not a border.
+- **`galaxy`** — the previous look, unchanged: the cosmic header
+  (`☄️ · ✦ · ˚ ✧ · ☾`), the `┌─〔 icone *KAKASHI BOT • TITULO* 〕─┐` frame and the
+  `✦ Constelado por Yanik Uaite ✦` footer.
+
+Any other value falls back to `plain`, so a typo cannot silently re-enable the
+decoration.
+
+- `PLAIN_MESSAGE_THEME` is the boolean form of the same decision, for code that
+  reads the config directly.
+- **the theme is read at import time**, so a change needs a restart; it is not a
+  per-message option.
+- `FOOTER` does not exist; use `footerAtual()`. Card code that captured the
+  footer in a module-level constant would keep printing the old one after a test
+  switched the theme.
+- the frame is applied centrally: `loadCommonFunctions` runs every reply through
+  `withFooter(ensureFrame(...))`, so a command does not opt in or out.
+- `src/utils/mainMenu.js` builds the main card body; in `plain` it returns only
+  the member/date/creator lines, dropping the `╭──────── 🪐 ────────╮` box.
+- `costsMessage` (`src/services/credits.js`) and the inner boxes of the menu are
+  the other hand-drawn decoration, and follow the same switch.
 - changing the footer means changing it in ONE place (`RODAPE`), but the tests
   assert the literal string in several files (`menu.test.js`,
   `mainMenu.test.js`, `youtubeSearch.test.js`, `genDownloader.test.js`,
-  `animeMenu.test.js`), so a footer change has to update those assertions too
+  `animeMenu.test.js`, `tabela.test.js`, `interactive.test.js`). Those files now
+  call `__setMessageThemeForTests(false)` to exercise the `galaxy` frame, so
+  they keep guarding the old look while the bot ships `plain`; a test that
+  forgets the call asserts the `plain` output instead.
 - the image caption of a submenu is the same text as the frame, and WhatsApp
   caps a caption at 1024 characters. `menuMessage` (`src/menu.js`) drops the
   per-command hints first, then truncates with a pointer back to `.menu`, so

@@ -20,7 +20,11 @@ import {
   resetGuidedSessions,
 } from "../interactive/flow.js";
 import menuCommand from "../commands/member/menu.js";
+import { __setMessageThemeForTests } from "../utils/formatMessage.js";
 import { extractDataFromMessage } from "../utils/index.js";
+
+// Este ficheiro assegura o tema "galaxy" (o padrão do bot é "plain").
+__setMessageThemeForTests(false);
 
 const GROUP = "grupo@g.us";
 const AGORA = Date.parse("2026-12-25T21:30:06Z");

@@ -5,6 +5,10 @@ import { ASSETS_DIR } from "../config.js";
 import { MENU_CATEGORIES, menuMessage } from "../menu.js";
 import command from "../commands/member/menu.js";
 import { formatCommand, readCommandImports } from "../utils/index.js";
+import { __setMessageThemeForTests } from "../utils/formatMessage.js";
+
+// Este ficheiro assegura o tema "galaxy" (o padrão do bot é "plain").
+__setMessageThemeForTests(false);
 
 const chatId = "menu-test@g.us";
 

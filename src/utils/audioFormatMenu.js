@@ -18,7 +18,7 @@
  * @author Dev Yanik
  */
 import fs from "node:fs/promises";
-import { RODAPE, downloadMessage } from "./formatMessage.js";
+import { footerAtual, downloadMessage } from "./formatMessage.js";
 import {
   numberedFallback as buildNumberedFallback,
   sendInteractiveWithFallback,
@@ -128,7 +128,7 @@ function formatListMessage(textoLista) {
   return singleSelectList({
     text: textoLista,
     title: "Formato do áudio",
-    footer: RODAPE,
+    footer: footerAtual(),
     buttonText: "Selecionar",
     sections: [
       {

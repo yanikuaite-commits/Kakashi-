@@ -17,6 +17,11 @@ import {
 } from "../utils/interactive.js";
 import { RODAPE, withFooter } from "../utils/formatMessage.js";
 
+import { __setMessageThemeForTests } from "../utils/formatMessage.js";
+
+// Este ficheiro assegura o tema "galaxy" (o padrão do bot é "plain").
+__setMessageThemeForTests(false);
+
 test("interactive builders preserve IDs and produce Baileys payloads", () => {
   // Nesta base só single_select e cta_url renderizam: quick_reply é proibido.
   const listaBtn = singleSelectButton("Abrir", [

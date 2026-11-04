@@ -13,6 +13,19 @@ export const BOT_EMOJI = "🤖";
 // Nome do bot (mude se preferir).
 export const BOT_NAME = "Kakashi Bot";
 
+// Tema visual das mensagens do bot.
+// "plain" (padrão): envia só o conteúdo — sem cabeçalho cósmico, sem caixa e
+// sem o rodapé "✦ Constelado por Yanik Uaite ✦".
+// "galaxy": o tema completo (☄️ · ✦ · ˚ ✧ · ☾ + caixa + rodapé).
+// Qualquer outro valor cai em "plain", para um engano não reativar a decoração.
+export const MESSAGE_THEME =
+  String(process.env.MESSAGE_THEME || "plain").trim().toLowerCase() === "galaxy"
+    ? "galaxy"
+    : "plain";
+
+// Atalho booleano, para o formatMessage não repetir a comparação.
+export const PLAIN_MESSAGE_THEME = MESSAGE_THEME === "plain";
+
 // Assinatura gravada nos metadados das figurinhas (o "publisher" que o WhatsApp
 // mostra ao ver o pacote). Aparece por baixo do nome de quem criou a figurinha.
 export const STICKER_PACK_PUBLISHER =

@@ -27,7 +27,7 @@
  */
 import { MAIN_MENU_CHANNEL_URL, PREFIX } from "../config.js";
 import { getPrefix } from "../utils/database.js";
-import { RODAPE, formatMessage } from "../utils/formatMessage.js";
+import { footerAtual, formatMessage } from "../utils/formatMessage.js";
 import {
   INTERACTIVE_MENU_TTL_MS,
   numberedFallback,

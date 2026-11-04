@@ -26,6 +26,7 @@ import {
   OWNER_CONTACT,
   PREFIX,
 } from "../config.js";
+import { isPlainTheme } from "../utils/formatMessage.js";
 import {
   readCreditsAccounts,
   saveCreditsAccounts,
@@ -504,19 +505,40 @@ export function accountMessage({ account, name = "Você", prefix = PREFIX, now =
 
 /** Tabela de custos por função. */
 export function costsMessage({ prefix = PREFIX } = {}) {
-  const items = Object.entries(COMMAND_CREDITS)
-    .map(
-      ([name, cost]) =>
-        `┃ ├ ${prefix}${name.replaceAll("-", " ")} — ${cost} crédito${cost === 1 ? "" : "s"}`,
-    )
-    .join("\n");
+  const items = Object.entries(COMMAND_CREDITS).map(
+    ([name, cost]) =>
+      `${prefix}${name.replaceAll("-", " ")} — ${cost} crédito${cost === 1 ? "" : "s"}`,
+  );
+
+  const linhas = [
+    `🎁 Grátis por dia: ${DAILY_FREE_CREDITS} créditos`,
+    `🕛 Reset: 00h00 (horário de Moçambique)`,
+    "",
+    ...items,
+    "",
+    "🎬 Episódio baixado (anime/megacine):",
+    `${ANIME_EPISODE_CREDITS} créditos por episódio (a pesquisa e o menu custam 2)`,
+    "",
+    "🎬 Mídia longa gasta extras:",
+    "até 3 min — +0",
+    "3 a 10 min — +2",
+    "10 a 30 min — +4",
+    "acima de 30 min — +6",
+    "(sem duração, usamos o tamanho: 10/30/60 MB)",
+    "",
+    ownerContactLine(),
+  ];
+
+  if (isPlainTheme()) {
+    return [`💳 *CUSTOS EM CRÉDITOS*`, "", ...linhas].join("\n");
+  }
 
   return (
     `╭━━━ 💳 *CUSTOS EM CRÉDITOS*\n` +
     `┃ 🎁 Grátis por dia: ${DAILY_FREE_CREDITS} créditos\n` +
     `┃ 🕛 Reset: 00h00 (horário de Moçambique)\n` +
     `┣━━━━━━━━━━━━━━━━━━\n` +
-    `${items}\n` +
+    `${items.map((item) => `┃ ├ ${item}`).join("\n")}\n` +
     `┣━━━━━━━━━━━━━━━━━━\n` +
     `┃ 🎬 Episódio baixado (anime/megacine):\n` +
     `┃ ├ ${ANIME_EPISODE_CREDITS} créditos por episódio\n` +

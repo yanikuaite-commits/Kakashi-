@@ -42,6 +42,7 @@ import {
   MAIN_MENU_IMAGE,
   MAIN_MENU_OWNER_NUMBER,
 } from "../config.js";
+import { isPlainTheme } from "./formatMessage.js";
 import { ownerButton, ownerWhatsAppUrl, singleSelectButton } from "./interactive.js";
 import { errorLog, infoLog } from "./logger.js";
 import { listCategories } from "../interactive/menuRegistry.js";
@@ -139,6 +140,19 @@ export function buildMainMenuBody({
   botName = BOT_NAME,
   rodape = MAIN_MENU_FOOTER,
 } = {}) {
+  // Tema "plain": o card leva só os dados. A caixa cósmica, a linha de
+  // velocidade e o rodapé duplo eram decoração; o utilizador, a data e o
+  // criador continuam lá porque são informação.
+  if (isPlainTheme()) {
+    return [
+      `👽 @${usuario}`,
+      `🌍 ${data}  🌙 ${hora}`,
+      `⭐ ${diaSemana}`,
+      `🚀 ${velocidade}`,
+      `👑 ${criador}`,
+    ].join("\n");
+  }
+
   return [
     "  ☄️ · ✦ ·  ˚  ✧ · ☾ · ✦ · ˚ · ✧ · ☄️",
     `      ⋆｡°✩  🌌 ${String(botName).toUpperCase()} 🌌  ✩°｡⋆`,

@@ -1,6 +1,6 @@
 import { delay } from "baileys";
 import { PREFIX } from "../../../config.js";
-import { formatMessage, RODAPE } from "../../../utils/formatMessage.js";
+import { formatMessage, footerAtual } from "../../../utils/formatMessage.js";
 import {
   numberedFallback,
   sendInteractiveWithFallback,
@@ -71,7 +71,7 @@ export default {
           campos: ["Desliza para ver os cards."],
           rodape: null,
         }),
-        footer: RODAPE,
+        footer: footerAtual(),
         cards,
         viewOnce: true,
       },

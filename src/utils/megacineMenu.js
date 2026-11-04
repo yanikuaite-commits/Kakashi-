@@ -64,7 +64,7 @@ import {
 } from "../services/credits.js";
 import { mediaUploadFromFile, safeMediaFileName } from "./mediaSend.js";
 import { prepareImageForWhatsApp, comprimirVideo, withPreparedVideo } from "../services/mediaPrepare.js";
-import { RODAPE, mediaCaption } from "./formatMessage.js";
+import { footerAtual, mediaCaption } from "./formatMessage.js";
 import {
   AUDIO_DUBBED,
   AUDIO_SUBBED,
@@ -343,7 +343,7 @@ async function sendCard({ socket, session, text, title, rows, fallbackPrompt, im
           // Com capa o corpo tem de ir em `caption`: com `text` o baileys
           // constrói uma mensagem de texto e descarta a imagem do cabeçalho.
           ...(capa.image ? { caption: text, image: { url: capa.image } } : { text }),
-          footer: RODAPE,
+          footer: footerAtual(),
           interactiveButtons: buttons,
           viewOnce: true,
         },

@@ -1,6 +1,6 @@
 import { delay } from "baileys";
 import { PREFIX } from "../../../config.js";
-import { formatMessage, RODAPE } from "../../../utils/formatMessage.js";
+import { formatMessage, footerAtual } from "../../../utils/formatMessage.js";
 import {
   clearInteractiveMenu,
   createInteractiveActionId,
@@ -54,7 +54,7 @@ export default {
           campos: ["Único formato de card que renderiza nesta base"],
           rodape: null,
         }),
-        footer: RODAPE,
+        footer: footerAtual(),
         interactiveButtons: [
           {
             name: "single_select",
@@ -109,7 +109,7 @@ export default {
           rodape: null,
         }),
         title: "Lista clássica",
-        footer: RODAPE,
+        footer: footerAtual(),
         buttonText: "Abrir opções",
         sections: [
           {

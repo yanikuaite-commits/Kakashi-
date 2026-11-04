@@ -10,6 +10,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { OWNER_LID } from "../config.js";
 import { handleInteractiveMenuReply } from "../utils/interactive.js";
+import { __setMessageThemeForTests } from "../utils/formatMessage.js";
+
+// Este ficheiro assegura o tema "galaxy" (o padrão do bot é "plain").
+__setMessageThemeForTests(false);
 import command from "../commands/member/tabela.js";
 import dias from "../commands/member/tabela-dias.js";
 import creditos from "../commands/member/tabela-creditos.js";
