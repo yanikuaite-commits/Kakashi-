@@ -49,8 +49,8 @@ import {
   getFilmeInfo,
   getFilmeStream,
   getSeasons,
-  isPlaylistReachable,
   megacineDownloadArgs,
+  primeiroAlcancavel,
   search,
 } from "../services/saimo.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
@@ -781,12 +781,18 @@ async function baixarFilme({ socket, session, altura, sendVideoFromFile }) {
   }
   session.audioVersion = faixaServida || faixaPedida;
 
-  if (!(await isPlaylistReachable(stream.url, stream.referer))) {
+  const candidatos = stream.candidatos?.length ? stream.candidatos : [stream.url];
+  const alcancavel = await primeiroAlcancavel(candidatos, stream.referer);
+  if (!alcancavel) {
     dropSession(session);
     await session
       .sendReply("❌ A fonte não respondeu a este filme agora. Tenta novamente em instantes.")
       .catch(() => {});
     return true;
+  }
+  if (alcancavel !== stream.url) {
+    infoLog("[megacine] primeiro candidato falhou; a usar um alternativo");
+    stream.url = alcancavel;
   }
 
   const contaId = session.ownerId;
@@ -1082,7 +1088,9 @@ async function downloadAndSend({ socket, session, episodeIndex, sendVideoFromFil
 
   // Confirmar que o CDN responde ANTES de cobrar: um bloqueio só aparecia
   // depois de gastar créditos e de arrancar o yt-dlp.
-  if (!(await isPlaylistReachable(stream.url, stream.referer))) {
+  const candidatos = stream.candidatos?.length ? stream.candidatos : [stream.url];
+  const alcancavel = await primeiroAlcancavel(candidatos, stream.referer);
+  if (!alcancavel) {
     dropSession(session);
     await session
       .sendReply(
@@ -1090,6 +1098,10 @@ async function downloadAndSend({ socket, session, episodeIndex, sendVideoFromFil
       )
       .catch(() => {});
     return true;
+  }
+  if (alcancavel !== stream.url) {
+    infoLog("[megacine] primeiro candidato falhou; a usar um alternativo");
+    stream.url = alcancavel;
   }
 
   const contaId = session.ownerId;

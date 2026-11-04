@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 import { test, mock } from "node:test";
 import {
+  candidatosUrl,
   destoken,
   faixasDoFilme,
   filtrarPorTermo,
@@ -24,6 +25,7 @@ import {
   parseSeriesBlocos,
   parseSeriesIndice,
   posterDoTitulo,
+  primeiroAlcancavel,
   token,
   versaoParaFaixa,
 } from "../services/saimo.js";
@@ -63,6 +65,38 @@ test("melhorUrl prefere o mp4 direto e, em HLS, o master", () => {
     "https://x/cdn/hls/abc/master.txt",
   );
   assert.equal(melhorUrl([]), null);
+});
+
+test("candidatosUrl põe o preferido primeiro e mantém os restantes", () => {
+  assert.deepEqual(
+    candidatosUrl(["https://x/proxy", "http://x/video.mp4"]),
+    ["http://x/video.mp4", "https://x/proxy"],
+  );
+  assert.deepEqual(candidatosUrl(["https://x/only"]), ["https://x/only"]);
+  assert.deepEqual(candidatosUrl([]), []);
+  assert.deepEqual(candidatosUrl(null), []);
+});
+
+test("primeiroAlcancavel devolve o primeiro candidato que responde", async () => {
+  const tentadas = [];
+  mock.method(globalThis, "fetch", async (url) => {
+    tentadas.push(url);
+    return { ok: url === "http://x/segundo.mp4" };
+  });
+
+  const achado = await primeiroAlcancavel([
+    "http://x/primeiro.mp4",
+    "http://x/segundo.mp4",
+  ]);
+
+  assert.equal(achado, "http://x/segundo.mp4");
+  assert.deepEqual(tentadas, ["http://x/primeiro.mp4", "http://x/segundo.mp4"]);
+});
+
+test("primeiroAlcancavel devolve null quando nenhum responde", async () => {
+  mock.method(globalThis, "fetch", async () => ({ ok: false }));
+  assert.equal(await primeiroAlcancavel(["http://x/a.mp4"]), null);
+  assert.equal(await primeiroAlcancavel([]), null);
 });
 
 test("parseSeriesIndice lê título, ano, pedaço e episódios", () => {
@@ -235,4 +269,39 @@ test("getEpisodeStream serve a faixa pedida e cai para a que existe", async () =
   const fallback = await getEpisodeStream(titulo.slug, 1, 2, "dubbed");
   assert.equal(fallback.url, "http://x/s01e02-leg.mp4");
   assert.equal(fallback.faixa, "subbed", "a faixa servida é reportada");
+});
+
+test("getEpisodeStream devolve candidatos das duas faixas", async () => {
+  process.env.SAIMO_CATALOG_BASE = "https://catalogo.saimo.test";
+
+  mock.method(globalThis, "fetch", async (alvo) => {
+    const url = String(alvo);
+    const responder = (texto) => ({
+      ok: true,
+      status: 200,
+      text: async () => texto,
+    });
+    if (url.endsWith("/busca.txt")) return responder("Dual Show\ts\tZ\t2020");
+    if (url.endsWith("/fichas.txt")) return responder("capa: https://img/w342");
+    if (url.endsWith("/series-Z.txt")) return responder("Dual Show\t2020\t0\t2");
+    if (url.endsWith("/series-Z-0.txt")) {
+      return responder(
+        [
+          "@Dual Show\t2020",
+          "1\t1\tdub\thttp://x/s01e01-dub.mp4",
+          "1\t1\tleg\thttp://x/s01e01-leg.mp4",
+        ].join("\n"),
+      );
+    }
+    return { ok: false, status: 404, text: async () => "404" };
+  });
+
+  const { search } = await import("../services/saimo.js");
+  const [titulo] = await search("dual show");
+  const ep = await getEpisodeStream(titulo.slug, 1, 1, "dubbed");
+
+  // A faixa pedida vem primeiro e a outra fica como alternativa: se o CDN
+  // preferido falhar o menu pode cair na segunda sem repetir a pesquisa.
+  assert.equal(ep.candidatos[0], "http://x/s01e01-dub.mp4");
+  assert.ok(ep.candidatos.includes("http://x/s01e01-leg.mp4"));
 });

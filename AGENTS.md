@@ -1103,6 +1103,12 @@ command is `src/commands/member/downloads/megacine.js` (aliases `serie`, `series
   pages. Verifying the playlist with the short page timeout aborted streams that were
   fine — the user saw "the source did not respond" on a title that worked. That step
   therefore uses `MEGACINE_PLAYLIST_TIMEOUT_MS` (60 s), not `MEGACINE_TIMEOUT_MS`.
+- **the reachability check walks the candidate mirrors.** `getEpisodeStream` /
+  `getFilmeStream` return a `candidatos` array and the menu resolves it with
+  `primeiroAlcancavel` before charging credits, because one CDN can answer `404`/`503`
+  alone while another serves the same episode. Testing only the first URL rejected
+  titles that were available (measured: 78% → 82% on a 50-title sample).
+
 - a non-owner message while a menu is open is ignored in SILENCE (same rule as the
   anime flow), so group chatter does not turn into bot replies.
 
@@ -1135,15 +1141,28 @@ short path: **faixa → quality → download → compress → send**. The catalo
 into `{ titulo, dub: [urls], leg: [urls] }`; `getFilmeInfo` reads the tracks and
 `getFilmeStream(slug, faixa)` returns the URL with the track actually served.
 
-- **the proxy mirror is dead for films; the direct CDN is what works.** A line's
-  `dub=`/`leg=` carries MIRRORS of the same content (the site's
-  `saimo-tv.pages.dev/api/stream` proxy and a direct CDN URL), not qualities.
-  Measured: the proxy answers `404 {"error":"Nenhum stream disponível..."}` for
-  films, while the direct `.mp4` answers `206 video/mp4`. `melhorUrl` prefers the
-  `.mp4`, which is the reachable one — do not "fix" it to prefer the proxy.
-  ~17.6% of film lines carry ONLY the proxy URL (2663 of 15157 measured): those
-  films cannot be served and fail the `isPlaylistReachable` check with a clear
-  message. That is a source limitation, not a bug to patch around.
+- **the proxy mirror is alive; it redirects.** A line's `dub=`/`leg=` carries
+  MIRRORS of the same content (the site's `saimo-tv.pages.dev/api/stream` proxy
+  and a direct CDN URL), not qualities. The proxy answers `302` to a
+  `workers.dev` host that serves `206 video/mp4`, and `fetch` follows it by
+  default — it is NOT dead. Measured over the whole catalogue (28838 lines):
+  82% carry at least one direct `.mp4`, 14% carry ONLY the proxy, and the rest
+  carry both. `melhorUrl` prefers the `.mp4` (fewer hops), which is fine; do not
+  change it to prefer the proxy, and do not assume the proxy is broken.
+- **a title's mirrors are a fallback chain, not a single URL.** Measured
+  end to end on a 50-title sample with the real `isPlaylistReachable`: one
+  candidate answered for 78% of titles; walking the candidates (other CDN, other
+  track) raised it to 82%. `getFilmeStream`/`getEpisodeStream` therefore return a
+  `candidatos` array (preferred first, then the rest, then the other track) and
+  the menu resolves it with `primeiroAlcancavel`, instead of testing only the
+  first URL and giving up. A dead mirror alone is NOT proof the title is
+  unavailable.
+- **the remaining failures are a source limitation, not a bug to patch.** Some
+  proxy ids answer `404 {"error":"Nenhum stream disponível para este título"}`
+  for every Referer tried, and some direct CDNs answer `404`/`503` alone. Those
+  titles cannot be served; the flow fails with a clear message and refunds
+  nothing because nothing was charged yet.
+
 - **most films exceed the send ceiling, so compression is required.** Measured on
   30 titles: median ~1.6 GB, max ~2.3 GB, with some small films (<100 MB) that fit
   as-is. The flow downloads the whole file, then

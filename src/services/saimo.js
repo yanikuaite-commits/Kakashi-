@@ -103,6 +103,22 @@ export function melhorUrl(urls, { hls = false } = {}) {
   return lista.find((u) => u.endsWith(".mp4")) || lista[0];
 }
 
+/**
+ * Os candidatos de UMA faixa por ordem de preferência: o `melhorUrl` primeiro,
+ * depois as restantes. A fonte publica o mesmo filme em vários CDNs e alguns
+ * respondem `404`/`503` isoladamente, por isso uma falha do primeiro não deve
+ * condenar o filme — quem chama tenta os seguintes.
+ *
+ * @param {string[]} urls
+ * @returns {string[]}
+ */
+export function candidatosUrl(urls) {
+  const lista = (urls || []).map((u) => String(u || "").trim()).filter(Boolean);
+  const melhor = melhorUrl(lista);
+  if (!melhor) return [];
+  return [melhor, ...lista.filter((u) => u !== melhor)];
+}
+
 /** Índice de séries: `título  ano  pedaço  episódios` (um por linha). */
 export function parseSeriesIndice(texto) {
   const out = [];
@@ -529,12 +545,14 @@ export async function getEpisodeStream(slug, temporada = 1, episodio = 1, faixa 
   );
 
   let escolhido = null;
+  let escolhidoUrls = [];
   let faixaServida = "";
 
   if (pedida) {
     const exato = candidatos.find((e) => versaoParaFaixa(e.versao) === pedida);
     if (exato) {
       escolhido = melhorUrl(exato.urls);
+      escolhidoUrls = exato.urls;
       faixaServida = pedida;
     }
   }
@@ -543,6 +561,7 @@ export async function getEpisodeStream(slug, temporada = 1, episodio = 1, faixa 
     const comFaixa = candidatos.find((e) => versaoParaFaixa(e.versao));
     if (comFaixa) {
       escolhido = melhorUrl(comFaixa.urls);
+      escolhidoUrls = comFaixa.urls;
       faixaServida = versaoParaFaixa(comFaixa.versao);
     }
   }
@@ -550,7 +569,23 @@ export async function getEpisodeStream(slug, temporada = 1, episodio = 1, faixa 
   const url = escolhido || melhorUrl(ep.urls);
   if (!url) throw new SaimoError("A fonte não devolveu o vídeo deste episódio.");
 
-  return { url, tipo: "series", referer: REFERER, faixa: faixaServida };
+  // Vários CDNs servem o mesmo episódio; se o preferido responder 404/503 o
+  // menu tenta os seguintes em vez de dar o episódio por indisponível.
+  const urlsPreferidas = escolhido ? escolhidoUrls : ep.urls;
+  const outros = candidatos
+    .filter((e) => e.urls !== urlsPreferidas)
+    .flatMap((e) => candidatosUrl(e.urls));
+  const listaCandidatos = [...candidatosUrl(urlsPreferidas), ...outros].filter(
+    (u, i, l) => l.indexOf(u) === i,
+  );
+
+  return {
+    url,
+    candidatos: listaCandidatos.length ? listaCandidatos : [url],
+    tipo: "series",
+    referer: REFERER,
+    faixa: faixaServida,
+  };
 }
 
 /**
@@ -632,16 +667,31 @@ export async function getFilmeStream(slug, faixa = "") {
   const url = melhorUrl(urls);
   if (!url) throw new SaimoError("A fonte não devolveu o vídeo deste filme.");
 
-  return { url, tipo: "filme", referer: REFERER, faixa: escolhida, title: filme.titulo };
+  // A faixa pedida manda, mas se ela não responder o menu pode cair na outra.
+  // Os candidatos das DUAS faixas ficam disponíveis, na ordem de preferência.
+  const candidatos = [
+    ...candidatosUrl(urls),
+    ...candidatosUrl(escolhida === AUDIO_SUBBED ? filme.dub : filme.leg),
+  ].filter((u, i, l) => l.indexOf(u) === i);
+
+  return {
+    url,
+    candidatos,
+    tipo: "filme",
+    referer: REFERER,
+    faixa: escolhida,
+    title: filme.titulo,
+  };
 }
 
 /**
  * Confirma que a fonte responde antes de cobrar créditos.
  *
  * @param {string} url
+ * @param {string} [referer] o `Referer` que o CDN exige (por omissão o do site)
  * @returns {Promise<boolean>}
  */
-export async function isPlaylistReachable(url) {
+export async function isPlaylistReachable(url, referer = REFERER) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   timer.unref?.();
@@ -649,7 +699,7 @@ export async function isPlaylistReachable(url) {
   try {
     const resposta = await fetch(url, {
       signal: controller.signal,
-      headers: { "user-agent": ANIME_USER_AGENT, referer: REFERER, range: "bytes=0-0" },
+      headers: { "user-agent": ANIME_USER_AGENT, referer, range: "bytes=0-0" },
     });
     return resposta.ok;
   } catch (error) {
@@ -658,6 +708,22 @@ export async function isPlaylistReachable(url) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Devolve o primeiro candidato que responde, tentando por ordem. Um CDN pode
+ * responder `404`/`503` isolado enquanto outro serve o mesmo filme, por isso a
+ * falha do primeiro não deve condenar o título.
+ *
+ * @param {string[]} candidatos
+ * @param {string} [referer]
+ * @returns {Promise<string|null>}
+ */
+export async function primeiroAlcancavel(candidatos, referer = REFERER) {
+  for (const url of candidatos || []) {
+    if (await isPlaylistReachable(url, referer)) return url;
+  }
+  return null;
 }
 
 /**
