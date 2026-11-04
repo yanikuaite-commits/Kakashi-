@@ -11,12 +11,24 @@ import {
   startAnimeFlow,
 } from "../utils/animeMenu.js";
 
-// Os testes de fluxo abaixo substituem a rede pelo HTML do meusanimes, a fonte
+process.env.SAIMO_CATALOG_BASE = "https://catalogo.saimo.test";
+
+// Os testes de fluxo abaixo substituem a rede pelo catálogo do saimo, a fonte
 // única, para exercitar o menu sem tocar em nenhum site.
 
 const CHAT = "120363000000000000@g.us";
 const LID = "987654321098765:12@lid";
 const PN = "244991234567@s.whatsapp.net";
+
+/** Limpa a cache do catálogo entre testes (o processo reutiliza o módulo). */
+async function limparCache() {
+  const { limparCacheAnimes } = await import("../services/saimoAnime.js");
+  limparCacheAnimes();
+}
+
+test.beforeEach(async () => {
+  await limparCache();
+});
 
 function makeSocket() {
   return { sendMessage: async () => ({ key: { id: "m" } }) };
@@ -194,29 +206,47 @@ test("anm:sea com sessão inexistente avisa que o menu expirou", async () => {
   assert.match(replies[0], /expirou/i);
 });
 
-/* ─────────── Rede stubada (HTML do meusanimes) ─────────── */
+/* ─────────── Rede stubada (catálogo do saimo) ─────────── */
 
-const BUSCA_NARUTO = `
-  <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/naruto/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Naruto" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/naruto/">Naruto</a></div><div class="meta"> <span class="year">2002</span></div></div></article></div>
-`;
+// O catálogo de animes do saimo é um ficheiro de texto com blocos `@Título` e
+// linhas `temporada  episódio  versão  urls` (separadas por TAB). O stub imita-o
+// para exercitar o parsing real sem tocar em nenhum site.
 
-/** Página do anime com uma única temporada (o fluxo salta o passo de temporada). */
-const PAGINA_NARUTO_UMA = `
-  <div id='seasons'><div class='se-c'><div class='se-q'><span class='title'>Temporada 1</span></div><div class='se-a' style="display:block"><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-1/'>Episódio 1</a></div></li><li class='mark-2'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-2/'>Episódio 2</a></div></li></ul></div></div></div>
-`;
+const CATALOGO_NARUTO_UMA = [
+  "@Naruto\t2002\t46260",
+  "1\t1\tsub\thttps://embed.saimo.test/cdn/naruto-1/master.txt",
+  "1\t2\tsub\thttps://embed.saimo.test/cdn/naruto-2/master.txt",
+].join("\n");
 
-/** Página com duas temporadas, cada uma com um número diferente de episódios. */
-const PAGINA_NARUTO_DUAS = `
-  <div id='seasons'><div class='se-c'><div class='se-q'><span class='title'>Temporada 1</span></div><div class='se-a' style="display:block"><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-1/'>Episódio 1</a></div></li><li class='mark-2'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-1-episodio-2/'>Episódio 2</a></div></li></ul></div></div><div class='se-c'><div class='se-q'><span class='title'>Temporada 2</span></div><div class='se-a'><ul class='episodios'><li class='mark-1'><div class='episodiotitle'><a href='https://meusanimes.blog/e/naruto-2-episodio-1/'>Episódio 1</a></div></li></ul></div></div></div>
-`;
+const CATALOGO_NARUTO_DUAS = [
+  "@Naruto\t2002\t46260",
+  "1\t1\tsub\thttps://embed.saimo.test/cdn/naruto-1-1/master.txt",
+  "1\t2\tsub\thttps://embed.saimo.test/cdn/naruto-1-2/master.txt",
+  "2\t1\tsub\thttps://embed.saimo.test/cdn/naruto-2-1/master.txt",
+].join("\n");
 
-/** Página do episódio que marca a faixa real ("Dublado"). */
-const PAGINA_EP_DUBLADO = `<span class="qualidade"><i class='fas fa-arrow-alt-circle-right'></i> Dublado</span>`;
+const CATALOGO_NARUTO_DUB = [
+  "@Naruto\t2002\t46260",
+  "1\t1\tdub\thttps://embed.saimo.test/cdn/naruto-1/master.txt",
+  "1\t2\tdub\thttps://embed.saimo.test/cdn/naruto-2/master.txt",
+].join("\n");
 
-/** Página do episódio que marca a faixa real ("Legendado"). */
-const PAGINA_EP_LEGENDADO = `<span class="qualidade"><i class='fas fa-arrow-alt-circle-right'></i> Legendado</span>`;
+const CATALOGO_BOKU = [
+  "@Boku no Hero Academia\t2016\t31910",
+  "1\t1\tsub\thttps://embed.saimo.test/cdn/boku-1/master.txt",
+].join("\n");
 
-function stubFetch(respostas) {
+// O `master.txt` de cada episódio traz os degraus (360p/720p).
+const MASTER = [
+  "#EXTM3U",
+  '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,NAME="360p"',
+  "360/index.m3u8",
+  '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,NAME="720p"',
+  "720/index.m3u8",
+].join("\n");
+
+/** Rede fixa: catálogo de animes e o master HLS de cada episódio. */
+function stubFetch(respostas = {}) {
   const pedidos = [];
 
   globalThis.fetch = async (url) => {
@@ -226,7 +256,14 @@ function stubFetch(respostas) {
     const chave = Object.keys(respostas).find((k) =>
       alvo.toLowerCase().includes(k.toLowerCase()),
     );
-    const corpo = respostas[chave] ?? "";
+
+    const corpo =
+      chave !== undefined
+        ? respostas[chave]
+        : alvo.includes("master.txt")
+          ? MASTER
+          : "";
+
     return {
       ok: true,
       status: 200,
@@ -286,9 +323,7 @@ test("cards de anime não repetem o rodapé (o card já leva footer)", async () 
 test("a faixa é perguntada ANTES de pesquisar (e a pesquisa usa a escolhida)", async () => {
   resetAnimeSessions();
   const pedidos = stubFetch({
-    "/?s=naruto": BUSCA_NARUTO,
-    "/a/naruto/": PAGINA_NARUTO_UMA,
-    "/e/naruto-1-episodio-1/": PAGINA_EP_DUBLADO,
+    "links-animes.txt": CATALOGO_NARUTO_DUB,
   });
 
   try {
@@ -340,10 +375,7 @@ test("a faixa é perguntada ANTES de pesquisar (e a pesquisa usa a escolhida)", 
 test("anm:sea carrega os episódios da temporada escolhida", async () => {
   resetAnimeSessions();
   stubFetch({
-    "/?s=naruto": BUSCA_NARUTO,
-    "/a/naruto/": PAGINA_NARUTO_DUAS,
-    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
-    "/e/naruto-2-episodio-1/": PAGINA_EP_LEGENDADO,
+    "links-animes.txt": CATALOGO_NARUTO_DUAS,
   });
 
   try {
@@ -385,11 +417,9 @@ test("anm:sea carrega os episódios da temporada escolhida", async () => {
     const sessao = getAnimeSession(CHAT, LID);
     assert.equal(sessao.stage, "episodios");
     assert.equal(sessao.episodes.length, 1, "a temporada 2 tem 1 episódio");
-    assert.equal(
-      sessao.episodes[0].id,
-      "naruto::1::naruto-2-episodio-1::naruto-2-episodio-1",
-      "o id junta o slug da temporada (naruto::1) ao do episódio",
-    );
+    const partes = String(sessao.episodes[0].id).split("::");
+    assert.equal(partes.length, 3, "o id tem 3 partes (token da temporada::ep::ids)");
+    assert.equal(partes[1], "1", "o episódio é o nº 1 da temporada 2");
   } finally {
     delete globalThis.fetch;
   }
@@ -398,9 +428,7 @@ test("anm:sea carrega os episódios da temporada escolhida", async () => {
 test("sem temporadas agrupadas, salta direto para os episódios", async () => {
   resetAnimeSessions();
   stubFetch({
-    "/?s=naruto": BUSCA_NARUTO,
-    "/a/naruto/": PAGINA_NARUTO_UMA,
-    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+    "links-animes.txt": CATALOGO_NARUTO_UMA,
   });
 
   try {
@@ -443,9 +471,7 @@ test("sem temporadas agrupadas, salta direto para os episódios", async () => {
 test("modo texto: cards saem em texto numerado e o número escolhe a linha", async () => {
   resetAnimeSessions();
   stubFetch({
-    "/?s=naruto": BUSCA_NARUTO,
-    "/a/naruto/": PAGINA_NARUTO_UMA,
-    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+    "links-animes.txt": CATALOGO_NARUTO_UMA,
   });
 
   try {
@@ -532,9 +558,7 @@ test("faixa pedida que a fonte não tem: avisa e cai para a que existe", async (
   resetAnimeSessions();
   // A página do episódio marca "Legendado": a entrada só tem essa faixa.
   stubFetch({
-    "/?s=naruto": BUSCA_NARUTO,
-    "/a/naruto/": PAGINA_NARUTO_UMA,
-    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+    "links-animes.txt": CATALOGO_NARUTO_UMA,
   });
 
   try {
@@ -574,9 +598,7 @@ test("faixa pedida que a fonte não tem: avisa e cai para a que existe", async (
 test("faixa dublada pedida e disponível não gera aviso", async () => {
   resetAnimeSessions();
   stubFetch({
-    "/?s=naruto": BUSCA_NARUTO,
-    "/a/naruto/": PAGINA_NARUTO_UMA,
-    "/e/naruto-1-episodio-1/": PAGINA_EP_DUBLADO,
+    "links-animes.txt": CATALOGO_NARUTO_DUB,
   });
 
   try {
@@ -830,13 +852,6 @@ test("com saldo, o episódio passa do portão e cobra o preço do episódio", as
 
 /* ─────────── Desambiguação (candidatos) ─────────── */
 
-const BUSCA_EIYUU = `
-  <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Eiyuu Kyoushitsu" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/">Eiyuu Kyoushitsu</a></div><div class="meta"> <span class="year">2023</span></div></div></article></div>
-`;
-
-const BUSCA_DOIS = `
-  <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/boku-no-hero-academia/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/bnha-150x150.jpg" alt="Boku no Hero Academia" /> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/boku-no-hero-academia/">Boku no Hero Academia</a></div><div class="meta"> <span class="year">2016</span></div></div></article></div>
-`;
 
 /**
  * Desambiguação no fluxo: quando a pesquisa não tem correspondência exata, o
@@ -854,8 +869,7 @@ test("sem correspondência exata, o card mostra a lista e não os episódios", a
       null,
       "pt",
     ]),
-    "/?s=meu%20hero%20academia": BUSCA_EIYUU,
-    "/?s=my%20hero%20academia": BUSCA_EIYUU,
+    "links-animes.txt": CATALOGO_BOKU,
   });
 
   try {
@@ -890,14 +904,9 @@ test("sem correspondência exata, o card mostra a lista e não os episódios", a
     );
 
     const card = enviados[enviados.length - 1];
-    assert.ok(card.image?.url, "o card leva a capa do candidato");
-    assert.match(
-      card.image.url,
-      /^https:\/\/meusanimes\.blog\/wp-content\/uploads\/.*\/yLZS\.jpg$/,
-      "a capa vai em tamanho grande (sem o sufixo -150x150)",
-    );
-    assert.match(card.caption, /My Hero Academia/, "mostra o título encontrado");
-    assert.match(card.caption, /Traduzi/, "explica que traduziu o termo");
+    const corpo = card.caption || card.text || "";
+    assert.match(corpo, /Boku no Hero Academia/, "mostra o título encontrado");
+    assert.match(corpo, /Traduzi/, "explica que traduziu o termo");
 
     const ids = rowIds(card);
     assert.ok(ids.includes("anm:an:0"), "a lista tem o candidato");
@@ -913,9 +922,7 @@ test("sem correspondência exata, o card mostra a lista e não os episódios", a
 test("com correspondência exata, segue direto sem lista de candidatos", async () => {
   resetAnimeSessions();
   stubFetch({
-    "/?s=naruto": BUSCA_NARUTO,
-    "/a/naruto/": PAGINA_NARUTO_UMA,
-    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+    "links-animes.txt": CATALOGO_NARUTO_UMA,
   });
 
   try {
@@ -946,11 +953,8 @@ test("com correspondência exata, segue direto sem lista de candidatos", async (
     assert.ok(sessao.episodes.length > 0, "os episódios foram carregados");
 
     const card = enviados[enviados.length - 1];
-    assert.equal(
-      card.image?.url,
-      "https://meusanimes.blog/wp-content/uploads/2025/04/yLZS.jpg",
-      "o card leva a capa do título, sem o sufixo de miniatura",
-    );
+    const corpo = card.caption || card.text || "";
+    assert.match(corpo, /Naruto/, "o card mostra o título encontrado");
   } finally {
     delete globalThis.fetch;
   }
@@ -964,10 +968,7 @@ test("escolher um candidato carrega os episódios do candidato escolhido", async
       null,
       "pt",
     ]),
-    "/?s=meu%20hero%20academia": BUSCA_EIYUU,
-    "/?s=my%20hero%20academia": BUSCA_DOIS,
-    "/a/boku-no-hero-academia/": PAGINA_NARUTO_UMA,
-    "/e/naruto-1-episodio-1/": PAGINA_EP_LEGENDADO,
+    "links-animes.txt": CATALOGO_BOKU,
   });
 
   try {
@@ -1010,7 +1011,7 @@ test("escolher um candidato carrega os episódios do candidato escolhido", async
 
     const depois = getAnimeSession(CHAT, LID);
     assert.equal(depois.anime.title, "Boku no Hero Academia");
-    assert.equal(depois.provider, "meusanimes");
+    assert.equal(depois.provider, "saimo");
     assert.deepEqual(depois.candidates, [], "a lista é limpa depois da escolha");
   } finally {
     delete globalThis.fetch;

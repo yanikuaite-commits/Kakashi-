@@ -205,7 +205,10 @@ test("a pesquisa descarta filmes pelo card-meta", () => {
 <article class="card"><a href="https://www.megacine.online/series/meu-amor"><h3 class="card-title">Meu Amor</h3><p class="card-meta">2026 • Dorama</p></a></article>
 <article class="card"><a href="https://www.megacine.online/series/naruto"><h3 class="card-title">Naruto</h3><p class="card-meta">2026 • Animes</p></a></article>`;
 
-  const slugs = parseSearch(html).map((r) => r.slug);
+  // A lista de tipos é passada EXPLICITAMENTE: o teste prova o mecanismo de
+  // filtragem, não o default. O default do config deixou de excluir filmes
+  // quando o `.megacine` passou a servi-los (ver `MEGACINE_TIPOS_EXCLUIDOS`).
+  const slugs = parseSearch(html, { tiposExcluidos: ["filmes"] }).map((r) => r.slug);
 
   assert.deepEqual(slugs, ["the-boys", "meu-amor", "naruto"]);
   assert.ok(!slugs.includes("matrix-1-1999"), "o filme fica de fora");

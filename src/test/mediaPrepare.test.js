@@ -5,6 +5,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 import {
+  comprimirVideo,
   firstAtoms,
   hasFaststart,
   needsH264Transcode,
@@ -293,6 +294,83 @@ test(
         false,
         "sem fuga de ficheiro quando o envio falha",
       );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test("comprimirVideo sem altura devolve null sem tocar no ffmpeg", async () => {
+  // Guarda de contrato: uma altura inválida não pode lançar, senão o fluxo do
+  // filme morria a meio de um download já feito.
+  assert.equal(await comprimirVideo("/nao/existe.mp4"), null);
+  assert.equal(await comprimirVideo("/nao/existe.mp4", { height: 0 }), null);
+  assert.equal(await comprimirVideo("/nao/existe.mp4", { height: "abc" }), null);
+});
+
+test(
+  "comprimirVideo reduz a altura e produz um MP4 enviável",
+  { skip: !TEM_FFMPEG },
+  async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "comp-"));
+
+    try {
+      // 720p de entrada, comprimido para 480p: a altura TEM de descer, senão a
+      // "compressão" não servia de nada.
+      const entrada = path.join(dir, "grande.mp4");
+      execFileSync(
+        "ffmpeg",
+        [
+          "-y",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc=size=1280x720:rate=10",
+          "-t",
+          "1",
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          entrada,
+        ],
+        { stdio: "ignore" },
+      );
+
+      const resultado = await comprimirVideo(entrada, { height: 480 });
+
+      assert.ok(resultado, "a compressão devolve um ficheiro");
+      assert.equal(resultado.height, 480);
+
+      try {
+        const altura = execFileSync(
+          "ffprobe",
+          [
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=height",
+            "-of",
+            "default=nw=1:nk=1",
+            resultado.filePath,
+          ],
+          { encoding: "utf8" },
+        ).trim();
+
+        assert.equal(altura, "480", "a altura alvo foi aplicada");
+
+        // O WhatsApp exige o `moov` no início; sem ele responde "vídeo não
+        // disponível" depois de gastar a banda toda.
+        assert.equal(
+          hasFaststart(head(resultado.filePath)),
+          true,
+          "o resultado sai com faststart",
+        );
+      } finally {
+        fs.rmSync(resultado.filePath, { force: true });
+      }
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

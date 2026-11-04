@@ -1,5 +1,5 @@
 /**
- * Fluxo de animes (fonte única: meusanimes) — Parte 3 do sistema de downloads.
+ * Fluxo de animes (fonte única: saimo) — Parte 3 do sistema de downloads.
  *
  * Passos:
  *   1. o utilizador escolhe "Animes" no menu (ou usa `.anime <nome>`) → o bot
@@ -20,14 +20,14 @@
  *      as qualidades (rowId `anm:src:<índice>`);
  *   5. ao escolher a qualidade, baixa com o yt-dlp e aplica a regra de tamanho
  *      (a mesma do YouTube, com teto maior):
- *        > 500 MB   → cancela e pede qualidade menor;
- *        100–500 MB → envia como DOCUMENTO;
+ *        > 800 MB   → cancela e pede qualidade menor;
+ *        100–800 MB → envia como DOCUMENTO;
  *        ≤ 100 MB   → envia como VÍDEO.
  *
  * A resolução do download depende do tipo de fonte. Um m3u8 traz vários degraus
  * no mesmo URL, por isso o yt-dlp é limitado a `ANIME_MAX_HEIGHT` (480p) — sem
  * limite escolhia 1080p e estourava o teto. Uma fonte MP4 direta já É o degrau
- * escolhido no menu (o meusanimes publica 360p e 720p como URLs distintos),
+ * escolhido no menu (o saimo publica 360p e 720p como fontes distintas),
  * por isso não leva filtro de altura: o teto de MB é que decide.
  *
  * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
@@ -93,13 +93,19 @@ export const ANIME_TTL_MS = INTERACTIVE_MENU_TTL_MS;
 const CANCEL_TOKEN = "anm:cancel";
 
 /**
- * Cabeçalhos que o CDN do Google Video (Blogger) exige: o `Referer` do Blogger e
- * um User-Agent de browser. Sem o User-Agent responde 403 mesmo com o Referer
- * certo. É o formato servido pelo meusanimes.
+ * Cabeçalhos que o CDN do saimo (Fire HLS Player, `embedplayer2.xyz`) exige.
+ *
+ * O m3u8 é servido como `text/plain` e o servidor recusa o pedido com
+ * "security error" quando o cliente pede HTML — o yt-dlp pede
+ * `Accept: text/html` por omissão e recebia 14 bytes de erro em vez da playlist.
+ * Forçar `Accept: *` (e um User-Agent de browser) faz a playlist chegar. Sem
+ * isto TODO o download de anime falhava, apesar de o URL responder bem ao curl.
  */
-const ARGS_BLOGGER = [
+const ARGS_SAIMO = [
+  "--add-header",
+  "Accept:*/*",
   "--referer",
-  "https://www.blogger.com/",
+  "https://embedplayer2.xyz/",
   "--user-agent",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
     "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -422,7 +428,7 @@ async function searchAndSendEpisodes({ socket, session, nome }) {
   touch(session);
 
   try {
-    // A faixa escolhida vai já para a pesquisa: o `meusanimes` publica o
+    // A faixa escolhida vai já para a pesquisa: o `saimo` publica o
     // dublado como entrada própria, pelo que a escolha muda o que é procurado.
     //
     // `searchAnimeCandidates` (e não `searchAnime`) porque um título em
@@ -676,7 +682,7 @@ async function loadEpisodesAndSend({ socket, session, id }) {
  *
  * À parte da faixa, a DUBLAGEM tem uma questão de idioma que a faixa não
  * resolve: "dubbed" é um booleano no site, mas o idioma depende do SITE (o
- * meusanimes dubla em PT-BR). Quando a faixa servida é a dublada e a fonte não é
+ * saimo entrega a faixa dublada em PT-BR). Quando a faixa servida é a dublada e a fonte não é
  * PT-BR, o aviso diz que o áudio é inglês — para o utilizador não receber
  * português na etiqueta e inglês no som.
  *
@@ -797,7 +803,7 @@ async function askAudioBeforeSearch({ socket, session }) {
  * - ANTES de pesquisar (`pendingName` preenchido): a faixa é fixada e a pesquisa
  *   arranca já com ela. É o caminho normal.
  * - DEPOIS de a lista existir: recarrega os episódios na faixa nova. O
- *   `meusanimes` publica ids por faixa, pelo que a lista muda com a escolha.
+ *   `saimo` publica ids por faixa, pelo que a lista muda com a escolha.
  *
  * A validação muda com o caminho. Antes da pesquisa oferecem-se sempre as duas
  * faixas, pelo que qualquer uma é aceitável — é a fonte que dirá se a tem. Com a
@@ -839,7 +845,7 @@ async function chooseAudioVersion({ socket, session, version }) {
 /**
  * Recarrega os episódios com a faixa já fixada.
  *
- * O `meusanimes` publica ids por faixa, pelo que a lista muda com a escolha.
+ * O `saimo` publica ids por faixa, pelo que a lista muda com a escolha.
  *
  * @returns {Promise<boolean>}
  */
@@ -1040,17 +1046,15 @@ async function sendQualityList({ socket, session, episodeIndex }) {
 /* ═══════════ PASSO 4 · BAIXAR E ENVIAR ═══════════ */
 
 /**
- * Argumentos extra do yt-dlp.
+ * Argumentos extra do yt-dlp para o CDN de animes do saimo.
  *
- * O meusanimes serve o episódio pelo CDN do Google Video (Blogger), que exige o
- * `Referer` do Blogger E um User-Agent de browser: sem o User-Agent responde 403
- * mesmo com o Referer certo. Os MP4 são degraus diretos (360p/720p), pelo que
- * não há `impersonate` nem `Referer` de player a acrescentar.
+ * O m3u8 do `embedplayer2.xyz` só chega com `Accept: *` e um User-Agent de
+ * browser (ver `ARGS_SAIMO`); os MP4 diretos não precisam de mais nada.
  *
  * @returns {string[]}
  */
 function animeDownloadArgs() {
-  return ARGS_BLOGGER;
+  return ARGS_SAIMO;
 }
 
 async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile }) {
@@ -1128,7 +1132,7 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
         () =>
           downloadWithYtDlp(source.url, {
             // A fonte HLS traz vários degraus no mesmo URL, por isso o limite de
-            // altura escolhe o degrau. Uma fonte MP4 direta (meusanimes) já É o
+            // altura escolhe o degrau. Uma fonte MP4 direta (saimo) já É o
             // degrau escolhido no menu: filtrar por altura
             // não teria efeito e podia descartar o formato único disponível.
             height: source.isM3U8 ? alturaMaxima : "best",

@@ -1,10 +1,11 @@
 /**
  * Extração de links de streaming de animes, em processo.
  *
- * FONTE ÚNICA: o `meusanimes` (`src/services/meusanimes.js`). Responde a IPs de
- * datacenter sem desafio Cloudflare, agrupa temporadas na própria página e serve
- * o episódio pelo player do Blogger. Os outros providers foram removidos a
- * pedido do dono do bot; se um dia voltarem, o sítio onde entram é aqui.
+ * FONTE ÚNICA: o `saimo` (`src/services/saimoAnime.js`). O catálogo é servido em
+ * ficheiros de texto num Cloudflare Pages e a maioria dos episódios é HLS com
+ * degraus 360p/720p. O `meusanimes` (`src/services/meusanimes.js`) continua no
+ * repositório mas deixou de ser chamado; se um dia voltar, o sítio onde entra é
+ * aqui, trocando `FONTE`.
  *
  * O `provider` continua a viajar na sessão do menu (é o rótulo do card) mesmo
  * havendo uma só fonte: assim o fluxo não precisa de saber que é única.
@@ -15,7 +16,7 @@ import { ANIME_API_TIMEOUT_MS, TRANSLATE_ENABLED } from "../config.js";
 import { errorLog, infoLog } from "../utils/logger.js";
 import { translateToEnglish } from "./translate.js";
 import { correspondenciaExata, normalizeSources, tituloDeBusca } from "../utils/animeFormat.js";
-import * as meusanimes from "./meusanimes.js";
+import * as saimoAnime from "./saimoAnime.js";
 
 /** Erro de configuração/indisponibilidade da fonte (não do anime escolhido). */
 export class AnimeApiError extends Error {
@@ -26,9 +27,9 @@ export class AnimeApiError extends Error {
 }
 
 /** Nome da fonte única, usado como rótulo em toda a sessão do menu. */
-export const ANIME_PROVIDER = "meusanimes";
+export const ANIME_PROVIDER = "saimo";
 
-const FONTE = meusanimes;
+const FONTE = saimoAnime;
 
 const NO_PROVIDER_HINT =
   "A fonte de animes não respondeu. O site pode estar fora do ar ou a bloquear " +
@@ -240,8 +241,8 @@ export async function searchAnimeCandidates(nome, audioVersion = "") {
  * Informações do anime (com episódios) na fonte.
  *
  * O `id` chega como `"<slug>:<slug>"` e cada episódio passa a carregar
- * `"<slug>::<epId>::<ids>"`, porque a cadeia do meusanimes precisa do slug
- * (Referer) em todos os passos seguintes.
+ * `"<slug>::<epId>::<ids>"`, porque a fonte precisa do token da temporada e do
+ * id do episódio em todos os passos seguintes.
  *
  * @param {string} id
  * @param {string} [provider] mantido por compatibilidade da assinatura
@@ -345,7 +346,7 @@ export async function getSeasonEpisodes(slug, provider, audioVersion = "") {
 /**
  * Normaliza o retorno de `sources()` da fonte em fontes de menu.
  *
- * O meusanimes devolve uma lista de degraus (360p e 720p no mesmo player), mas o
+ * O saimo devolve uma lista de degraus (360p e 720p no mesmo player), mas o
  * contrato fica permissivo: um URL solto ou um objeto único também são aceites,
  * para a fonte poder mudar de forma sem partir o menu.
  *

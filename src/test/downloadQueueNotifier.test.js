@@ -58,6 +58,7 @@ process.env.YTDLP_PATH = fakeBinary;
 process.env.DOWNLOAD_CONCURRENCY = "1";
 // Curto para o segundo pedido não esperar 5 min no caso de falha.
 process.env.DOWNLOAD_QUEUE_TIMEOUT_MS = "15000";
+process.env.SAIMO_CATALOG_BASE = "https://catalogo.saimo.test";
 
 await mkdir(fakeDir, { recursive: true });
 await writeFile(fakeBinary, fakeSource);
@@ -67,6 +68,7 @@ const { onMessagesUpsert } = await import("../middlewares/onMesssagesUpsert.js")
 const { resetDownloadQueue } = await import("../services/downloadQueue.js");
 const { resetMegacineSessions, handleMegacineReply, startMegacineFlow } =
   await import("../utils/megacineMenu.js");
+const { limparCacheSaimo } = await import("../services/saimo.js");
 const { extractDataFromMessage } = await import("../utils/index.js");
 const { OWNER_LID } = await import("../config.js");
 
@@ -75,25 +77,35 @@ const { OWNER_LID } = await import("../config.js");
 const CHAT_A = "fila-a@g.us";
 const CHAT_B = "fila-b@g.us";
 
-const BOTAO_SERIE = `<a href="#" id="assistirplaybutton" class="play-btn">Assistir Agora</a>`;
-const HTML_BUSCA = `<article class="card"><a href="https://www.megacine.online/series/the-boys"><h3 class="card-title">The Boys</h3></a></article>`;
-// Duas temporadas: sem a segunda o fluxo salta a lista e arranca o download
-// logo, e o teste nunca chegaria a ter a sessão no passo "episodios".
-const HTML_SERIE = `
-<div class="episodes-modern-list episodes-modern-season-content active" data-season="1"><a href="https://www.megacine.online/series/the-boys/temporada-01/episodio-01"></a></div>
-<div class="episodes-modern-list episodes-modern-season-content" data-season="2"><a href="https://www.megacine.online/series/the-boys/temporada-02/episodio-01"></a></div>
-`;
-const HTML_EPISODIO = `<script>var urlConfig = { base: "https://forks-series.madfirebox.shop", slug: "the-boys", tipo: "series", temporada: 1, episodio: 1 };</script>`;
+// Catálogo do saimo (TAB). "The Boys" tem DUAS temporadas: sem a segunda o
+// fluxo saltaria a lista e arrancaria o download logo, e o teste nunca chegaria
+// a ter a sessão no passo "episodios".
+const BUSCA = [
+  "The Boys\ts\tT\t2019",
+  "The Boys Apresenta: Diabólicos\ts\tT\t2022",
+].join("\n");
+
+const SERIES_T = [
+  "The Boys\t2019\t0\t2",
+  "The Boys Apresenta: Diabólicos\t2022\t1\t1",
+].join("\n");
+
+const EPISODIOS_THE_BOYS = [
+  "@The Boys\t2019",
+  "1\t1\tdub\thttp://cdn.saimo.test/the-boys-s01e01.mp4",
+  "1\t2\tdub\thttp://cdn.saimo.test/the-boys-s01e02.mp4",
+  "2\t1\tdub\thttp://cdn.saimo.test/the-boys-s02e01.mp4",
+].join("\n");
 
 function stubRede() {
   return mock.method(globalThis, "fetch", async (url) => {
     const alvo = String(url);
     const responder = (corpo) => ({ ok: true, status: 200, text: async () => corpo });
 
-    if (alvo.includes("/search/")) return responder(HTML_BUSCA);
-    if (/\/temporada-\d+\/episodio-\d+/.test(alvo)) return responder(HTML_EPISODIO);
-    if (alvo.endsWith("/series/the-boys")) return responder(BOTAO_SERIE + HTML_SERIE);
-    if (alvo.includes(".m3u8")) return responder("#EXTM3U\n#EXTINF:10,\nseg.ts\n");
+    if (alvo.endsWith("/busca.txt")) return responder(BUSCA);
+    if (alvo.endsWith("/series-T.txt")) return responder(SERIES_T);
+    if (alvo.endsWith("/series-T-0.txt")) return responder(EPISODIOS_THE_BOYS);
+    if (alvo.includes("cdn.saimo.test")) return responder("x");
 
     return { ok: false, status: 404, text: async () => "404" };
   });
@@ -168,6 +180,7 @@ async function enviarPeloMiddleware(chatId, texto, replies, id) {
 test.beforeEach(() => {
   resetDownloadQueue();
   resetMegacineSessions();
+  limparCacheSaimo();
 });
 
 test.afterEach(() => mock.restoreAll());

@@ -3,9 +3,9 @@ import { startMegacineFlow } from "../../../utils/megacineMenu.js";
 
 export default {
   name: "megacine",
-  description: "Baixa séries, doramas e animes do Megacine",
-  commands: ["megacine", "serie", "series", "novela", "novelas"],
-  usage: `${PREFIX}megacine <nome da série>`,
+  description: "Baixa séries, doramas e filmes do Saimo TV",
+  commands: ["megacine", "serie", "series", "novela", "novelas", "filme", "filmes"],
+  usage: `${PREFIX}megacine <nome da série ou filme>`,
   /**
    * @param {import("../../../@types/index.d.ts").CommandHandleProps} props
    */

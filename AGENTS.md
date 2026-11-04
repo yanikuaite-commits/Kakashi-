@@ -74,10 +74,11 @@ High-value architectural notes:
 | `src/services/spider-x-api.js` | Spider X integration for downloads, AI, Pinterest, Brat, and related endpoints. |
 | `src/services/ytdlp.js` | Local downloads through the yt-dlp CLI (metadata, video, mp3) with GenDownload API fallback. |
 | `src/services/anime.js` | Anime service layer over the single source: search, episodes, streaming sources. |
-| `src/services/meusanimes.js` | Single anime source: WordPress search, seasons, and Blogger sources via the player API. |
-| `src/services/bloggerVideo.js` | Blogger/Google Video reader (iframe, token, itags) used by `meusanimes`. |
-| `src/services/megacine.js` | Megacine scraper: series/dorama search (films filtered out), seasons, episodes and the m3u8 stream. |
-| `src/utils/megacineMenu.js` | Interactive Megacine flow: title → seasons → episodes → download. |
+| `src/services/saimoAnime.js` | Anime catalogue of the single source: reads `redeflix/links-animes.txt`, resolves the HLS steps and the cover from `fichas.txt`. |
+| `src/services/meusanimes.js` | LEGACY. Former anime source (WordPress search, Blogger sources via the player API). Kept in the tree, no longer called. |
+| `src/services/bloggerVideo.js` | Blogger/Google Video reader (iframe, token, itags), used only by the legacy `meusanimes`. |
+| `src/services/megacine.js` | Megacine scraper: series/dorama search (films filtered via `MEGACINE_TIPOS_EXCLUIDOS`, empty by default), seasons, episodes and the m3u8 stream. |
+| `src/utils/megacineMenu.js` | Interactive flow for séries/doramas/filmes: title → (faixa →) seasons/episodes, or faixa → quality → compress for a film. |
 | `src/services/sticker.js` | Sticker processing and EXIF handling. |
 | `src/services/ffmpeg.js` | Media conversion and audio/video processing. |
 
@@ -950,55 +951,50 @@ Sent files carry the search title, not a fixed name: build it with
 file. Only documents can be named — the WhatsApp `VideoMessage` proto has no
 filename field, so a video sent as video carries no name at all.
 
-### Animes (fonte única: meusanimes)
+### Animes (fonte única: saimo)
 
 `src/services/anime.js` é a camada de serviço sobre a **fonte única**
-`src/services/meusanimes.js`; `src/utils/animeMenu.js` corre o fluxo interativo
+`src/services/saimoAnime.js`; `src/utils/animeMenu.js` corre o fluxo interativo
 (nome → faixa → pesquisa → temporadas → episódios → qualidade → download) e
-`src/utils/animeFormat.js` guarda os helpers puros. `src/services/bloggerVideo.js`
-lê os degraus (360p/720p) do CDN do Blogger, que é o que o `meusanimes` publica.
+`src/utils/animeFormat.js` guarda os helpers puros.
 
-- **o `meusanimes` (`meusanimes.blog`) é a única fonte.** Responde de um IP de
-  datacenter **sem desafio Cloudflare**, agrupa temporadas na página do anime e
-  serve o episódio pelo player do Blogger. A cadeia é: `/?s=<termo>` →
-  `/a/<slug>/` (o bloco `id='seasons'` traz todas as temporadas e os episódios)
-  → `/e/<ep-slug>/` (um iframe
-  `serv01.meusdoramas.club/#/video/<tmdb>/<season>/<episode>`) →
-  `serv01.meusdoramas.club/posts/get-video.php?episode_number=&season_number=&tmdb=`
-  → `{success, videoUrl}` com um link do Blogger → o URL direto
-  `googlevideo.com`. O player é uma SPA React noutro domínio e o endpoint real é
-  `posts/get-video.php` — os caminhos óbvios `api/video/...` respondem 404. A
-  resposta do `get-video.php` é idêntica **com e sem cookies** (o cookie
-  `starstruck_...` do site é só de sessão), pelo que a fonte não guarda estado: a
-  tripla `tmdb`/temporada/episódio viaja dentro do id do episódio
-- **a faixa dublada é uma ENTRADA separada** (`/a/<base>-dublado/`). O sufixo é
-  convenção do site mas não garantia — `naruto-shippuden` serve um dub sem
-  sufixo —, por isso a faixa real é confirmada na página do PRIMEIRO episódio
-  (`span.qualidade` diz "Dublado" ou "Legendado") antes de a lista ser rotulada.
-  Sem essa confirmação a fonte podia chamar a um episódio dublado "legendado",
-  que é exatamente o defeito que o fluxo de áudio corrige. `candidatosDeSlug`
-  ordena as entradas a tentar; o passo de faixa também passa por `seasons()`,
-  porque o índice de temporada só é válido dentro da entrada onde foi lido
-- **a fonte publica o itag 18 (360p, ~89 MB num episódio de 23 min) e o itag 22
-  (720p, ~285 MB) como fontes distintas**, pelo que o menu de qualidade oferece
-  ambas e a regra de tamanho decide o que pode ser enviado. **Nem todo o episódio
-  traz as duas**: episódios antigos publicam só 360p, pelo que uma lista de
-  qualidade com um item é normal, não uma falha
-- **a cadeia real ponta-a-ponta foi verificada**: página do episódio →
-  `get-video.php` → token do Blogger → bytes do `googlevideo.com`, com `206`,
-  `video/mp4` e um cabeçalho `ftyp` válido, e o yt-dlp a descarregar o ficheiro.
-  Como todo o site PT-BR indexado em romaji, um termo em inglês pode ainda cair
-  num spin-off (`attack on titan` → o Junior High), que é uma limitação da
-  correspondência por título
+- **o `saimo` é a fonte única dos animes, a mesma das séries e dos filmes.** O
+  `saimoAnime.js` expõe a interface que o `anime.js` espera (`search`, `seasons`,
+  `seasonEpisodes`, `episodes`, `sources`), por isso o serviço não sabe de quem
+  são os dados. O `meusanimes.js` continua no repositório mas já não é chamado
+  (e o `bloggerVideo.js` só serve o `meusanimes`), pelo que ambos são legado.
+- o catálogo vive em `redeflix/links-animes.txt` (426 títulos), em blocos
+  `@Título  ano  tmdbId` seguidos das linhas
+  `temporada  episódio  versão(dub|leg)  url1,url2,...`. A maioria é HLS
+  (`master.txt`, degraus 360p/720p); o resto é um mp4 único.
+- **as capas dos candidatos vêm do `fichas.txt`, casadas pelo id do TMDB.** O
+  `links-animes.txt` não traz pôster, mas o bloco traz o id e o `fichas.txt` (o
+  mesmo que as séries/filmes usam) tem o pôster desse id. Medido no catálogo
+  real: **99% das capas resolvidas** (421/426) pela ordem id → título → título
+  sem o sufixo "Dublado"/"Legendado"; por id sozinho é 98%, por título 93%.
+  Antes disto o `search` devolvia `image: null` e o card do anime saía sem capa,
+  apesar de o `animeMenu.js` já estar preparado para a mostrar — foi uma
+  regressão da troca de fonte, não uma funcionalidade nova.
+- sem `fichas.txt` o menu continua a funcionar: a capa é um extra e a falha é
+  registada, nunca propagada.
+
+- **a cadeia do saimo é simples porque o catálogo é um ficheiro.** Não há
+  scraping de HTML nem player de terceiros: o `links-animes.txt` já traz, por
+  episódio, a lista de URLs (`master.txt` para HLS ou um mp4). `sources()` lê o
+  `master.txt` e devolve um item por degrau (360p/720p), que é o que dá ao menu
+  a escolha real de qualidade. Os detalhes do `meusanimes` que aqui estavam
+  (cadeia `get-video.php` do Blogger, itags 18/22, confirmação da faixa na
+  página do episódio) descrevem o legado e já não se aplicam.
 - **a faixa dublada desta fonte é PT-BR** (`ANIME_PT_DUB_PROVIDERS` em
-  `src/config.js`). A faixa é um booleano no site ("dubbed" ou não), mas o
+  `src/config.js`). A faixa é um booleano no catálogo ("dub" ou não), mas o
   IDIOMA dessa dublagem pertence ao SITE. Com a fonte única atual (um site
   brasileiro) a lista só tem esse nome; o mecanismo mantém-se porque o rótulo do
   card (`Dublado (PT-BR)`) e o aviso de idioma ainda o consultam
-- **os cabeçalhos do download são os do CDN do Blogger**: `Referer` do Blogger
-  **e** um `User-Agent` de browser. Sem o `User-Agent` o CDN responde 403 mesmo
-  com o `Referer` certo. É o que `animeDownloadArgs()` em `src/utils/animeMenu.js`
-  acrescenta à chamada do yt-dlp
+- **os cabeçalhos do download são um `Referer` do site e um `User-Agent` de
+  browser.** Sem o `User-Agent` alguns CDNs respondem 403 mesmo com o `Referer`
+  certo. É o que `animeDownloadArgs()` em `src/utils/animeMenu.js` acrescenta à
+  chamada do yt-dlp
+
 - **a faixa é perguntada ANTES da pesquisa, não antes da lista de episódios**
   (`anm:aud:subbed` / `anm:aud:dubbed`). O utilizador escolhe a faixa assim que o
   nome é conhecido e a pesquisa corre já com ela. Perguntar depois da lista
@@ -1036,7 +1032,7 @@ lê os degraus (360p/720p) do CDN do Blogger, que é o que o `meusanimes` public
   sufixos que só o site usa ("Black Clover" corresponde a "Black Clover Dublado")
 - **a tradução é o último recurso, nunca o primeiro passo**
   (`TRANSLATE_ENABLED`, `src/services/translate.js`). O termo original é
-  pesquisado primeiro, porque o `meusanimes` já indexa muitos aliases PT
+  pesquisado primeiro, porque o catálogo já indexa muitos aliases PT
   ("Ataque dos Titãs" → "Shingeki No Kyojin"); só quando não há correspondência
   exata é que o termo é traduzido e pesquisado de novo. Uma tradução que devolve
   o mesmo texto é descartada, e qualquer falha (sem rede, erro HTTP) devolve
@@ -1084,14 +1080,10 @@ command is `src/commands/member/downloads/megacine.js` (aliases `serie`, `series
 - **this is a SEPARATE command (`.megacine`), not an anime provider.** The catalogue
   is episodic series with seasons, which the `.anime` flow does not cover; mixing the
   two would conflate catalogues with different rules.
-- **films are deliberately excluded** (`MEGACINE_TIPOS_EXCLUIDOS`, default `filmes`).
-  The site does NOT separate films from series in the URL — both live at
-  `/series/<slug>` — so the type is decided by two signals: the search card's
-  `card-meta` (`"2026 • Filmes"`) and, as a safety net, the title page itself
-  ("Assistir Filme" vs "Assistir Agora"). The page is the source of truth; the
-  season count is NOT a signal, because single-season series exist
-  (`duna-a-profecia-dublado` is 1 season with 6 episodes). A title that slips past
-  the search filter is refused when opened.
+- **films are now INCLUDED** (`MEGACINE_TIPOS_EXCLUIDOS` is empty by default; set it
+  to `filmes` to restore the old episodic-only behaviour). A film is a single
+  download with no seasons, so it takes a different, shorter path — see "Filmes"
+  below. The search returns `tipo: "filme"` and `chooseCandidate` branches on it.
 - the chain is: `/search/?q=` → `/series/<slug>` → `/series/<slug>/temporada-NN/episodio-NN`
   → the page's `urlConfig` → `<S>/<slug>/<NN>-temporada/<NN>/stream.m3u8`
   (`<S>` is the slug's first letter, uppercased). `buildStreamPath` mirrors the
@@ -1107,8 +1099,94 @@ command is `src/commands/member/downloads/megacine.js` (aliases `serie`, `series
   pages. Verifying the playlist with the short page timeout aborted streams that were
   fine — the user saw "the source did not respond" on a title that worked. That step
   therefore uses `MEGACINE_PLAYLIST_TIMEOUT_MS` (60 s), not `MEGACINE_TIMEOUT_MS`.
+- **the reachability check walks the candidate mirrors.** `getEpisodeStream` /
+  `getFilmeStream` return a `candidatos` array and the menu resolves it with
+  `primeiroAlcancavel` before charging credits, because one CDN can answer `404`/`503`
+  alone while another serves the same episode. Testing only the first URL rejected
+  titles that were available (measured: 78% → 82% on a 50-title sample).
+
 - a non-owner message while a menu is open is ignored in SILENCE (same rule as the
   anime flow), so group chatter does not turn into bot replies.
+
+Newer additions to the flow:
+
+- **covers come from the site's own `fichas.txt`**, not from a TMDB call: it is a
+  TAB file with `tipo  título  tmdbId  pôster  gêneros` and a `capa:` header giving the
+  image base (`https://image.tmdb.org/t/p/w342`). `parseFichas` + `posterDoTitulo`
+  (`src/services/saimo.js`) build the URL, so the bot needs no TMDB key of its own.
+  A title with no ficha simply goes without a cover — the image is an extra.
+- **the results list is paginated 20 per page** (`RESULTS_PER_PAGE`), with a
+  `mgc:pg2:<página>` "🔎 Ver mais resultados" row when there is a next page. The full
+  list is kept in `session.allCandidates` (up to `MAX_RESULTS`, 60) and the page is a
+  slice, so "ver mais" never re-searches. The row ids carry the ABSOLUTE index
+  (`mgc:an:<índice>`), which is why `buildCandidateRows` takes an `inicio`.
+- **dublado/legendado is asked when the source publishes both** (`mgc:aud:<faixa>`),
+  right after the title is chosen and before the seasons. The tracks are a UNION over
+  the episodes (`availableAudioVersions`); a single track is fixed silently. At
+  download time `getEpisodeStream(slug, temporada, episodio, faixa)` serves the
+  requested track and **falls back to the one that exists, warning the user** instead
+  of switching in silence. The caption shows the track that was actually sent.
+- films are handled by their own branch (see "Filmes" below); the search no longer
+  skips `tipo === "f"`.
+
+### Filmes (single download, with compression)
+
+A film is one MP4 with no seasons, so it skips the season/episode steps and takes a
+short path: **faixa → quality → download → compress → send**. The catalogue lives in
+`filmes-<L>.txt` (one file per letter, no index/pedaços), parsed by `parseFilmes`
+into `{ titulo, dub: [urls], leg: [urls] }`; `getFilmeInfo` reads the tracks and
+`getFilmeStream(slug, faixa)` returns the URL with the track actually served.
+
+- **the proxy mirror is alive; it redirects.** A line's `dub=`/`leg=` carries
+  MIRRORS of the same content (the site's `saimo-tv.pages.dev/api/stream` proxy
+  and a direct CDN URL), not qualities. The proxy answers `302` to a
+  `workers.dev` host that serves `206 video/mp4`, and `fetch` follows it by
+  default — it is NOT dead. Measured over the whole catalogue (28838 lines):
+  82% carry at least one direct `.mp4`, 14% carry ONLY the proxy, and the rest
+  carry both. `melhorUrl` prefers the `.mp4` (fewer hops), which is fine; do not
+  change it to prefer the proxy, and do not assume the proxy is broken.
+- **a title's mirrors are a fallback chain, not a single URL.** Measured
+  end to end on a 50-title sample with the real `isPlaylistReachable`: one
+  candidate answered for 78% of titles; walking the candidates (other CDN, other
+  track) raised it to 82%. `getFilmeStream`/`getEpisodeStream` therefore return a
+  `candidatos` array (preferred first, then the rest, then the other track) and
+  the menu resolves it with `primeiroAlcancavel`, instead of testing only the
+  first URL and giving up. A dead mirror alone is NOT proof the title is
+  unavailable.
+- **the remaining failures are a source limitation, not a bug to patch.** Some
+  proxy ids answer `404 {"error":"Nenhum stream disponível para este título"}`
+  for every Referer tried, and some direct CDNs answer `404`/`503` alone. Those
+  titles cannot be served; the flow fails with a clear message and refunds
+  nothing because nothing was charged yet.
+
+- **most films exceed the send ceiling, so compression is required.** Measured on
+  30 titles: median ~1.6 GB, max ~2.3 GB, with some small films (<100 MB) that fit
+  as-is. The flow downloads the whole file, then
+  `comprimirVideo(filePath, { height })` (`src/services/mediaPrepare.js`) reencodes
+  H.264/AAC with `-movflags +faststart`. Measured end to end: an 88.5 MB film
+  downloaded in 11 s and compressed 480p in 29 s to 21.6 MB (**−75.6%**). A
+  720p→480p reencode runs at ~17x realtime on this host with `veryfast`. The
+  quality step offers `FILME_COMPRESS_HEIGHTS` (720p, 480p) — never "original",
+  because an option that always fails at the end of a multi-minute download is a
+  trap.
+- **compression failure degrades, it does not abort.** `comprimirVideo` returns
+  `null` (never throws) when ffmpeg is missing or the run times out
+  (`FILME_COMPRESS_TIMEOUT_MS`, 45 min); the flow then sends the original if it
+  fits, otherwise warns and refunds the credits. A film already downloaded is not
+  thrown away over a failed reencode.
+- the download ceiling is `FILME_MAX_DOWNLOAD_BYTES` (5 GB), separate from the
+  episodes' `MEGACINE_MAX_DOWNLOAD_BYTES` (800 MB): a film needs the whole file on
+  disk before compressing, so the ceiling is what bounds the disk, not the send
+  limit. The process holds the original AND the compressed copy at once, so the
+  host needs ~1.4x the ceiling free.
+- the SEND ceiling is `FILME_MAX_SEND_BYTES` (1.5 GB, = `MAX_FILE_SIZE_BYTES`),
+  passed to `decideAnimeSend` as `documentLimitMb`. It is deliberately NOT the
+  anime ceiling (800 MB): a 2 h film at 720p can exceed 800 MB and would be
+  cancelled after the whole download and reencode — the exact trap the quality
+  step exists to avoid.
+- `FILME_COMPRESS_CRF` (28) and `FILME_COMPRESS_PRESET` (`veryfast`) are the
+  measured time/size balance; `ultrafast` is faster but produces a ~78% larger
+  file (measured).
 
 ### Painel de administração (`.painel`)
 

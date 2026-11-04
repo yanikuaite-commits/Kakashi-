@@ -70,16 +70,16 @@ export const MENU_CATEGORIES = [
   },
   {
     key: "anime", label: "Animes", icon: "🍿", aliases: ["canime", "animes"],
-    intro: "Animes pelo Meus Animes. Baixa com yt-dlp.",
+    intro: "Animes pelo Saimo TV. Baixa com yt-dlp.",
     commands: [
       ["anime <nome>", "escolha episódio e qualidade"],
     ],
   },
   {
-    key: "cinema", label: "Séries & Doramas", icon: "📺", aliases: ["ccinema", "series", "novelas"],
-    intro: "Séries, doramas e animes episódicos do Megacine. Baixa com yt-dlp.",
+    key: "cinema", label: "Séries, Doramas & Filmes", icon: "🎬", aliases: ["ccinema", "series", "novelas", "filmes"],
+    intro: "Séries, doramas e filmes do Saimo TV. Baixa com yt-dlp.",
     commands: [
-      ["megacine <nome>", "escolhe temporada e episódio"],
+      ["megacine <nome>", "série, dorama ou filme (o filme é comprimido antes de enviar)"],
     ],
   },
   {

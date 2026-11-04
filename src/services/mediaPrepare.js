@@ -22,7 +22,14 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { TEMP_DIR, VIDEO_FIX_ENABLED, VIDEO_FIX_TIMEOUT_MS } from "../config.js";
+import {
+  FILME_COMPRESS_CRF,
+  FILME_COMPRESS_PRESET,
+  FILME_COMPRESS_TIMEOUT_MS,
+  TEMP_DIR,
+  VIDEO_FIX_ENABLED,
+  VIDEO_FIX_TIMEOUT_MS,
+} from "../config.js";
 import { errorLog, infoLog, warningLog } from "../utils/logger.js";
 
 const CODECS_WHATSAPP = new Set(["h264", "avc1"]);
@@ -305,6 +312,76 @@ export async function withPreparedVideo(filePath, enviar) {
     if (preparado.temporary) {
       await fs.promises.rm(preparado.filePath, { force: true }).catch(() => {});
     }
+  }
+}
+
+/**
+ * Comprime um vídeo para uma altura-alvo (reencode H.264/AAC).
+ *
+ * PORQUÊ: muitos filmes do catálogo são MP4 únicos que excedem o teto de envio
+ * (mediana ~1,6 GB) e a fonte não publica uma versão menor, por isso a única
+ * saída é reconverter. Medido neste host: um filme de 88 MB comprimido de 480p a
+ * `veryfast` levou 29 s e encolheu 75,6%.
+ *
+ * Devolve `null` (e não lança) quando o ffmpeg falta ou a compressão falha: quem
+ * chama envia o original, porque um filme grande é melhor do que nenhum. O
+ * temporário fica a cargo de quem chama.
+ *
+ * @param {string} filePath
+ * @param {{height?: number}} [opcoes]
+ * @returns {Promise<{filePath: string, height: number}|null>}
+ */
+export async function comprimirVideo(filePath, { height } = {}) {
+  const alvo = Number(height);
+  if (!Number.isFinite(alvo) || alvo <= 0) return null;
+
+  const binary = await resolveFfmpegBinary();
+  if (!binary) return null;
+
+  const destino = tempPath("mp4");
+  const inicio = Date.now();
+
+  const args = [
+    "-y",
+    "-i",
+    filePath,
+    // `-2` no eixo par: o H.264 exige dimensões pares, e a altura fixa obriga a
+    // largura a acompanhar para não esticar a imagem.
+    "-vf",
+    `scale=-2:${alvo}`,
+    "-c:v",
+    "libx264",
+    "-preset",
+    FILME_COMPRESS_PRESET,
+    "-crf",
+    String(FILME_COMPRESS_CRF),
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "128k",
+    // `moov` no início: sem isto o WhatsApp responde "vídeo não está
+    // disponível" (o mesmo problema que o `prepareVideoForWhatsApp` resolve).
+    "-movflags",
+    "+faststart",
+    destino,
+  ];
+
+  try {
+    await run(binary, args, FILME_COMPRESS_TIMEOUT_MS);
+    const { size } = await fs.promises.stat(destino);
+    if (!size) throw new Error("ffmpeg produziu um ficheiro vazio");
+
+    infoLog(
+      `[media] comprimido para ${alvo}p em ${Math.round((Date.now() - inicio) / 1000)}s`,
+    );
+
+    return { filePath: destino, height: alvo };
+  } catch (error) {
+    warningLog(`[media] compressão para ${alvo}p falhou: ${error.message}`);
+    await fs.promises.rm(destino, { force: true }).catch(() => {});
+    return null;
   }
 }
 

@@ -529,9 +529,9 @@ export const MEDIA_CREDITS_BY_SIZE = [
 // downloads continuam funcionando pela API GenDownload (fallback).
 export const YTDLP_ENABLED = process.env.YTDLP_ENABLED !== "false";
 export const YTDLP_PATH = process.env.YTDLP_PATH || "";
-// Teto de tempo de UMA execução do yt-dlp. 30 min por omissão: um episódio de
+// Teto de tempo de UMA execução do yt-dlp. 50 min por omissão: um episódio de
 // 24 min em 480p (~95 MB) desce a ~7 MB/min de alguns hosts, e com o teto de
-// 500 MB os ficheiros grandes precisam de mais folga — o processo era morto a
+// 800 MB os ficheiros grandes precisam de mais folga — o processo era morto a
 // meio, sem stderr, e o utilizador só via o comando (ver `friendlyError` em
 // `src/services/ytdlp.js`).
 // Ajustável por YTDLP_TIMEOUT_MS; valor não numérico ou <= 0 cai no default.
@@ -539,7 +539,7 @@ const ytdlpTimeoutMs = Number(process.env.YTDLP_TIMEOUT_MS);
 export const YTDLP_TIMEOUT_MS =
   Number.isFinite(ytdlpTimeoutMs) && ytdlpTimeoutMs > 0
     ? ytdlpTimeoutMs
-    : 30 * 60 * 1000;
+    : 50 * 60 * 1000;
 // Cookies (formato Netscape) para o YouTube aceitar a sessão em IP de datacenter.
 export const YTDLP_COOKIES_PATH = process.env.YTDLP_COOKIES_PATH || "";
 export const YTDLP_PROXY = process.env.YTDLP_PROXY || "";
@@ -621,17 +621,16 @@ export const TURSO_BACKUP_TABLE =
   process.env.TURSO_BACKUP_TABLE || "kakashi_backups";
 
 // ==========================================================================
-// ANIMES (fonte única: meusanimes)
+// ANIMES (fonte única: saimo)
 // ==========================================================================
-// O fluxo de animes usa UMA fonte: `meusanimes` (`src/services/meusanimes.js`).
-// Responde a IPs de datacenter sem desafio Cloudflare, agrupa temporadas na
-// própria página e serve o episódio pelo player do Blogger (que o projeto já
-// lê). Publica 360p (~89 MB num episódio de 23 min) e 720p (~285 MB) como
-// degraus separados, pelo que o menu de qualidades deixa o utilizador escolher.
+// O fluxo de animes usa UMA fonte: `saimo` (`src/services/saimoAnime.js`). O
+// catálogo é servido em ficheiros de texto num Cloudflare Pages (sem desafio) e
+// a maioria dos episódios é HLS com degraus 360p/720p, pelo que o menu de
+// qualidades deixa o utilizador escolher.
 //
-// Os outros providers (anikoto, animegg, anitube, animeheaven, animesonlinehd e
-// os da biblioteca `@consumet/extensions`) foram removidos a pedido do dono do
-// bot. Se um dia voltarem, o ponto de entrada é `src/services/anime.js`.
+// O `meusanimes` (`src/services/meusanimes.js`) continua no repositório mas
+// deixou de ser chamado; se um dia voltar, o ponto de entrada é
+// `src/services/anime.js`, trocando `FONTE`.
 //
 // `ANIME_USER_AGENT` é o cabeçalho aplicado a todos os pedidos à fonte, e o
 // `ANIME_ACCEPT_LANGUAGE` o idioma preferido. `ANIME_PROXY_URL` é a saída de
@@ -675,11 +674,15 @@ export const MEGACINE_PLAYLIST_TIMEOUT_MS = Number(
   process.env.MEGACINE_PLAYLIST_TIMEOUT_MS || 60 * 1000,
 );
 
-// O comando serve só conteúdo episódico (séries, doramas e animes). Filmes são
-// um download único de duas horas, com outro perfil de uso, e ficaram fora por
-// decisão do dono do bot. A lista é configurável para o dia em que isso mudar.
+// Tipos que a pesquisa do `.megacine` deve ignorar. Vazio por omissão: FILMES
+// ENTRAM. O comando deixou de servir só conteúdo episódico — um filme é um
+// download único, sem temporadas, e o menu deteta-o pelo tipo (`f`) para seguir
+// outro caminho (faixa → qualidade → compressão → envio).
+//
+// A lista mantém-se configurável: `MEGACINE_TIPOS_EXCLUIDOS=filmes` repõe o
+// comportamento antigo (só séries, doramas e animes episódicos).
 export const MEGACINE_TIPOS_EXCLUIDOS = (
-  process.env.MEGACINE_TIPOS_EXCLUIDOS || "filmes"
+  process.env.MEGACINE_TIPOS_EXCLUIDOS || ""
 )
   .split(",")
   .map((tipo) => tipo.trim().toLowerCase())
@@ -695,10 +698,66 @@ export const MEGACINE_DOWNLOAD_CREDITS = Number(
   process.env.MEGACINE_DOWNLOAD_CREDITS || ANIME_EPISODE_CREDITS,
 );
 
-// Teto do download. Um episódio de série fica bem dentro do teto dos animes
-// (500 MB), que já cobre um episódio longo em boa qualidade.
+// Teto do download de séries/doramas. As séries do Saimo são MP4 diretos e
+// passam com frequência dos 500 MB (medidos: 509 a 752 MB em 6 de 7 títulos).
+// Segue o teto dos animes (`ANIME_DOCUMENT_LIMIT_MB`, definido abaixo): baixar
+// mais do que o envio aceita só gastava banda e disco para depois recusar no
+// fim. O envio mantém o download E a cópia encriptada do Baileys em disco
+// (~2x), por isso este valor exige ~2x o seu tamanho livre no diretório
+// temporário. A precedência é `MEGACINE_MAX_DOWNLOAD_MB`, depois o teto dos
+// animes.
 export const MEGACINE_MAX_DOWNLOAD_BYTES =
-  Number(process.env.MEGACINE_MAX_DOWNLOAD_MB || 500) * 1024 * 1024;
+  Number(process.env.MEGACINE_MAX_DOWNLOAD_MB || 800) * 1024 * 1024;
+
+// ==========================================================================
+// FILMES (download único, com compressão)
+// ==========================================================================
+// Um filme do catálogo é um MP4 único. Medido em 30 títulos: mediana ~1,6 GB e
+// máximo ~2,3 GB, com alguns filmes pequenos (<100 MB) que já cabem no envio. A
+// maioria excede o teto, e como o ficheiro TEM de ser baixado inteiro antes de
+// comprimir, o teto do download é o que limita o disco: o processo mantém o
+// original E a cópia comprimida em disco ao mesmo tempo.
+//
+// 5 GB cobre todo o catálogo medido com folga. O disco do host precisa de ~1,4x
+// este valor livre (original + versão comprimida, que é uma fração do original).
+export const FILME_MAX_DOWNLOAD_BYTES =
+  Number(process.env.FILME_MAX_DOWNLOAD_MB || 5120) * 1024 * 1024;
+
+// Teto de ENVIO do filme, separado do teto dos animes (`ANIME_DOCUMENT_LIMIT_MB`,
+// 800 MB). A 720p um filme de 2 h pode passar dos 800 MB e seria cancelado
+// depois de todo o download e da compressão — a mesma armadilha que a lista de
+// qualidade existe para evitar. 1,5 GB é o teto dos downloads gerais
+// (`MAX_FILE_SIZE_BYTES`) e cobre um filme comprimido.
+export const FILME_MAX_SEND_BYTES =
+  Number(process.env.FILME_MAX_SEND_MB || 1536) * 1024 * 1024;
+
+// Altura-alvo da compressão. 720p corta a maior parte do tamanho mantendo a
+// qualidade num ecrã de telemóvel; 480p corta mais e é a opção para quem quer o
+// ficheiro mais leve possível. A escolha é do utilizador no menu; estes são os
+// degraus oferecidos.
+export const FILME_COMPRESS_HEIGHTS = (
+  process.env.FILME_COMPRESS_HEIGHTS || "720,480"
+)
+  .split(",")
+  .map((v) => Number(v.trim()))
+  .filter((v) => Number.isFinite(v) && v > 0);
+
+// Qualidade da compressão (CRF do libx264): mais alto = ficheiro menor e mais
+// artefactos. 28 é o valor escolhido para 720p.
+export const FILME_COMPRESS_CRF = Number(process.env.FILME_COMPRESS_CRF || 28);
+
+// Preset do libx264. Medido neste host (720p→480p, `testsrc`): `veryfast` corre
+// a ~17x o tempo real (um filme de 90 min em ~5 min); `ultrafast` é ~21x mais
+// rápido mas gera ~78% mais bytes. `veryfast` é o equilíbrio; num host lento o
+// dono pode subir para `ultrafast` ou descer para `faster`.
+export const FILME_COMPRESS_PRESET = process.env.FILME_COMPRESS_PRESET || "veryfast";
+
+// Teto de uma só compressão. Um filme de 90 min a `veryfast` leva ~5 min neste
+// host; o teto de 45 min dá folga a um host ARM mais lento sem deixar um
+// processo preso indefinidamente. Excedido, a compressão é abortada e o original
+// é enviado (ver `comprimirVideo`), para não perder o download já feito.
+export const FILME_COMPRESS_TIMEOUT_MS =
+  Number(process.env.FILME_COMPRESS_TIMEOUT_MS || 45 * 60 * 1000);
 
 // Tradução de títulos PT → língua do catálogo (ver `src/services/translate.js`).
 //
@@ -712,20 +771,20 @@ export const TRANSLATE_TIMEOUT_MS = 8 * 1000;
 // YouTube, aplicada pelo `decideAnimeSend`); acima deste teto o envio é
 // cancelado e o utilizador é convidado a escolher uma qualidade menor.
 //
-// 500 MB: o envio mantém em disco o download e a cópia encriptada do Baileys,
-// ou seja ~2x o tamanho (500 MB -> ~1 GB). O Oracle Cloud (instância ARM com
+// 800 MB: o envio mantém em disco o download e a cópia encriptada do Baileys,
+// ou seja ~2x o tamanho (800 MB -> ~1.6 GB). O Oracle Cloud (instância ARM com
 // volume persistente) aguenta esse pico, ao contrário dos hosts de disco
 // efémero com pouca RAM que existiam antes. O valor continua configurável para
 // hosts mais apertados.
 export const ANIME_DOCUMENT_LIMIT_MB = Number(
-  process.env.ANIME_DOCUMENT_LIMIT_MB || 500,
+  process.env.ANIME_DOCUMENT_LIMIT_MB || 800,
 );
 export const ANIME_MAX_DOWNLOAD_BYTES = ANIME_DOCUMENT_LIMIT_MB * 1024 * 1024;
 
 // Resolução máxima do download de animes. O provider entrega um m3u8 com várias
 // faixas (240p–1080p) e, sem limite, o yt-dlp escolhe a maior (1080p): um
 // episódio de 24 min passa de 400 MB, gasta o dobro da banda e arrisca o teto
-// de 500 MB. Fixar 480p mantém o episódio leve. Se a faixa de 480p não existir,
+// de 800 MB. Fixar 480p mantém o episódio leve. Se a faixa de 480p não existir,
 // o seletor do yt-dlp cai para a melhor disponível em vez de falhar.
 export const ANIME_MAX_HEIGHT = Number(process.env.ANIME_MAX_HEIGHT) || 480;
 
@@ -746,22 +805,22 @@ export const ANIME_PREFER_DUBBED =
 // lista só tem esse nome; o mecanismo mantém-se porque o rótulo do card e o
 // aviso de idioma ainda o consultam.
 export const ANIME_PT_DUB_PROVIDERS = (
-  process.env.ANIME_PT_DUB_PROVIDERS || "meusanimes"
+  process.env.ANIME_PT_DUB_PROVIDERS || "saimo,meusanimes"
 )
   .split(",")
   .map((nome) => nome.trim().toLowerCase())
   .filter(Boolean);
 
-export const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+export const DOWNLOAD_TIMEOUT_MS = 50 * 60 * 1000;
 export const AI_TIMEOUT_MS = 30 * 1000;
 export const ATTP_TIMEOUT_MS = 10 * 1000;
 export const PENDING_DOWNLOAD_TTL_MS = 5 * 60 * 1000;
 export const DEFAULT_VIDEO_HEIGHT = 720;
 // Teto de cancelamento de um download geral (TikTok, Instagram, X, Facebook,
 // Pinterest, GenDownload, cobalt). Acima disto o download é recusado em vez de
-// encher o disco. É o mesmo teto dos animes (`ANIME_DOCUMENT_LIMIT_MB`), para
-// não haver dois números diferentes a dizer "demasiado grande".
-export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024;
+// encher o disco. É um teto próprio, separado do teto dos animes
+// (`ANIME_DOCUMENT_LIMIT_MB`), que é maior.
+export const MAX_FILE_SIZE_BYTES = 1536 * 1024 * 1024;
 export const ATTP_APIS = [
 	"https://api.urfake.com/attp?text=",
 	"https://widipe.com/api/attp?text=",

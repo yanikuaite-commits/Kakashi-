@@ -1,7 +1,9 @@
 /**
  * Provider "meusanimes": extrai o vídeo do site, sem API de terceiros.
  *
- * PORQUÊ: é a FONTE ÚNICA do fluxo de animes — responde a IPs de datacenter
+ * PORQUÊ: foi a fonte única do fluxo de animes até ser substituída pelo `saimo`
+ * (`src/services/saimoAnime.js`). Continua no repositório, mas já não é chamada.
+ * Responde a IPs de datacenter
  * SEM qualquer desafio Cloudflare, publica temporadas
  * agrupadas na própria página e serve o episódio pelo player do Blogger, que o
  * projeto já sabe ler. Os sites PT-BR mais conhecidos (goyabu, animefire,

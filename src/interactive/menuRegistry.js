@@ -564,10 +564,10 @@ export const FUNCTIONS = [
 
   /* ═══════════ CINEMA ═══════════ */
   entry("cinema", "megacine", "megacine", {
-    titulo: "Séries & Doramas",
-    icone: "📺",
-    descricao: "Baixa séries, doramas e animes episódicos do Megacine.",
-    guia: "Envie o nome da série (ex: Duna A Profecia).",
+    titulo: "Séries, Doramas & Filmes",
+    icone: "🎬",
+    descricao: "Baixa séries, doramas e filmes do Saimo TV.",
+    guia: "Envie o nome da série ou do filme (ex: Duna A Profecia).",
     aceita: "texto",
     exemplo: "Duna A Profecia",
   }),

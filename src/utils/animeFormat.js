@@ -1,5 +1,5 @@
 /**
- * Helpers puros do fluxo de animes (fonte única: meusanimes).
+ * Helpers puros do fluxo de animes (fonte única: saimo).
  *
  * Ficam separados do cliente HTTP (`src/services/anime.js`) para poderem ser
  * testados sem rede e sem Baileys: aqui só há transformação de dados.
@@ -257,6 +257,7 @@ export function buildAudioRows(versions = []) {
  */
 const PROVIDER_LABELS = {
   meusanimes: "Meus Animes",
+  saimo: "Saimo TV",
 };
 
 /**
