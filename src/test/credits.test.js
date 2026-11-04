@@ -6,8 +6,10 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import {
+  ANIME_EPISODE_CREDITS,
   DAILY_FREE_CREDITS,
   DATABASE_DIR,
+  DOWNLOAD_CREDIT_TIERS,
   OWNER_LID,
 } from "../config.js";
 import {
@@ -109,8 +111,8 @@ after(async () => {
 });
 
 test("custo por comando: tabela, isentos e padrão", () => {
-  assert.equal(commandCost({ name: "tik-tok", commands: ["tik-tok", "ttk", "tik"] }), 7);
-  assert.equal(commandCost({ name: "play-video", commands: ["play-video", "pv"] }), 8);
+  assert.equal(commandCost({ name: "tik-tok", commands: ["tik-tok", "ttk", "tik"] }), 4);
+  assert.equal(commandCost({ name: "play-video", commands: ["play-video", "pv"] }), 5);
   assert.equal(commandCost({ name: "deepseek", commands: ["deepseek"] }), 6);
   assert.equal(
     commandCost({ name: "anime", commands: ["anime", "animes"] }),
@@ -123,6 +125,32 @@ test("custo por comando: tabela, isentos e padrão", () => {
   assert.equal(commandCost({ name: "ping", commands: ["ping"] }), 0);
   // Comando isento não vira pago por causa de um atalho compartilhado.
   assert.equal(commandCost({ name: "suporte", commands: ["suporte", "help"] }), 0);
+});
+
+test("hierarquia dos downloads: do leve ao pesado, sem degraus invertidos", () => {
+  const custo = (name) => commandCost({ name, commands: [name] });
+
+  // A hierarquia é a garantia de que o preço diz algo: o áudio leve não pode
+  // custar mais do que um vídeo, nem o vídeo de rede social mais do que o
+  // YouTube (que ainda paga a pesquisa).
+  assert.equal(custo("tik-tok-audio"), DOWNLOAD_CREDIT_TIERS.leve);
+  assert.equal(custo("pinterest"), DOWNLOAD_CREDIT_TIERS.leve);
+  assert.equal(custo("tik-tok"), DOWNLOAD_CREDIT_TIERS.medio);
+  assert.equal(custo("instagram"), DOWNLOAD_CREDIT_TIERS.medio);
+  assert.equal(custo("facebook"), DOWNLOAD_CREDIT_TIERS.medio);
+  assert.equal(custo("x-twitter"), DOWNLOAD_CREDIT_TIERS.medio);
+  assert.equal(custo("baixar"), DOWNLOAD_CREDIT_TIERS.medio);
+  assert.equal(custo("play-video"), DOWNLOAD_CREDIT_TIERS.pesado);
+  assert.equal(custo("play-audio"), DOWNLOAD_CREDIT_TIERS.pesado);
+
+  assert.ok(
+    DOWNLOAD_CREDIT_TIERS.leve < DOWNLOAD_CREDIT_TIERS.medio &&
+      DOWNLOAD_CREDIT_TIERS.medio < DOWNLOAD_CREDIT_TIERS.pesado,
+    "os degraus têm de subir",
+  );
+
+  // A âncora pedida: o download mais barato custa 3 créditos.
+  assert.equal(DOWNLOAD_CREDIT_TIERS.leve, 3);
 });
 
 test("relógio de Moçambique e reset diário às 00h", () => {
@@ -265,8 +293,11 @@ test("mensagens de créditos explicam saldo, reset e recarga com o dono", () => 
 
   const costs = costsMessage({ prefix: "." });
   assert.match(costs, /CUSTOS EM CRÉDITOS/);
-  assert.match(costs, /\.tik tok — 7 créditos/);
+  assert.match(costs, /\.tik tok — 4 créditos/);
   assert.match(costs, /acima de 30 min — \+6/);
+  // O custo por episódio não vem da tabela de comandos: sem esta linha o
+  // usuário veria `.anime — 2 créditos` e um episódio a custar 13.
+  assert.match(costs, new RegExp(`${ANIME_EPISODE_CREDITS} créditos por episódio`));
 });
 
 test("dispatcher real cobra créditos, bloqueia sem saldo e não cobra o dono", async () => {

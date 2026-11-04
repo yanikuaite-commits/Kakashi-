@@ -15,6 +15,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
+  ANIME_EPISODE_CREDITS,
   COMMAND_CREDITS,
   CREDITS_TIMEZONE,
   DAILY_FREE_CREDITS,
@@ -516,6 +517,10 @@ export function costsMessage({ prefix = PREFIX } = {}) {
     `┃ 🕛 Reset: 00h00 (horário de Moçambique)\n` +
     `┣━━━━━━━━━━━━━━━━━━\n` +
     `${items}\n` +
+    `┣━━━━━━━━━━━━━━━━━━\n` +
+    `┃ 🎬 Episódio baixado (anime/megacine):\n` +
+    `┃ ├ ${ANIME_EPISODE_CREDITS} créditos por episódio\n` +
+    `┃ └ a pesquisa e o menu custam só 2\n` +
     `┣━━━━━━━━━━━━━━━━━━\n` +
     `┃ 🎬 Mídia longa gasta extras:\n` +
     `┃ ├ até 3 min — +0\n` +

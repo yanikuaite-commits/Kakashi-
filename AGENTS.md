@@ -448,13 +448,41 @@ Every member command checks the balance before running, not only at the end:
 
 - `dynamicCommand` calls `hasSufficientCredits` and then `chargeCredits`; with no
   balance the command never starts and the member gets `creditsExhaustedMessage`
-- `ANIME_EPISODE_CREDITS` (20) is charged per downloaded episode in
+- `ANIME_EPISODE_CREDITS` (13) is charged per downloaded episode in
   `downloadAndSend`, after the same pre-check. The search and the menus cost the
   `anime` command price (`COMMAND_CREDITS.anime`, 2) — cheap because searching
   spends no bandwidth; the real cost is the episode that gets downloaded. A
   failed download is refunded with `refundCredits`, because nobody pays for an
   episode that never arrived
+- `MEGACINE_DOWNLOAD_CREDITS` defaults to `ANIME_EPISODE_CREDITS`: both download
+  an episode, and charging different prices for the same work would be arbitrary
 - the owner (`OWNER_LID`) never pays, in commands or in the anime flow
+
+### DOWNLOAD_CREDIT_TIERS
+
+The download commands do not carry their own numbers; they point at one of three
+named tiers in `src/config.js`:
+
+| Tier | Credits | Commands |
+| --- | --- | --- |
+| `leve` | 3 | `tik-tok-audio`, `pinterest` |
+| `medio` | 4 | `tik-tok`, `instagram`, `facebook`, `x-twitter`, `baixar` |
+| `pesado` | 5 | `play-video`, `play-audio` |
+
+- the tier is a **name**, so the price lives in one place: raising the
+  social-video price no longer means editing six identical lines and risking
+  leaving one behind
+- `pesado` is the YouTube pair, which pays for the search on top of the download;
+  `leve` is short audio and images, which barely spend bandwidth
+- `credits.test.js` guards the order (`leve < medio < pesado`) and the anchor
+  (`leve === 3`), so a future edit cannot silently invert the hierarchy
+- the episode prices (`ANIME_EPISODE_CREDITS` 13, `MEGACINE_DOWNLOAD_CREDITS`)
+  are **not** in `COMMAND_CREDITS`: they are charged per episode by the flow, not
+  per command. `costsMessage` therefore prints them in their own block — without
+  it the member would read `.anime — 2 créditos` and pay 13 per episode
+- a daily allowance of `DAILY_FREE_CREDITS` (10) means one free episode does not
+  fit at 13: the anime flow is deliberately just past the free tier, so it needs
+  a recharge while staying cheap enough to use
 
 ## OWNER_CREDIT_ADJUSTMENTS
 

@@ -344,21 +344,33 @@ export const FREE_COMMANDS = [
   "pagamento",
 ];
 
+// Hierarquia de custo dos downloads, do mais leve ao mais pesado.
+//
+// O degrau é um nome e não um número solto para o preço viver num sítio só:
+// subir o vídeo de rede social não pode obrigar a acertar seis linhas iguais.
+// A âncora é o degrau leve (3 créditos), que é o download mais barato do bot.
+export const DOWNLOAD_CREDIT_TIERS = {
+  leve: 3, // áudio curto e imagem: quase não gastam banda
+  medio: 4, // vídeo de rede social: um ficheiro, sem pesquisa
+  pesado: 5, // YouTube: pesquisa + melhor qualidade disponível
+};
+
 // Custo em créditos por comando (nome oficial do comando).
 // Comandos de membro que não estão aqui gastam DEFAULT_COMMAND_CREDITS.
 export const COMMAND_CREDITS = {
-  // Downloads
-  "tik-tok": 7,
-  "tik-tok-audio": 6,
-  "instagram": 7,
-  "facebook": 7,
-  "pinterest": 6,
-  "x-twitter": 7,
-  "play-video": 8,
-  "play-audio": 7,
-  "baixar": 7,
-  "anime": 2,
-  "megacine": 2,
+  // Downloads — os degraus de DOWNLOAD_CREDIT_TIERS, do leve ao pesado.
+  "tik-tok-audio": DOWNLOAD_CREDIT_TIERS.leve,
+  pinterest: DOWNLOAD_CREDIT_TIERS.leve,
+  "tik-tok": DOWNLOAD_CREDIT_TIERS.medio,
+  instagram: DOWNLOAD_CREDIT_TIERS.medio,
+  facebook: DOWNLOAD_CREDIT_TIERS.medio,
+  "x-twitter": DOWNLOAD_CREDIT_TIERS.medio,
+  baixar: DOWNLOAD_CREDIT_TIERS.medio,
+  "play-video": DOWNLOAD_CREDIT_TIERS.pesado,
+  "play-audio": DOWNLOAD_CREDIT_TIERS.pesado,
+  // Navegação: só pesquisa, sem baixar nada.
+  anime: 2,
+  megacine: 2,
   "yt-search": 5,
   // Inteligência artificial
   "deepseek": 6,
@@ -389,7 +401,11 @@ export const DEFAULT_COMMAND_CREDITS = 5;
 // `COMMAND_CREDITS.anime` (2 créditos, barato porque só pesquisar não gasta
 // banda), mas cada episódio efetivamente baixado custa isto: o gasto real é o
 // download, não a navegação.
-export const ANIME_EPISODE_CREDITS = 20;
+//
+// 13 créditos, abaixo do degrau mais pesado dos vídeos: um episódio é um
+// download longo, e a 10 créditos/dia gratuitos continua a exigir recarga
+// (cerca de um episódio por dia), sem tornar o comando inútil.
+export const ANIME_EPISODE_CREDITS = 13;
 
 // ==========================================================================
 // ANTI-FLOOD
@@ -672,8 +688,11 @@ export const MEGACINE_TIPOS_EXCLUIDOS = (
 // Custo por episódio baixado. A pesquisa e o menu são baratos
 // (`COMMAND_CREDITS.megacine`), porque só pesquisar não gasta banda — o gasto
 // real é o download.
+//
+// Mesmo valor dos animes: as duas funções baixam um episódio, e preços
+// diferentes para o mesmo trabalho seriam arbitrários.
 export const MEGACINE_DOWNLOAD_CREDITS = Number(
-  process.env.MEGACINE_DOWNLOAD_CREDITS || 25,
+  process.env.MEGACINE_DOWNLOAD_CREDITS || ANIME_EPISODE_CREDITS,
 );
 
 // Teto do download. Um episódio de série fica bem dentro do teto dos animes
