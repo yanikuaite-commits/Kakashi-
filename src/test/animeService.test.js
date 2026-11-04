@@ -9,11 +9,11 @@ import {
 } from "../services/anime.js";
 
 /**
- * Serviço de animes (fonte única: meusanimes).
+ * Serviço de animes (fonte única: saimo).
  *
- * Os testes de parsing do provider vivem em `meusanimes.test.js`; aqui prova-se
- * a camada do serviço: normalização do id, timeout/erro claro e a
- * desambiguação com tradução, sem tocar na rede real.
+ * O parsing do provider vive nos testes do `saimoAnime.js`; aqui prova-se a
+ * camada do serviço: normalização do id, timeout/erro claro e a desambiguação
+ * com tradução, sem tocar na rede real.
  */
 
 /**
@@ -27,7 +27,7 @@ test("searchAnime devolve um resultado com a fonte associada", { skip: !comRede 
   const anime = await searchAnime(TERMO);
 
   assert.ok(anime.id, "o resultado deve ter id");
-  assert.equal(anime.provider, "meusanimes", "a fonte única é o meusanimes");
+  assert.equal(anime.provider, "saimo", "a fonte única é o saimo");
   assert.ok(anime.title, "o resultado deve ter título");
 });
 
@@ -57,26 +57,26 @@ test("nome vazio é rejeitado sem ir à rede", async () => {
  */
 test("episódio com id malformado dá erro claro", async () => {
   await assert.rejects(
-    () => getEpisodeSources("sem-separador", "meusanimes"),
+    () => getEpisodeSources("sem-separador", "saimo"),
     (error) => error instanceof AnimeApiError,
   );
 });
 
 /**
- * `searchAnimeCandidates` — a desambiguação. A rede é substituída pelo HTML do
- * meusanimes: nenhum site é tocado.
+ * `searchAnimeCandidates` — a desambiguação. A rede é substituída pelo catálogo
+ * do saimo (ficheiro `links-animes.txt`): nenhum site é tocado.
  *
- * O defeito que isto corrige: pesquisar "Meu Hero Academia" (português) devolvia
- * "Eiyuu Kyoushitsu" (outro anime) sem aviso, porque a pesquisa caía no primeiro
- * resultado quando não havia correspondência exata.
+ * O defeito que isto corrige: pesquisar "Meu Hero Academia" (português) e cair
+ * no primeiro resultado sem aviso. Aqui o catálogo só tem o título em romaji
+ * ("Boku no Hero Academia"), pelo que não há correspondência exata e o fluxo
+ * devolve candidatos — em vez de escolher sozinho.
  */
-const BUSCA_EIYUU = `
-  <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Eiyuu Kyoushitsu" /> <span class="tvshows"> TV </span> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/eiyuu-kyoushitsu/">Eiyuu Kyoushitsu</a></div><div class="meta"> <span class="year">2023</span></div><div class="contenido"><p>Assistir Eiyuu Kyoushitsu...</p></div></div></article></div>
-`;
-
-const BUSCA_NARUTO = `
-  <div class="result-item"><article><div class="image"><div class="thumbnail animation-2"> <a href="https://meusanimes.blog/a/naruto/"> <img src="https://meusanimes.blog/wp-content/uploads/2025/04/yLZS-150x150.jpg" alt="Naruto" /> <span class="tvshows"> TV </span> </a></div></div><div class="details"><div class="title"> <a href="https://meusanimes.blog/a/naruto/">Naruto</a></div><div class="meta"> <span class="year">2002</span></div><div class="contenido"><p>Assistir Naruto...</p></div></div></article></div>
-`;
+const CATALOGO_ANIMES = [
+  "@Boku no Hero Academia\t2016\t31910",
+  "1\t1\tdub\thttps://embedplayer2.xyz/cdn/hls/aaa/master.txt",
+  "@Naruto\t2002\t46260",
+  "1\t1\tdub\thttps://embedplayer2.xyz/cdn/hls/ccc/master.txt",
+].join("\n");
 
 function stubFetch(respostas) {
   const pedidos = [];
@@ -101,14 +101,16 @@ function stubFetch(respostas) {
 }
 
 test("sem correspondência exata, devolve candidatos e traduz o termo", async () => {
+  const { limparCacheAnimes } = await import("../services/saimoAnime.js");
+  limparCacheAnimes();
+
   const pedidos = stubFetch({
     "translate.googleapis.com": JSON.stringify([
       [["My Hero Academia", "Meu Hero Academia", null, null]],
       null,
       "pt",
     ]),
-    "/?s=meu%20hero%20academia": BUSCA_EIYUU,
-    "/?s=my%20hero%20academia": BUSCA_EIYUU,
+    "links-animes.txt": CATALOGO_ANIMES,
   });
 
   try {
@@ -120,8 +122,8 @@ test("sem correspondência exata, devolve candidatos e traduz o termo", async ()
       "sem correspondência exata NÃO pode escolher sozinho",
     );
     assert.ok(resultado.candidatos.length > 0, "tem de devolver a lista");
-    assert.equal(resultado.candidatos[0].title, "Eiyuu Kyoushitsu");
-    assert.equal(resultado.provider, "meusanimes");
+    assert.equal(resultado.candidatos[0].title, "Boku no Hero Academia");
+    assert.equal(resultado.provider, "saimo");
     assert.equal(
       resultado.termoTraduzido,
       "My Hero Academia",
@@ -129,10 +131,8 @@ test("sem correspondência exata, devolve candidatos e traduz o termo", async ()
     );
     assert.equal(resultado.traduzidoDe, "Meu Hero Academia");
     assert.ok(
-      pedidos.some((alvo) =>
-        alvo.toLowerCase().includes("my%20hero%20academia"),
-      ),
-      "o termo TRADUZIDO também tem de ser pesquisado",
+      pedidos.some((alvo) => alvo.includes("translate.googleapis.com")),
+      "sem correspondência exata, o termo é traduzido",
     );
   } finally {
     delete globalThis.fetch;
@@ -140,13 +140,16 @@ test("sem correspondência exata, devolve candidatos e traduz o termo", async ()
 });
 
 test("com correspondência exata, nem lista nem tradução", async () => {
+  const { limparCacheAnimes } = await import("../services/saimoAnime.js");
+  limparCacheAnimes();
+
   const pedidos = stubFetch({
     "translate.googleapis.com": JSON.stringify([
       [["X", "Y", null, null]],
       null,
       "pt",
     ]),
-    "/?s=naruto": BUSCA_NARUTO,
+    "links-animes.txt": CATALOGO_ANIMES,
   });
 
   try {
@@ -154,12 +157,12 @@ test("com correspondência exata, nem lista nem tradução", async () => {
 
     assert.ok(resultado.anime, "com correspondência exata segue direto");
     assert.equal(resultado.anime.title, "Naruto");
-    assert.equal(resultado.anime.provider, "meusanimes");
+    assert.equal(resultado.anime.provider, "saimo");
     assert.deepEqual(resultado.candidatos, [], "sem ambiguidade não há lista");
     assert.equal(
       pedidos.some((alvo) => alvo.includes("translate.googleapis.com")),
       false,
-      "não se traduz quando o site já reconheceu o termo",
+      "não se traduz quando o catálogo já reconheceu o termo",
     );
   } finally {
     delete globalThis.fetch;

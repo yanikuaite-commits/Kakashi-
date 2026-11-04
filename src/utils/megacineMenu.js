@@ -3,17 +3,24 @@
  *
  * Passos:
  *   1. o utilizador escreve `.megacine <nome>` → o bot pesquisa e lista os
- *      resultados (`rowId` `mgc:an:<índice>`);
- *   2. escolhido o título, o bot lista as temporadas (`rowId` `mgc:sea:<índice>`)
- *      — só quando há mais de uma, senão salta direto para os episódios, porque
- *      uma escolha de um item só seria ruído;
- *   3. escolhida a temporada, lista os episódios (`rowId` `mgc:ep:<índice>`),
+ *      resultados (`rowId` `mgc:an:<índice>`), 20 por página, com uma capa
+ *      (pôster TMDB da ficha do site) e uma linha `mgc:pg2:<página>` "ver mais"
+ *      quando há mais resultados;
+ *   2. escolhido o título, pergunta a FAIXA (dublado/legendado) quando a fonte
+ *      publica as duas (`rowId` `mgc:aud:<faixa>`); com uma só faixa, salta o
+ *      passo;
+ *   3. lista as temporadas (`rowId` `mgc:sea:<índice>`) — só quando há mais de
+ *      uma, senão salta direto para os episódios, porque uma escolha de um item
+ *      só seria ruído;
+ *   4. escolhida a temporada, lista os episódios (`rowId` `mgc:ep:<índice>`),
  *      paginados, com um botão `mgc:pg:<página>` no fundo;
- *   4. escolhido o episódio, baixa e envia.
+ *   5. escolhido o episódio, baixa e envia — na faixa escolhida, caindo para a
+ *      que existe quando o episódio não tem a pedida (avisa em vez de trocar em
+ *      silêncio).
  *
- * FILMES NÃO ENTRAM. A pesquisa descarta-os pelo `card-meta` e, como rede de
- * segurança, um título que escape é recusado ao abrir (a página diz "Assistir
- * Filme"). Ver `src/services/megacine.js` para o porquê.
+ * FILMES NÃO ENTRAM. A pesquisa descarta-os pelo tipo (`f`) do índice do site e,
+ * como rede de segurança, um título que escape é recusado ao abrir. Ver
+ * `src/services/saimo.js` para o porquê.
  *
  * NÃO há passo de qualidade, ao contrário dos animes: o Megacine publica UMA só
  * qualidade por episódio (uma playlist de segmentos, sem `EXT-X-STREAM-INF`),
@@ -37,7 +44,7 @@ import {
   isPlaylistReachable,
   megacineDownloadArgs,
   search,
-} from "../services/megacine.js";
+} from "../services/saimo.js";
 import { downloadWithYtDlp, isYtDlpAvailable } from "../services/ytdlp.js";
 import { withDownloadSlot } from "../services/downloadQueue.js";
 import {
@@ -51,8 +58,14 @@ import { mediaUploadFromFile, safeMediaFileName } from "./mediaSend.js";
 import { prepareImageForWhatsApp, withPreparedVideo } from "../services/mediaPrepare.js";
 import { RODAPE, mediaCaption } from "./formatMessage.js";
 import {
+  AUDIO_DUBBED,
+  AUDIO_SUBBED,
+  AUDIO_VERSIONS,
   EPISODES_PER_PAGE,
   animeSessionKey,
+  audioVersionLabel,
+  availableAudioVersions,
+  buildAudioRows,
   buildNextPageRow,
   jidIdentities,
   identitiesOverlap,
@@ -71,12 +84,20 @@ export const MEGACINE_TTL_MS = INTERACTIVE_MENU_TTL_MS;
 
 const CANCEL_TOKEN = "mgc:cancel";
 
+/** Quantos resultados de pesquisa aparecem por página. */
+const RESULTS_PER_PAGE = 20;
+
+/** Teto de resultados recolhidos por pesquisa (alimenta a paginação). */
+const MAX_RESULTS = 60;
+
 /** Prefixos de token tratados por este fluxo (usado no despacho do middleware). */
 export const MEGACINE_TOKEN_PREFIXES = [
   "mgc:an:",
   "mgc:sea:",
+  "mgc:aud:",
   "mgc:ep:",
   "mgc:pg:",
+  "mgc:pg2:",
   CANCEL_TOKEN,
 ];
 
@@ -120,7 +141,7 @@ function touch(session) {
     if (sessoesMegacine.get(session.key) !== session) return;
     dropSession(session);
     session
-      .sendReply?.("⏳ O tempo do menu do Megacine terminou. Envia .menu para recomeçar.")
+      .sendReply?.("⏳ O tempo do menu do Saimo TV terminou. Envia .menu para recomeçar.")
       .catch(() => {});
   }, MEGACINE_TTL_MS);
   session.cleanupTimer.unref?.();
@@ -181,6 +202,10 @@ function ensureSession({
       episodes: [],
       page: 0,
       episode: null,
+      audioVersion: "",
+      audioVersions: [],
+      allCandidates: [],
+      resultPage: 0,
       lastRows: [],
       textOnly: Boolean(textOnly),
       cleanupTimer: null,
@@ -202,18 +227,32 @@ function cancelRow() {
   return {
     id: CANCEL_TOKEN,
     title: "❌ Cancelar",
-    description: "Sair do menu do Megacine",
+    description: "Sair do menu do Saimo TV",
   };
 }
 
-function buildCandidateRows(candidatos = []) {
-  return candidatos.map((item, index) => ({
-    id: `mgc:an:${index}`,
+function buildCandidateRows(candidatos = [], page = 0) {
+  const inicio = page * RESULTS_PER_PAGE;
+
+  return candidatos.slice(inicio, inicio + RESULTS_PER_PAGE).map((item, offset) => ({
+    id: `mgc:an:${inicio + offset}`,
     title: String(item.title || item.slug).slice(0, 60),
     // A pesquisa já só devolve conteúdo episódico (séries, doramas e animes),
     // por isso o tipo não precisa de aparecer; o ano desempata títulos iguais.
     description: item.year ? String(item.year) : "Abrir",
   }));
+}
+
+/** Linha "ver mais resultados" quando há uma página seguinte na pesquisa. */
+function buildMoreResultsRow(pagina, totalPaginas) {
+  if (pagina + 1 >= totalPaginas) return [];
+  return [
+    {
+      id: `mgc:pg2:${pagina + 1}`,
+      title: "🔎 Ver mais resultados",
+      description: `Página ${pagina + 2} de ${totalPaginas}`,
+    },
+  ];
 }
 
 function buildSeasonRows(seasons = []) {
@@ -240,7 +279,7 @@ function buildEpisodeRows(episodes = [], page = 0) {
 }
 
 async function sendCard({ socket, session, text, title, rows, fallbackPrompt, image = null }) {
-  const sections = [{ title: title || "Megacine", rows }];
+  const sections = [{ title: title || "Saimo TV", rows }];
   const options = rows.map((row, index) => ({
     number: String(index + 1),
     title: row.title,
@@ -248,7 +287,7 @@ async function sendCard({ socket, session, text, title, rows, fallbackPrompt, im
   }));
 
   const buttons = [];
-  const lista = singleSelectButton("📂 Opções", sections, { title: title || "Megacine" });
+  const lista = singleSelectButton("📂 Opções", sections, { title: title || "Saimo TV" });
   if (lista) buttons.push(lista);
   const dono = ownerButton();
   if (dono) buttons.push(dono);
@@ -334,10 +373,10 @@ export async function startMegacineFlow({
       socket,
       session,
       text:
-        `📺 *MEGACINE*\n\n` +
+        `📺 *SAIMO TV*\n\n` +
         `Escreve o nome da série que queres ver.\n\n` +
         `_Ex.: .megacine the boys_`,
-      title: "Megacine",
+      title: "Saimo TV",
       rows: [cancelRow()],
       fallbackPrompt: "Escreve o nome no chat 👇",
     });
@@ -354,7 +393,7 @@ async function searchAndSendResults({ socket, session, termo }) {
   let resultados;
 
   try {
-    resultados = await search(termo);
+    resultados = await search(termo, MAX_RESULTS);
   } catch (error) {
     dropSession(session);
     errorLog(`[megacine] falha na pesquisa: ${error.message}`);
@@ -375,34 +414,59 @@ async function searchAndSendResults({ socket, session, termo }) {
     return true;
   }
 
-  session.candidates = resultados.slice(0, 10);
+  // Guarda a lista COMPLETA: `buildCandidateRows` fatia por página, e os `rowId`
+  // usam o índice ABSOLUTO da lista, para "ver mais" continuar a apontar certo.
+  session.allCandidates = resultados;
+  session.resultPage = 0;
+  session.termo = sanitizeName(termo);
   session.stage = "candidatos";
 
-  const rows = buildCandidateRows(session.candidates);
-  rows.push(cancelRow());
-
   infoLog(`[megacine] "${termo}": ${resultados.length} resultados`);
+
+  return sendResultsPage({ socket, session, page: 0 });
+}
+
+/** Envia uma página da lista de resultados (20 por página, com "ver mais"). */
+async function sendResultsPage({ socket, session, page }) {
+  const total = session.allCandidates?.length || 0;
+  const totalPaginas = Math.max(1, Math.ceil(total / RESULTS_PER_PAGE));
+  const pagina = Math.min(Math.max(0, page), totalPaginas - 1);
+
+  session.resultPage = pagina;
+  session.stage = "candidatos";
+  // Fatia da página atual, só para introspeção: a escolha (`mgc:an:<índice>`) e
+  // as linhas usam a lista COMPLETA, cujo índice é absoluto.
+  session.candidates = session.allCandidates.slice(
+    pagina * RESULTS_PER_PAGE,
+    pagina * RESULTS_PER_PAGE + RESULTS_PER_PAGE,
+  );
+  touch(session);
+
+  const rows = buildCandidateRows(session.allCandidates, pagina);
+  rows.push(...buildMoreResultsRow(pagina, totalPaginas));
+  rows.push(cancelRow());
 
   return sendCard({
     socket,
     session,
     text:
-      `🎬 *MEGACINE*\n\n` +
-      `🔎 *Procura:* ${sanitizeName(termo)}\n` +
-      `📚 *Resultados:* ${resultados.length}\n\n` +
-      `Escolhe o título que queres ver.`,
+      `🎬 *SAIMO TV*\n\n` +
+      `🔎 *Procura:* ${session.termo || "—"}\n` +
+      `📚 *Resultados:* ${total}` +
+      (totalPaginas > 1 ? `  ·  página ${pagina + 1}/${totalPaginas}` : "") +
+      `\n\nEscolhe o título que queres ver.`,
     title: "Resultados",
     rows,
-    // Capa do primeiro resultado: mostra de que título se trata antes de o
-    // utilizador escolher da lista.
-    image: session.candidates[0]?.image || null,
+    // Capa do primeiro resultado da página: mostra de que título se trata antes
+    // de o utilizador escolher da lista.
+    image: session.allCandidates[pagina * RESULTS_PER_PAGE]?.image || null,
   });
 }
 
-/* ═══════════ PASSO 2 · TEMPORADAS ═══════════ */
+/* ═══════════ PASSO 2 · TÍTULO (faixa de áudio) ═══════════ */
 
 async function chooseCandidate({ socket, session, index }) {
-  const candidato = session.candidates[index];
+  const candidato = session.allCandidates?.[index];
 
   if (!candidato?.slug) {
     dropSession(session);
@@ -455,29 +519,97 @@ async function chooseCandidate({ socket, session, index }) {
 
   session.title = candidato;
   session.seasons = seasons;
+  session.audioVersion = "";
+  session.audioVersions = availableAudioVersions(
+    seasons.flatMap((t) => t.episodes || []),
+  );
 
-  // Uma temporada única não tem escolha a fazer: seguir direto evita um passo
-  // com uma opção só (ex.: `duna-a-profecia-dublado`, 1 temporada com 6 eps).
-  if (seasons.length === 1) {
-    return chooseSeason({ socket, session, index: 0 });
+  // A fonte publica as DUAS faixas: pergunta antes de listar as temporadas, para
+  // o download já sair com a faixa certa. Uma só faixa (ou nenhuma) fica fixada
+  // sozinha, sem incomodar o utilizador com uma escolha que não existe.
+  if (session.audioVersions.length > 1) {
+    return askAudioVersion({ socket, session });
   }
 
-  const rows = buildSeasonRows(seasons);
-  rows.push(cancelRow());
+  session.audioVersion = session.audioVersions[0] || "";
+  return openSeasons({ socket, session });
+}
 
-  infoLog(`[megacine] "${candidato.title}": ${seasons.length} temporadas`);
+/**
+ * Pergunta a faixa (Dublado / Legendado) quando o título publica as duas.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function askAudioVersion({ socket, session }) {
+  session.stage = "faixas";
+  touch(session);
+
+  const rows = [...buildAudioRows(session.audioVersions), cancelRow()];
 
   return sendCard({
     socket,
     session,
     text:
-      `🎬 *${candidato.title}*\n\n` +
+      `🎬 *${session.title?.title || "Saimo TV"}*\n\n` +
+      `🔊 Este título tem *dublado* e *legendado*.\n` +
+      `Escolhe a faixa que queres baixar.`,
+    title: "Áudio",
+    rows,
+    image: session.title?.image || null,
+  });
+}
+
+/**
+ * Aplica a faixa escolhida e segue para as temporadas.
+ *
+ * Valida contra as faixas PUBLICADAS: um token forjado (ou de uma versão antiga
+ * do site) não pode fixar uma faixa inexistente.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function chooseAudioVersion({ socket, session, version }) {
+  const disponiveis = session.audioVersions || [];
+
+  if (!AUDIO_VERSIONS.includes(version) || !disponiveis.includes(version)) {
+    dropSession(session);
+    await session
+      .sendReply("❌ Essa faixa já não está disponível. Envia .menu para recomeçar.")
+      .catch(() => {});
+    return true;
+  }
+
+  session.audioVersion = version;
+  infoLog(`[megacine] faixa escolhida: ${version}`);
+
+  return openSeasons({ socket, session });
+}
+
+/** Lista as temporadas (ou salta para os episódios quando há uma só). */
+async function openSeasons({ socket, session }) {
+  // Uma temporada única não tem escolha a fazer: seguir direto evita um passo
+  // com uma opção só (ex.: `duna-a-profecia-dublado`, 1 temporada com 6 eps).
+  if (session.seasons.length === 1) {
+    return chooseSeason({ socket, session, index: 0 });
+  }
+
+  const rows = buildSeasonRows(session.seasons);
+  rows.push(cancelRow());
+
+  infoLog(
+    `[megacine] "${session.title?.title}": ${session.seasons.length} temporadas`,
+  );
+
+  return sendCard({
+    socket,
+    session,
+    text:
+      `🎬 *${session.title?.title || "Saimo TV"}*\n\n` +
       `📺 Escolhe a temporada que queres ver.`,
     title: "Temporadas",
     rows,
     // Capa do título escolhido: confirma visualmente que abriu o título certo
     // antes de listar as temporadas.
-    image: candidato.image || null,
+    image: session.title?.image || null,
   });
 }
 
@@ -532,7 +664,7 @@ async function sendEpisodePage({ socket, session, page }) {
     socket,
     session,
     text:
-      `🎬 *${session.title?.title || "Megacine"}*\n\n` +
+      `🎬 *${session.title?.title || "Saimo TV"}*\n\n` +
       `📺 *Temporada ${session.seasonNumber}*\n` +
       `🎞️ *Episódios:* ${session.episodes.length}\n\n` +
       `Escolhe o episódio para baixar.`,
@@ -556,11 +688,12 @@ async function sendEpisodePage({ socket, session, page }) {
  * @param {{titulo?: string, duracao?: string}} [props]
  * @returns {string}
  */
-export function megacineCaption({ titulo, duracao } = {}) {
+export function megacineCaption({ titulo, duracao, faixa } = {}) {
   return mediaCaption({
     titulo,
-    canal: "Megacine",
+    canal: "Saimo TV",
     duracao: duracao || "Não disponível",
+    extra: faixa ? `🔊 ${audioVersionLabel(faixa)}` : "",
   });
 }
 
@@ -575,7 +708,7 @@ async function downloadAndSend({ socket, session, episodeIndex, sendVideoFromFil
     return true;
   }
 
-  const titulo = session.title?.title || "Megacine";
+  const titulo = session.title?.title || "Saimo TV";
   const rotulo =
     session.seasons.length === 1 && session.episodes.length === 1
       ? titulo
@@ -591,6 +724,7 @@ async function downloadAndSend({ socket, session, episodeIndex, sendVideoFromFil
       session.title.slug,
       session.seasonNumber,
       episode.number,
+      session.audioVersion || "",
     );
   } catch (error) {
     dropSession(session);
@@ -598,6 +732,20 @@ async function downloadAndSend({ socket, session, episodeIndex, sendVideoFromFil
     await session.sendReply(`❌ ${error.message}`).catch(() => {});
     return true;
   }
+
+  // A fonte nem sempre tem a faixa pedida (a lista é uma união): quando cai para
+  // a outra, dizê-lo evita servir legendado em silêncio a quem pediu dublado.
+  const faixaPedida = session.audioVersion || "";
+  const faixaServida = stream.faixa || "";
+  if (faixaPedida && faixaServida && faixaServida !== faixaPedida) {
+    await session
+      .sendReply(
+        `⚠️ Este episódio não tem ${audioVersionLabel(faixaPedida).toLowerCase()}. ` +
+          `Vou enviar ${audioVersionLabel(faixaServida).toLowerCase()}.`,
+      )
+      .catch(() => {});
+  }
+  session.audioVersion = faixaServida || faixaPedida;
 
   // Confirmar que o CDN responde ANTES de cobrar: um bloqueio só aparecia
   // depois de gastar créditos e de arrancar o yt-dlp.
@@ -691,6 +839,7 @@ async function downloadAndSend({ socket, session, episodeIndex, sendVideoFromFil
     const caption = megacineCaption({
       titulo: rotulo,
       duracao: result.durationString,
+      faixa: session.audioVersion || "",
     });
 
     if (acao === "cancel") {
@@ -796,7 +945,7 @@ export async function handleMegacineReply({
 
   if (isToken() && !doChat) {
     await sendReply(
-      "⏳ Este menu do Megacine expirou. Envia .menu para recomeçar.",
+      "⏳ Este menu do Saimo TV expirou. Envia .menu para recomeçar.",
     ).catch(() => {});
     return true;
   }
@@ -805,7 +954,7 @@ export async function handleMegacineReply({
     if (!doChat) return false;
     if (!isSessionOwner(doChat, ...senderJids)) return false;
     dropSession(doChat);
-    await sendReply("❌ Menu do Megacine cancelado.").catch(() => {});
+    await sendReply("❌ Menu do Saimo TV cancelado.").catch(() => {});
     return true;
   }
 
@@ -836,6 +985,14 @@ export async function handleMegacineReply({
       return chooseSeason({ socket, session: sessao, index: temporadaIndex });
     }
 
+    if (value.startsWith("mgc:aud:")) {
+      return chooseAudioVersion({
+        socket,
+        session: sessao,
+        version: value.slice("mgc:aud:".length).trim().toLowerCase(),
+      });
+    }
+
     const episodioIndex = tokenIndex(value, "mgc:ep:");
     if (episodioIndex >= 0) {
       return downloadAndSend({
@@ -844,6 +1001,18 @@ export async function handleMegacineReply({
         episodeIndex: episodioIndex,
         sendVideoFromFile,
       });
+    }
+
+    const resultadosIndex = tokenIndex(value, "mgc:pg2:");
+    if (resultadosIndex >= 0) {
+      if (!sessao.allCandidates?.length) {
+        dropSession(sessao);
+        await sendReply(
+          "❌ Essa lista não está mais disponível. Envia .menu para recomeçar.",
+        ).catch(() => {});
+        return true;
+      }
+      return sendResultsPage({ socket, session: sessao, page: resultadosIndex });
     }
 
     const paginaIndex = tokenIndex(value, "mgc:pg:");

@@ -1110,6 +1110,30 @@ command is `src/commands/member/downloads/megacine.js` (aliases `serie`, `series
 - a non-owner message while a menu is open is ignored in SILENCE (same rule as the
   anime flow), so group chatter does not turn into bot replies.
 
+Newer additions to the flow:
+
+- **covers come from the site's own `fichas.txt`**, not from a TMDB call: it is a
+  TAB file with `tipo  título  tmdbId  pôster  gêneros` and a `capa:` header giving the
+  image base (`https://image.tmdb.org/t/p/w342`). `parseFichas` + `posterDoTitulo`
+  (`src/services/saimo.js`) build the URL, so the bot needs no TMDB key of its own.
+  A title with no ficha simply goes without a cover — the image is an extra.
+- **the results list is paginated 20 per page** (`RESULTS_PER_PAGE`), with a
+  `mgc:pg2:<página>` "🔎 Ver mais resultados" row when there is a next page. The full
+  list is kept in `session.allCandidates` (up to `MAX_RESULTS`, 60) and the page is a
+  slice, so "ver mais" never re-searches. The row ids carry the ABSOLUTE index
+  (`mgc:an:<índice>`), which is why `buildCandidateRows` takes an `inicio`.
+- **dublado/legendado is asked when the source publishes both** (`mgc:aud:<faixa>`),
+  right after the title is chosen and before the seasons. The tracks are a UNION over
+  the episodes (`availableAudioVersions`); a single track is fixed silently. At
+  download time `getEpisodeStream(slug, temporada, episodio, faixa)` serves the
+  requested track and **falls back to the one that exists, warning the user** instead
+  of switching in silence. The caption shows the track that was actually sent.
+- films stay OUT of the search on purpose (`tipo === "f"` is skipped). The saimo
+  catalogue does separate them (`filmes-<L>.txt`), but the command is for episodic
+  content (séries, doramas and animes) — a film has no seasons/episodes, so it would
+  need its own branch in the flow. Keep the exclusion; do not add films without an
+  explicit request.
+
 ### Painel de administração (`.painel`)
 
 `src/commands/owner/painel.js` renders an admin dashboard **inside WhatsApp** —

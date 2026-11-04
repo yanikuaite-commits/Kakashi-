@@ -566,7 +566,7 @@ export const FUNCTIONS = [
   entry("cinema", "megacine", "megacine", {
     titulo: "Séries & Doramas",
     icone: "📺",
-    descricao: "Baixa séries, doramas e animes episódicos do Megacine.",
+    descricao: "Baixa séries e doramas do Saimo TV.",
     guia: "Envie o nome da série (ex: Duna A Profecia).",
     aceita: "texto",
     exemplo: "Duna A Profecia",

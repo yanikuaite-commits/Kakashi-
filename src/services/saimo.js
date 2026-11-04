@@ -1,0 +1,536 @@
+/**
+ * Saimo TV — catálogo e fontes de SÉRIES/doramas (o lado episódico).
+ *
+ * Substitui o `megacine.js` no fluxo `.megacine`, com a MESMA interface
+ * (`search`, `getSeasons`, `getEpisodeStream`, `isPlaylistReachable`,
+ * `megacineDownloadArgs`), para o menu continuar a funcionar sem saber de quem
+ * são os dados. O `megacine.js` continua no repositório, apenas deixou de ser
+ * chamado.
+ *
+ * O site (Cloudflare Pages SPA) publica o catálogo em ficheiros `.txt`:
+ *   - `busca.txt`            → índice geral (título, tipo, letra, ano)
+ *   - `series-<L>.txt`       → títulos da letra (título, ano, pedaço, eps)
+ *   - `series-<L>-<P>.txt`   → episódios do pedaço, em blocos `@Título`
+ *   - `redeflix/links-animes.txt` → o catálogo de animes (ver `saimoAnime.js`)
+ *
+ * O separador é TAB (o site divide por TAB no build minificado); linhas antigas
+ * de 5 espaços também são aceites. Filmes ficam de fora, como no Megacine.
+ *
+ * @author Dev Yanik
+ */
+import { ANIME_USER_AGENT } from "../config.js";
+import { AUDIO_DUBBED, AUDIO_SUBBED } from "../utils/animeFormat.js";
+import { errorLog } from "../utils/logger.js";
+
+/** Erro do provedor (catálogo indisponível ou título sem episódios). */
+export class SaimoError extends Error {
+  constructor(message, options) {
+    super(message, options);
+    this.name = "SaimoError";
+  }
+}
+
+const CATALOGO = process.env.SAIMO_CATALOG_BASE || "https://filmes-saimo.pages.dev";
+const TIMEOUT_MS = Number(process.env.SAIMO_TIMEOUT_MS || 30000);
+const MAX_PEDACO = Number(process.env.SAIMO_MAX_PEDACO || 30);
+const REFERER = `${CATALOGO}/`;
+
+/** Divide uma linha em campos: TAB quando existe, senão 5+ espaços. */
+function campos(linha) {
+  const texto = String(linha || "");
+  return texto.includes("\t") ? texto.split("\t") : texto.split(/\s{5,}/);
+}
+
+/**
+ * Normaliza um título para comparação (sem acentos, minúsculas, sem pontuação).
+ * A mesma normalização que o site usa, para a correspondência bater certo.
+ *
+ * @param {string} texto
+ * @returns {string}
+ */
+export function normalizar(texto) {
+  return String(texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** A letra `#` vira `%23` no nome do ficheiro, como o site faz. */
+export function letraArquivo(letra) {
+  const valor = String(letra || "").trim();
+  return valor === "#" ? "%23" : valor;
+}
+
+/** Codifica um objeto num token seguro para `rowId`/ids (sem `:` nem `::`). */
+export function token(obj) {
+  return Buffer.from(JSON.stringify(obj), "utf8").toString("base64url");
+}
+
+/** Descodifica um token; devolve `null` em vez de rebentar com lixo. */
+export function destoken(valor) {
+  try {
+    const obj = JSON.parse(Buffer.from(String(valor || ""), "base64url").toString("utf8"));
+    return obj && typeof obj === "object" ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Escolhe o melhor URL de uma lista.
+ *
+ * As linhas trazem várias fontes para o MESMO conteúdo (CDN, proxy do site),
+ * não qualidades. Para HLS prefere-se o `master.txt` (que tem degraus); para
+ * mp4 prefere-se o `.mp4` direto.
+ *
+ * @param {string[]} urls
+ * @param {{hls?: boolean}} [opcoes]
+ * @returns {string|null}
+ */
+export function melhorUrl(urls, { hls = false } = {}) {
+  const lista = (urls || []).map((u) => String(u || "").trim()).filter(Boolean);
+  if (!lista.length) return null;
+  if (hls) return lista.find((u) => u.includes("master.txt")) || lista[0];
+  return lista.find((u) => u.endsWith(".mp4")) || lista[0];
+}
+
+/** Índice de séries: `título  ano  pedaço  episódios` (um por linha). */
+export function parseSeriesIndice(texto) {
+  const out = [];
+  for (const linha of String(texto || "").split("\n")) {
+    const p = campos(linha.trim());
+    if (p.length < 4 || !p[0].trim()) continue;
+    out.push({
+      titulo: p[0].trim(),
+      ano: (p[1] || "").trim(),
+      pedaco: Number(p[2]) || 0,
+      episodios: Number(p[3]) || 0,
+    });
+  }
+  return out;
+}
+
+/**
+ * Blocos de episódios (`@Título` seguido de `temporada  episódio  versão  urls`).
+ *
+ * @param {string} texto
+ * @returns {Array<{titulo: string, ano: string, episodios: Array<{temporada:number, numero:number, versao:string, urls:string[]}>}>}
+ */
+export function parseSeriesBlocos(texto) {
+  const blocos = [];
+  let atual = null;
+
+  for (const bruto of String(texto || "").split("\n")) {
+    const linha = bruto.trim();
+    if (!linha) continue;
+
+    if (linha.startsWith("@")) {
+      const p = campos(linha.slice(1));
+      atual = { titulo: (p[0] || "").trim(), ano: (p[1] || "").trim(), episodios: [] };
+      blocos.push(atual);
+      continue;
+    }
+
+    if (!atual) continue;
+
+    const p = campos(linha);
+    if (p.length < 4) continue;
+
+    const urls = (p[3] || "").split(",").map((u) => u.trim()).filter(Boolean);
+    if (!urls.length) continue;
+
+    atual.episodios.push({
+      temporada: Number(p[0]) || 0,
+      numero: Number(p[1]) || 0,
+      versao: (p[2] || "").trim(),
+      urls,
+    });
+  }
+
+  return blocos;
+}
+
+/** Índice geral: `título  tipo(f|s)  letra  ano`. */
+export function parseBusca(texto) {
+  const out = [];
+  for (const linha of String(texto || "").split("\n")) {
+    const p = campos(linha.trim());
+    if (p.length < 3 || !p[0].trim()) continue;
+    out.push({
+      titulo: p[0].trim(),
+      tipo: (p[1] || "").trim(),
+      letra: (p[2] || "").trim(),
+      ano: (p[3] || "").trim(),
+    });
+  }
+  return out;
+}
+
+/**
+ * Fichas de cada título: `tipo  título  tmdbId  pôster  gêneros`.
+ *
+ * A primeira linha é o cabeçalho (`capa: https://image.tmdb.org/t/p/w342`) e
+ * define o prefixo das imagens; as restantes são os títulos. O pôster vem em
+ * caminho relativo (`/abc.jpg`), por isso a base do cabeçalho é necessária.
+ *
+ * @param {string} texto
+ * @returns {{baseCapa: string, fichas: Array<{tipo:string, titulo:string, tmdbId:string, poster:string, generos:string}>}}
+ */
+export function parseFichas(texto) {
+  let baseCapa = "";
+  const fichas = [];
+
+  for (const bruto of String(texto || "").split("\n")) {
+    const linha = bruto.trim();
+    if (!linha) continue;
+
+    const cabecalho = linha.match(/^capa:\s*(\S+)/i);
+    if (cabecalho) {
+      baseCapa = cabecalho[1];
+      continue;
+    }
+    if (linha.startsWith("#")) continue;
+
+    const p = campos(linha);
+    if (p.length < 4) continue;
+
+    fichas.push({
+      tipo: (p[0] || "").trim(),
+      titulo: (p[1] || "").trim(),
+      tmdbId: (p[2] || "").trim(),
+      poster: (p[3] || "").trim(),
+      generos: (p[4] || "").trim(),
+    });
+  }
+
+  return { baseCapa, fichas };
+}
+
+/**
+ * URL completa do pôster de um título, ou `null`.
+ *
+ * O casamento é por título normalizado: a ficha e a pesquisa usam o MESMO
+ * título do catálogo, por isso a chave bate. Um título sem ficha fica sem capa
+ * em vez de rebentar — a imagem é um extra, nunca um requisito.
+ *
+ * @param {string} baseCapa
+ * @param {Array<object>} fichas
+ * @param {string} titulo
+ * @returns {string|null}
+ */
+export function posterDoTitulo(baseCapa, fichas, titulo) {
+  if (!baseCapa) return null;
+  const alvo = normalizar(titulo);
+  if (!alvo) return null;
+
+  const ficha = fichas.find((f) => normalizar(f.titulo) === alvo);
+  if (!ficha?.poster) return null;
+
+  const caminho = ficha.poster.startsWith("/") ? ficha.poster : `/${ficha.poster}`;
+  return `${baseCapa.replace(/\/$/, "")}${caminho}`;
+}
+
+/**
+ * Escolhe os títulos que correspondem ao termo.
+ *
+ * Primeiro a correspondência por SUBSTRING (o caso comum: "naruto" →
+ * "Naruto Shippuden"). Se nada bater, cai para uma correspondência por TOKENS:
+ * o site antigo pesquisava de forma difusa, e uma pesquisa por sinónimo ou
+ * tradução ("My Hero Academia" num catálogo que só tem "Boku no Hero Academia")
+ * ficava sem resultado nenhum. O recurso exige pelo menos metade dos tokens do
+ * termo, para não devolver o catálogo inteiro numa pesquisa curta.
+ *
+ * @param {Array<{titulo: string}>} itens
+ * @param {string} alvo termo já normalizado
+ * @param {number} [limite]
+ * @returns {Array<object>}
+ */
+export function filtrarPorTermo(itens, alvo, limite = 20) {
+  const termo = normalizar(alvo);
+  if (termo.length < 2) return [];
+
+  const estritos = itens.filter((item) => normalizar(item.titulo).includes(termo));
+  if (estritos.length) return estritos.slice(0, limite);
+
+  const tokens = termo.split(" ").filter(Boolean);
+  const minimo = Math.max(1, Math.ceil(tokens.length / 2));
+
+  return itens
+    .map((item) => {
+      const titulo = normalizar(item.titulo);
+      return { item, score: tokens.filter((t) => titulo.includes(t)).length };
+    })
+    .filter(({ score }) => score >= minimo)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limite)
+    .map(({ item }) => item);
+}
+
+/** GET de texto do catálogo, com timeout e User-Agent de browser. */
+async function fetchText(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  timer.unref?.();
+
+  try {
+    const resposta = await fetch(url, {
+      signal: controller.signal,
+      headers: { "user-agent": ANIME_USER_AGENT, referer: REFERER },
+    });
+    if (!resposta.ok) return null;
+    return await resposta.text();
+  } catch (error) {
+    errorLog(`[saimo] falha ao ler ${url}: ${error.message}`);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Lê um ficheiro do catálogo, com cache em memória (o processo dura). */
+const cache = new Map();
+
+async function lerArquivo(nome) {
+  if (cache.has(nome)) return cache.get(nome);
+  const texto = await fetchText(`${CATALOGO}/${nome}`);
+  cache.set(nome, texto);
+  return texto;
+}
+
+/** Limpa a cache do catálogo (usado pelos testes). */
+export function limparCacheSaimo() {
+  cache.clear();
+}
+
+/**
+ * Encontra o bloco de episódios de um título a partir do token de pesquisa.
+ *
+ * Usa o índice da letra (`series-<L>.txt`) para saber o pedaço; se o índice
+ * falhar, varre os pedaços até encontrar o bloco — a rede de segurança para um
+ * título que o índice não liste.
+ *
+ * @param {{l: string, t: string, a?: string}} ref
+ * @returns {Promise<Array<object>>}
+ */
+async function acharEpisodios(ref) {
+  const alvoTitulo = normalizar(ref.t);
+  const alvoAno = String(ref.a || "").trim();
+
+  const indice = parseSeriesIndice(await lerArquivo(`series-${letraArquivo(ref.l)}.txt`));
+  const entrada = indice.find(
+    (item) =>
+      normalizar(item.titulo) === alvoTitulo && (!alvoAno || !item.ano || item.ano === alvoAno),
+  );
+
+  const pedacos = entrada
+    ? [entrada.pedaco]
+    : Array.from({ length: MAX_PEDACO + 1 }, (_, i) => i);
+
+  for (const pedaco of pedacos) {
+    const texto = await lerArquivo(`series-${letraArquivo(ref.l)}-${pedaco}.txt`);
+    const bloco = parseSeriesBlocos(texto).find(
+      (b) =>
+        normalizar(b.titulo) === alvoTitulo && (!alvoAno || !b.ano || b.ano === alvoAno),
+    );
+    if (bloco?.episodios?.length) return bloco.episodios;
+  }
+
+  return [];
+}
+
+/**
+ * Pesquisa séries pelo nome (interface do `megacine.search`).
+ *
+ * Cada resultado leva a CAPA (pôster TMDB de `fichas.txt`) para o menu poder
+ * mostrar de que título se trata antes de o utilizador escolher.
+ *
+ * @param {string} termo
+ * @param {number} [limite]
+ * @returns {Promise<Array<{slug: string, title: string, image: string|null, year: string, tipo: string}>>}
+ */
+export async function search(termo, limite = 20) {
+  const alvo = normalizar(termo);
+  if (alvo.length < 2) return [];
+
+  const indice = parseBusca(await lerArquivo("busca.txt"));
+  const series = indice.filter((item) => item.tipo === "s");
+  const { baseCapa, fichas } = parseFichas(await lerArquivo("fichas.txt"));
+
+  const out = [];
+  const vistos = new Set();
+
+  for (const item of filtrarPorTermo(series, alvo, limite)) {
+    const chave = `${normalizar(item.titulo)}|${item.ano}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+
+    out.push({
+      slug: token({ l: item.letra, t: item.titulo, a: item.ano }),
+      title: item.titulo,
+      image: posterDoTitulo(baseCapa, fichas, item.titulo),
+      year: item.ano,
+      tipo: "série",
+    });
+  }
+
+  return out;
+}
+
+/**
+ * Converte `dub`/`leg` do catálogo no vocabulário do menu de animes
+ * (`AUDIO_DUBBED`/`AUDIO_SUBBED`), para o menu reutilizar `availableAudioVersions`.
+ *
+ * @param {string} versao
+ * @returns {string} faixa, ou "" quando a fonte não a distingue
+ */
+export function versaoParaFaixa(versao) {
+  const v = String(versao || "").trim().toLowerCase();
+  if (v.startsWith("dub")) return AUDIO_DUBBED;
+  if (v.startsWith("leg") || v.startsWith("sub")) return AUDIO_SUBBED;
+  return "";
+}
+
+/**
+ * Temporadas e episódios de um título (interface do `megacine.getSeasons`).
+ *
+ * Agrupa os episódios por temporada. Cada episódio guarda as FAIXAS que publica
+ * (`versions`) e o URL de cada uma (`urls`), para o menu poder oferecer
+ * dublado/legendado e cair para a que existe. Filmes não entram (o catálogo de
+ * séries é episódico), por isso `isFilme` é sempre falso.
+ *
+ * @param {string} slug token da pesquisa
+ * @returns {Promise<{seasons: Array<{number:number, episodes:Array<{number:number, url:string, versions:string[], urls:Object}>}>, isFilme: boolean}>}
+ */
+export async function getSeasons(slug) {
+  const ref = destoken(slug);
+  if (!ref?.t) throw new SaimoError("Título inválido. Envia .menu para recomeçar.");
+
+  const episodios = await acharEpisodios(ref);
+  if (!episodios.length) return { seasons: [], isFilme: false };
+
+  const porTemporada = new Map();
+  for (const ep of episodios) {
+    const temporada = ep.temporada || 1;
+    if (!porTemporada.has(temporada)) porTemporada.set(temporada, new Map());
+
+    const mapa = porTemporada.get(temporada);
+    // O mesmo episódio pode vir em dub e leg: junta as DUAS faixas no mesmo
+    // episódio, em vez de deitar uma fora.
+    if (!mapa.has(ep.numero)) {
+      mapa.set(ep.numero, { number: ep.numero, urls: {}, versions: [] });
+    }
+
+    const alvo = mapa.get(ep.numero);
+    const faixa = versaoParaFaixa(ep.versao);
+    const url = melhorUrl(ep.urls);
+
+    if (faixa && url && !alvo.urls[faixa]) {
+      alvo.urls[faixa] = url;
+      alvo.versions.push(faixa);
+    } else if (!faixa && url && !alvo.url) {
+      // Episódio sem faixa declarada: guarda o URL para não ficar sem download.
+      alvo.url = url;
+    }
+  }
+
+  const seasons = [...porTemporada.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([number, mapa]) => ({
+      number,
+      episodes: [...mapa.values()]
+        .map((ep) => ({ ...ep, url: ep.url || melhorUrl(Object.values(ep.urls)) }))
+        .sort((a, b) => a.number - b.number),
+    }));
+
+  return { seasons, isFilme: false };
+}
+
+/**
+ * URL do stream de um episódio (interface do `megacine.getEpisodeStream`).
+ *
+ * Com uma `faixa` pedida, serve essa; se o episódio não a tiver, serve a que
+ * existe em vez de falhar. Sem faixa, serve o melhor URL disponível.
+ *
+ * @param {string} slug token do título
+ * @param {number} [temporada]
+ * @param {number} [episodio]
+ * @param {string} [faixa] `AUDIO_DUBBED` / `AUDIO_SUBBED`
+ * @returns {Promise<{url: string, tipo: string, referer: string, faixa: string}>}
+ */
+export async function getEpisodeStream(slug, temporada = 1, episodio = 1, faixa = "") {
+  const ref = destoken(slug);
+  if (!ref?.t) throw new SaimoError("Título inválido. Envia .menu para recomeçar.");
+
+  const episodios = await acharEpisodios(ref);
+  const ep = episodios.find(
+    (e) => (e.temporada || 1) === Number(temporada) && e.numero === Number(episodio),
+  );
+
+  if (!ep) throw new SaimoError("Este episódio não está disponível na fonte.");
+
+  const pedida = String(faixa || "").trim().toLowerCase();
+  const candidatos = episodios.filter(
+    (e) => (e.temporada || 1) === Number(temporada) && e.numero === Number(episodio),
+  );
+
+  let escolhido = null;
+  let faixaServida = "";
+
+  if (pedida) {
+    const exato = candidatos.find((e) => versaoParaFaixa(e.versao) === pedida);
+    if (exato) {
+      escolhido = melhorUrl(exato.urls);
+      faixaServida = pedida;
+    }
+  }
+
+  if (!escolhido) {
+    const comFaixa = candidatos.find((e) => versaoParaFaixa(e.versao));
+    if (comFaixa) {
+      escolhido = melhorUrl(comFaixa.urls);
+      faixaServida = versaoParaFaixa(comFaixa.versao);
+    }
+  }
+
+  const url = escolhido || melhorUrl(ep.urls);
+  if (!url) throw new SaimoError("A fonte não devolveu o vídeo deste episódio.");
+
+  return { url, tipo: "series", referer: REFERER, faixa: faixaServida };
+}
+
+/**
+ * Confirma que a fonte responde antes de cobrar créditos.
+ *
+ * @param {string} url
+ * @returns {Promise<boolean>}
+ */
+export async function isPlaylistReachable(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  timer.unref?.();
+
+  try {
+    const resposta = await fetch(url, {
+      signal: controller.signal,
+      headers: { "user-agent": ANIME_USER_AGENT, referer: REFERER, range: "bytes=0-0" },
+    });
+    return resposta.ok;
+  } catch (error) {
+    errorLog(`[saimo] verificação do stream falhou: ${error.message}`);
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Argumentos do yt-dlp. O CDN do Saimo responde sem Referer; o User-Agent de
+ * browser é o que evita alguns 403.
+ *
+ * @returns {string[]}
+ */
+export function megacineDownloadArgs() {
+  return ["--user-agent", ANIME_USER_AGENT];
+}

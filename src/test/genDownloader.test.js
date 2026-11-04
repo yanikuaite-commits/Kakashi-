@@ -40,8 +40,8 @@ before(async () => {
         { label: "720p", type: "video", ext: "mp4", url: `${baseUrl}/video?quality=720` },
         { label: "Audio", type: "audio", ext: input.url.endsWith("/m4a") ? "m4a" : "mp3", url: `${baseUrl}/audio?format=${input.url.endsWith("/m4a") ? "m4a" : "mp3"}` },
       ];
-      if (input.url.endsWith("/metadata-large")) formats[0].filesize = 501 * 1024 * 1024;
-      if (input.url.endsWith("/metadata-all-large")) formats.forEach((format) => { format.filesize = 501 * 1024 * 1024; });
+      if (input.url.endsWith("/metadata-large")) formats[0].filesize = 1600 * 1024 * 1024;
+      if (input.url.endsWith("/metadata-all-large")) formats.forEach((format) => { format.filesize = 1600 * 1024 * 1024; });
       if (input.url.endsWith("/large")) formats[0].url = `${baseUrl}/large`;
       if (input.url.endsWith("/image")) formats[0].url = `${baseUrl}/image`;
       response.end(JSON.stringify({ title: "Canção / Teste", author: "Canal", thumbnail: null, formats }));
@@ -50,7 +50,7 @@ before(async () => {
 
     mediaRequests.push(request.url);
     if (request.url === "/large") {
-      response.writeHead(200, { "Content-Type": "video/mp4", "Content-Length": 501 * 1024 * 1024 });
+      response.writeHead(200, { "Content-Type": "video/mp4", "Content-Length": 1600 * 1024 * 1024 });
       response.end();
     } else if (request.url === "/image") {
       response.writeHead(200, { "Content-Type": "image/jpeg" });
@@ -192,8 +192,8 @@ test("erro da API, formato inválido e limite geram mensagens úteis", async () 
   const smaller = await downloadWithGenDownload(`${baseUrl}/metadata-large`);
   assert.equal(mediaRequests.at(-1), "/video?quality=720");
   await rm(smaller.filePath);
-  await assert.rejects(downloadWithGenDownload(`${baseUrl}/metadata-all-large`), /500 MB/);
-  await assert.rejects(downloadWithGenDownload(`${baseUrl}/large`), /500 MB/);
+  await assert.rejects(downloadWithGenDownload(`${baseUrl}/metadata-all-large`), /1536 MB/);
+  await assert.rejects(downloadWithGenDownload(`${baseUrl}/large`), /1536 MB/);
   await assert.rejects(downloadWithGenDownload(`${baseUrl}/image`), /mídia compatível/);
 });
 

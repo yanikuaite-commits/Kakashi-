@@ -33,24 +33,24 @@ test("YouTube: documento acima de 100 MB, vídeo até 100 MB", () => {
   assert.equal(decideYouTubeSend(300 * MB), "document");
 });
 
-test("animes: cancelar acima de 500 MB", () => {
-  assert.equal(decideAnimeSend(500 * MB + 1), "cancel");
-  assert.equal(decideAnimeSend(600 * MB), "cancel");
-  assert.match(animeTooLargeMessage(), /mais de 500MB/);
+test("animes: cancelar acima de 800 MB", () => {
+  assert.equal(decideAnimeSend(800 * MB + 1), "cancel");
+  assert.equal(decideAnimeSend(900 * MB), "cancel");
+  assert.match(animeTooLargeMessage(), /mais de 800MB/);
   assert.match(animeTooLargeMessage(), /qualidade mais baixa/);
 });
 
-test("animes: a regra do YouTube (documento acima de 100 MB) até 500 MB", () => {
+test("animes: a regra do YouTube (documento acima de 100 MB) até 800 MB", () => {
   assert.equal(decideAnimeSend(50 * MB), "video");
   assert.equal(decideAnimeSend(100 * MB), "video");
   assert.equal(decideAnimeSend(100 * MB + 1), "document");
   assert.equal(decideAnimeSend(150 * MB), "document");
-  assert.equal(decideAnimeSend(500 * MB), "document");
+  assert.equal(decideAnimeSend(800 * MB), "document");
 });
 
 test("os limites batem com as constantes exportadas", () => {
   assert.equal(WHATSAPP_VIDEO_LIMIT_MB, 100);
-  assert.equal(ANIME_DOCUMENT_LIMIT_MB, 500);
+  assert.equal(ANIME_DOCUMENT_LIMIT_MB, 800);
 });
 
 test("animes baixam em 480p por padrão (resolução fixa)", async () => {
