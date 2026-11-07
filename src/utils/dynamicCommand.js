@@ -250,6 +250,10 @@ export async function dynamicCommand(paramsHandler, startProcess) {
 
 if (!hasTypeAndCommand({ type, command })) {
     if (!prefix && !prefixless) return;
+    // No modo prefixless, ignora silenciosamente mensagens que não são comandos.
+    // Só responde quando há prefixo explícito (erro normal) ou quando a mensagem
+    // é claramente um comando que não existe.
+    if (prefixless && !prefix) return;
     await sendWarningReply(
       `Comando não encontrado! Use ${groupPrefix}menu para ver os comandos disponíveis!`
     );
