@@ -12,6 +12,7 @@ export const BOT_EMOJI = "🤖";
 
 // Nome do bot (mude se preferir).
 export const BOT_NAME = "Kakashi Bot";
+export const BOT_VERSION = "1.0.0";
 
 // Tema visual das mensagens do bot.
 // "plain" (padrão): envia só o conteúdo — sem cabeçalho cósmico, sem caixa e
