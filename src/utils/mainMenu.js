@@ -34,6 +34,7 @@
  * @author Dev Yanik
  */
 import fs from "node:fs";
+import { BOT_VERSION } from "../config.js";
 import {
   BOT_NAME,
   MAIN_MENU_CHANNEL_URL,
@@ -139,39 +140,26 @@ export function buildMainMenuBody({
   criador = MAIN_MENU_CREATOR,
   botName = BOT_NAME,
   rodape = MAIN_MENU_FOOTER,
+  prefixo = ".",
+  status = "FREE USER",
 } = {}) {
-  // Tema "plain": o card leva só os dados. A caixa cósmica, a linha de
-  // velocidade e o rodapé duplo eram decoração; o utilizador, a data e o
-  // criador continuam lá porque são informação.
-  if (isPlainTheme()) {
-    return [
-      `👽 @${usuario}`,
-      `🌍 ${data}  🌙 ${hora}`,
-      `⭐ ${diaSemana}`,
-      `🚀 ${velocidade}`,
-      `👑 ${criador}`,
-    ].join("\n");
-  }
-
   return [
-    "  ☄️ · ✦ ·  ˚  ✧ · ☾ · ✦ · ˚ · ✧ · ☄️",
-    `      ⋆｡°✩  🌌 ${String(botName).toUpperCase()} 🌌  ✩°｡⋆`,
-    "  ✧ · ˚ · ✦ · ☄️ · ˚ · ✧ · ✦ · ˚ · ✧",
+    "༺ ⟡ ༻ KAKASHI BOT ༺ ⟡ ༻",
+    "  ⊹  ˖ ✦ KAKASHI CORE ✦ ˖  ⊹",
     "",
-    "      ╭────────  🪐  ────────╮",
+    `☽༺✧༻ CREATOR » ${criador}`,
+    `☽༺✧༻ BOT    » ${botName}`,
+    `☽༺✧༻ VERSION » ${BOT_VERSION || "1.0.0"}`,
+    `☽༺✧༻ STATUS » ${status}`,
+    `☽༺✧༻ UPTIME » 0h 00m 00s`,
+    `☽༺✧༻ PREFIX » [ ${prefixo} ]`,
     "",
-    `        👽 @${usuario}`,
-    `        🌍 ${data}  🌙 ${hora}`,
-    `        ⭐ ${diaSemana}`,
-    `        🚀 ${velocidade}`,
-    `        👑 ${criador}`,
+    "──────── ✦ ────────",
     "",
-    "      ╰──────────────────────╯",
+    `  ˚₊· ➳ USE O PREFIXO ➳`,
+    "  ✧･ﾟ: *✧･ﾟ:* KAKASHI BOT *:･ﾟ✧*:･ﾟ✧",
     "",
-    "   ✧ · ˚ · ✦ · ☄️ · ˚ · ✧ · ✦ · ˚ · ✧",
-    "",
-    `  ${rodape}`,
-    `  ✦ Constelado por ${criador} ✦`,
+    `© Made by ${criador}`,
   ].join("\n");
 }
 
@@ -217,31 +205,45 @@ export function buildMainMenuButtons({
   ownerNumber = MAIN_MENU_OWNER_NUMBER,
   channelUrl = MAIN_MENU_CHANNEL_URL,
   categories = [],
+  prefix = ".",
 } = {}) {
   const botoes = [];
-  const dono = ownerButton({ numero: ownerNumber });
 
-  if (dono) botoes.push(dono);
+  if (channelUrl) {
+    botoes.push({
+      name: "cta_url",
+      buttonParamsJson: JSON.stringify({
+        display_text: "🌐 Canal Oficial",
+        url: channelUrl,
+      }),
+    });
+  }
 
   const verMenus = singleSelectButton(
-    "🔰 Ver Menus 🔰",
+    "☰ Menus de Comandos",
     buildMainMenuSections(categories),
-    { title: "Ver Menus" },
+    { title: "☰ Selecione a Categoria" },
   );
 
   if (verMenus) {
     botoes.push(verMenus);
   }
 
-  if (channelUrl) {
-    botoes.push({
-      name: "cta_url",
-      buttonParamsJson: JSON.stringify({
-        display_text: "📢 Canal",
-        url: channelUrl,
-      }),
-    });
-  }
+  botoes.push({
+    name: "cta_url",
+    buttonParamsJson: JSON.stringify({
+      display_text: "🔄 Alugar Bot",
+      url: mainMenuOwnerUrl(ownerNumber),
+    }),
+  });
+
+  botoes.push({
+    name: "cta_copy",
+    buttonParamsJson: JSON.stringify({
+      display_text: "📋 Copiar Prefixo",
+      copy_code: prefix,
+    }),
+  });
 
   return botoes;
 }
@@ -321,12 +323,14 @@ export async function sendMainMenu(socket, chatId, ctx = {}) {
   }
 
   const relogio = mainMenuClock(new Date(now));
+  const prefixo = getPrefix(chatId) || PREFIX;
   const body = buildMainMenuBody({
     usuario: session.ownerName,
     data: relogio.data,
     hora: relogio.hora,
     diaSemana: relogio.diaSemana,
     velocidade: mainMenuVelocity(timestamp, now),
+    prefixo,
   });
 
   const categorias = listCategories(session.permissions);
@@ -336,7 +340,7 @@ export async function sendMainMenu(socket, chatId, ctx = {}) {
     id: `cat:${categoria.id}`,
   }));
 
-  const interactiveButtons = buildMainMenuButtons({ categories: categorias });
+  const interactiveButtons = buildMainMenuButtons({ categories: categorias, prefix: prefixo });
   const mentions = session.ownerId !== chatId ? [session.ownerId] : undefined;
 
   // Modo texto (prefixo `!`): vai DIRETO ao texto com as categorias numeradas.

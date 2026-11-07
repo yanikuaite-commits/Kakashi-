@@ -37,6 +37,7 @@ import { badMacHandler } from "./badMacHandler.js";
 import { withDownloadNotifier } from "../services/downloadQueue.js";
 import { withKakashiVoice } from "../services/kakashiVoice.js";
 import { isBanned } from "../services/blacklist.js";
+import { isGroupVip } from "../services/vipCodes.js"; // Importar verificação VIP
 import {
   recordCommandUsage,
   recordEvent,
@@ -83,7 +84,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     webMessage,
   } = paramsHandler;
 
-  const activeGroup = remoteJid.endsWith("@g.us") && isActiveGroup(remoteJid);
+  const activeGroup = remoteJid.endsWith("@g.us") && (isActiveGroup(remoteJid) || isGroupVip(remoteJid));
   const isPrivate = !remoteJid.endsWith("@g.us");
   // No chat privado não existe "participant", então o userLid vem vazio e o dono
   // é reconhecido também pelo próprio JID da conversa (ver OWNER_PRIVATE_ALL).
@@ -213,10 +214,12 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   }
 
   if (!isOwner && !activeGroup && remoteJid.endsWith("@g.us")) {
-    if (
+    // Se o grupo não está ativo (nem é VIP), ignora. A exceção é o comando 'on'
+    // ou se for VIP e a mensagem for um comando.
+    if (!isGroupVip(remoteJid) &&
       validPrefix &&
-      hasTypeAndCommand({ type, command })
-    ) {
+      hasTypeAndCommand({ type, command }))
+    {
       if (command.name !== "on") {
         await sendWarningReply(
           "Este grupo está desativado! Peça para o dono do grupo ativar o bot!"
@@ -230,7 +233,7 @@ export async function dynamicCommand(paramsHandler, startProcess) {
         );
         return;
       }
-    } else {
+    } else if (!isGroupVip(remoteJid)) {
       return;
     }
   }
