@@ -65,29 +65,10 @@ const CREDITOS = {
   resumo: "5, 10, 20, 30 e 50 MT",
 };
 
-/** Tabela 3 — planos VIP. */
-const VIP = {
-  id: "vip",
-  titulo: "Tabela de planos VIP",
-  cabecalho: ["Plano", "Preço", "Duração"],
-  linhas: [
-    ["VIP 1", "15 MT", "7 dias"],
-    ["VIP 2", "25 MT", "14 dias"],
-    ["VIP 3", "45 MT", "30 dias"],
-  ],
-  valores: [
-    { plano: "VIP 1", mt: 15, dias: 7 },
-    { plano: "VIP 2", mt: 25, dias: 14 },
-    { plano: "VIP 3", mt: 45, dias: 30 },
-  ],
-  comando: "tabela-vip",
-  resumo: "7, 14 e 30 dias",
-};
+export const TABELAS = { dias: DIAS, creditos: CREDITOS };
 
-export const TABELAS = { dias: DIAS, creditos: CREDITOS, vip: VIP };
-
-/** Ids na ordem em que a lista interativa os apresenta (1 = dias, 2 = créditos, 3 = vip). */
-export const TABELA_IDS = ["dias", "creditos", "vip"];
+/** Ids na ordem em que a lista interativa os apresenta (1 = dias, 2 = créditos). */
+export const TABELA_IDS = ["dias", "creditos"];
 
 /**
  * Tabela pelo id.

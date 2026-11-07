@@ -29,7 +29,6 @@ import {
   isAmbiguousAmount,
   planByAmount,
 } from "./subscriptions.js";
-import { generateVipCode } from "./vipCodes.js";
 
 const STATUS_PENDING = "pending";
 const STATUS_CONFIRMED = "confirmed";
@@ -62,12 +61,6 @@ export function creditsForAmount(mt) {
   return pacote ? Number(pacote.creditos) : null;
 }
 
-export function vipPlanForAmount(mt) {
-  const valor = Number(mt);
-  if (!Number.isFinite(valor) || valor <= 0) return null;
-  return TABELAS.vip.valores.find((item) => Number(item.mt) === valor) || null;
-}
-
 /**
  * O que um valor compra, ANTES de o utilizador decidir.
  *
@@ -89,10 +82,8 @@ export function paymentIntent(mt) {
 
   const temCreditos = creditsForAmount(valor) !== null;
   const temPlano = planByAmount(valor) !== null;
-  const temVip = vipPlanForAmount(valor) !== null;
 
-  if ((temCreditos && temPlano) || (temCreditos && temVip) || (temPlano && temVip)) return "escolha";
-  if (temVip) return "vip";
+  if (temCreditos && temPlano) return "escolha";
   if (temPlano) return "assinatura";
   if (temCreditos) return "creditos";
 
