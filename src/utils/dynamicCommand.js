@@ -59,6 +59,7 @@ import {
   isActiveAutoStickerGroup,
   isActiveGroup,
   isActiveOnlyAdmins,
+  isPrefixlessEnabled,
 } from "./database.js";
 import { findCommandInMessage, onlyNumbers } from "./index.js";
 import { errorLog } from "./logger.js";
@@ -150,12 +151,13 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   }
 
   const groupPrefix = getPrefix(remoteJid);
+  const prefixless = isPrefixlessEnabled(remoteJid);
   // O prefixo `!` é o "cantinho" dos clientes que não renderizam botões (iOS):
   // além de invocar o comando, pede a resposta em TEXTO. Sem ele, estes
   // utilizadores recebiam cards que não conseguem abrir.
   const textOnly = prefix === "!";
   const validPrefix = verifyPrefix(prefix, remoteJid) ||
-    prefix === "" || textOnly;
+    prefix === "" || textOnly || prefixless;
   const resolved = validPrefix
     ? await findCommandInMessage(commandName, paramsHandler.fullArgs)
     : { type: "", command: null, commandName, fullArgs: paramsHandler.fullArgs, args: paramsHandler.args };
@@ -246,12 +248,11 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     return;
   }
 
-  if (!hasTypeAndCommand({ type, command })) {
-    if (!prefix) return;
+if (!hasTypeAndCommand({ type, command })) {
+    if (!prefix && !prefixless) return;
     await sendWarningReply(
       `Comando não encontrado! Use ${groupPrefix}menu para ver os comandos disponíveis!`
     );
-
     return;
   }
 

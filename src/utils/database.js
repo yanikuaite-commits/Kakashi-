@@ -63,6 +63,7 @@ const RATE_LIMIT_FILE = "rate-limit";
 const BLACKLIST_FILE = "blacklist";
 const ACTIVITY_FILE = "activity";
 const SYSTEM_SAMPLES_FILE = "system-samples";
+const PREFIXLESS_GROUPS_FILE = "prefixless-groups";
 
 function createIfNotExists(fullPath, formatIfNotExists = []) {
   if (!fs.existsSync(fullPath)) {
@@ -1313,4 +1314,33 @@ export function readSystemSamples() {
 
 export function saveSystemSamples(samples) {
   writeJSON(SYSTEM_SAMPLES_FILE, samples, []);
+}
+
+/**
+ * Grupos onde o bot responde a qualquer mensagem sem necessidade de prefixo.
+ *
+ * Forma: `{ "<jid>": true|false }`. `true` = responde a tudo. `false`/ausente =
+ * só responde com prefixo (comportamento padrão).
+ */
+export function readPrefixlessGroups() {
+  return readJSON(PREFIXLESS_GROUPS_FILE, {});
+}
+
+export function savePrefixlessGroups(groups) {
+  writeJSON(PREFIXLESS_GROUPS_FILE, groups, {});
+}
+
+export function isPrefixlessEnabled(groupJid) {
+  const groups = readPrefixlessGroups();
+  return Boolean(groups[groupJid]);
+}
+
+export function setGroupPrefixless(groupJid, enabled) {
+  const groups = readPrefixlessGroups();
+  if (enabled) {
+    groups[groupJid] = true;
+  } else {
+    delete groups[groupJid];
+  }
+  savePrefixlessGroups(groups);
 }
