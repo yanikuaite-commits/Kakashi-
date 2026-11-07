@@ -86,7 +86,7 @@ function hasExpectedShape(value, fallback) {
   );
 }
 
-function readJSON(jsonFile, formatIfNotExists = []) {
+export function readJSON(jsonFile, formatIfNotExists = []) {
   const fullPath = path.resolve(databasePath, `${jsonFile}.json`);
 
   createIfNotExists(fullPath, formatIfNotExists);
@@ -123,7 +123,7 @@ function readJSON(jsonFile, formatIfNotExists = []) {
   return parsed;
 }
 
-function writeJSON(jsonFile, data, formatIfNotExists = []) {
+export function writeJSON(jsonFile, data, formatIfNotExists = []) {
   const fullPath = path.resolve(databasePath, `${jsonFile}.json`);
 
   createIfNotExists(fullPath, formatIfNotExists);
