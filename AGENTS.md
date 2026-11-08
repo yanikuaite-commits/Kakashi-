@@ -1012,6 +1012,16 @@ filename field, so a video sent as video carries no name at all.
   a escolha real de qualidade. Os detalhes do `meusanimes` que aqui estavam
   (cadeia `get-video.php` do Blogger, itags 18/22, confirmação da faixa na
   página do episódio) descrevem o legado e já não se aplicam.
+- **o áudio do HLS vive numa rendition separada, por isso cada degrau aponta
+  para o `master.txt`, não para a sua variante.** O `master.txt` declara
+  `#EXT-X-MEDIA:TYPE=AUDIO` (com o seu próprio URI) e as variantes de vídeo
+  (`/m3/...`) referenciam-na por `AUDIO="audio"`; cada variante, sozinha, é
+  **só vídeo**. Baixar a variante direta — o que o `degrausHls` fazia —
+  entregava um episódio **mudo**, sem erro nenhum. Por isso cada item leva
+  `url: masterUrl` (o único URL que traz as duas faixas) e a sua `height`, e o
+  yt-dlp escolhe o degrau pela altura e junta o áudio. Isto depende do ffmpeg
+  (já exigido pelo remux/mp3/compressão); sem ele o yt-dlp baixa as duas partes
+  e não as junta, e o ficheiro fica mudo de novo.
 - **a faixa dublada desta fonte é PT-BR** (`ANIME_PT_DUB_PROVIDERS` em
   `src/config.js`). A faixa é um booleano no catálogo ("dub" ou não), mas o
   IDIOMA dessa dublagem pertence ao SITE. Com a fonte única atual (um site
@@ -1089,9 +1099,11 @@ filename field, so a video sent as video carries no name at all.
   documento, `≤ 100 MB` envia como vídeo — o limite de documento é a mesma regra
   do YouTube (`decideYouTubeSend`), o teto de 500 MB é específico dos animes
   (`ANIME_DOCUMENT_LIMIT_MB`, `src/utils/mediaSend.js`)
-- a resolução é fixada em `ANIME_MAX_HEIGHT` (480p): a fonte publica 360p e
-  720p, e fixar 480p mantém o episódio leve. A lista de qualidade escolhe a
-  *fonte* (URL), não a resolução final
+- a resolução do download segue a qualidade escolhida: cada degrau leva a sua
+  altura (`source.height`) e o yt-dlp escolhe o degrau do master por ela. Sem
+  altura publicada cai no teto `ANIME_MAX_HEIGHT` (480p), que mantém o episódio
+  leve. A lista de qualidade escolhe o *degrau* do master (o mesmo URL para
+  todos), não uma URL distinta
 - o `yt-dlp` descarrega o m3u8/mp4 devolvido; o timeout de uma execução é
   `YTDLP_TIMEOUT_MS` (default 30 min) e o teto de cancelamento é o mesmo
   `ANIME_DOCUMENT_LIMIT_MB` (500 MB)

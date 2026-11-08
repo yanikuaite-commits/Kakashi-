@@ -109,8 +109,8 @@ test("buildNextPageRow mostra um só botão enquanto faltam episódios", () => {
 
 test("normalizeSources filtra sem url e ordena da maior para a menor", () => {
   const sources = normalizeSources([
-    { url: "https://a/480.m3u8", quality: "480p", isM3U8: true },
-    { url: "https://a/1080.m3u8", quality: "1080p", isM3U8: true },
+    { url: "https://a/480.m3u8", quality: "480p", height: 480, isM3U8: true },
+    { url: "https://a/1080.m3u8", quality: "1080p", height: 1080, isM3U8: true },
     { quality: "sem-url" },
     { url: "https://a/720.mp4", quality: "720p" },
   ]);
@@ -121,6 +121,11 @@ test("normalizeSources filtra sem url e ordena da maior para a menor", () => {
   );
   assert.equal(sources[0].isM3U8, true);
   assert.equal(sources[1].isM3U8, false);
+  // A altura acompanha o seu rótulo pelo sort: é ela que o download usa para
+  // escolher o degrau do master HLS (o mesmo URL para todas as qualidades).
+  assert.equal(sources[0].height, 1080);
+  assert.equal(sources[2].height, 480);
+  assert.equal(sources[1].height, undefined, "sem altura publicada não se inventa uma");
 });
 
 test("buildQualityRows usa anm:src:<i> e mantém a url real fora do rowId", () => {

@@ -97,3 +97,57 @@ test("search resolve a capa do anime pelo id do TMDB", async () => {
   );
   assert.equal(semFicha.image, null, "sem ficha o resultado fica sem capa");
 });
+
+/**
+ * O áudio do HLS vive numa rendition SEPARADA
+ * (`#EXT-X-MEDIA:TYPE=AUDIO`), declarada apenas no `master.txt`. As variantes
+ * do degrau (`/m3/...`) são só vídeo — baixá-las entregava um episódio mudo.
+ * Por isso `sources` tem de apontar para o master e levar a altura de cada
+ * degrau, que é o que o yt-dlp usa para escolher o vídeo e juntar o áudio.
+ */
+test("sources aponta para o master e leva a altura de cada degrau", async () => {
+  const MASTER = [
+    "#EXTM3U",
+    '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="und",NAME="Undefined",DEFAULT=NO,AUTOSELECT=YES,URI="/m3/audio.m3u8"',
+    '#EXT-X-STREAM-INF:BANDWIDTH=276000,RESOLUTION=640x360,NAME="360p",CODECS="avc1.4D4015,mp4a.40.2",AUDIO="audio"',
+    "/m3/360.m3u8",
+    '#EXT-X-STREAM-INF:BANDWIDTH=2048000,RESOLUTION=1280x720,NAME="720p",CODECS="avc1.4D401F,mp4a.40.2",AUDIO="audio"',
+    "/m3/720.m3u8",
+  ].join("\n");
+
+  const MASTER_URL = "https://x/hls/abc/master.txt";
+
+  mock.method(globalThis, "fetch", async (url) => {
+    const alvo = String(url);
+    if (alvo === MASTER_URL) {
+      return { ok: true, status: 200, text: async () => MASTER };
+    }
+    return { ok: false, status: 404, text: async () => "404" };
+  });
+
+  const { sources, limparCacheAnimes } = await import("../services/saimoAnime.js");
+  const { token } = await import("../services/saimo.js");
+  limparCacheAnimes();
+
+  const fontes = await sources({ id: "ep", ids: token({ u: [MASTER_URL], v: "dubbed" }) });
+
+  assert.equal(fontes.length, 2, "um degrau por variante de vídeo");
+  assert.deepEqual(
+    fontes.map((f) => f.quality),
+    ["360p", "720p"],
+  );
+  assert.deepEqual(
+    fontes.map((f) => f.height),
+    [360, 720],
+    "a altura de cada degrau viaja para o download",
+  );
+  assert.ok(
+    fontes.every((f) => f.url === MASTER_URL),
+    "todas as fontes apontam para o master (o único que traz o áudio)",
+  );
+  assert.ok(
+    fontes.every((f) => f.isM3U8),
+    "os degraus são HLS",
+  );
+});
+

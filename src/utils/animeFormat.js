@@ -410,6 +410,9 @@ export function normalizeSources(sources = []) {
     .map((source) => ({
       url: String(source.url),
       label: animeQualityLabel(source),
+      // A altura viaja até ao download: um master HLS serve todos os degraus
+      // pelo mesmo URL, e é a altura que diz ao yt-dlp qual escolher.
+      height: Number(source.height) || undefined,
       isM3U8: Boolean(source.isM3U8),
     }));
 

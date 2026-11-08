@@ -376,15 +376,14 @@ async function degrausHls(masterUrl) {
     const altura = (linhas[i].match(/RESOLUTION=(\d+)x(\d+)/) || [])[2];
     const nome = (linhas[i].match(/NAME="([^"]+)"/) || [])[1];
 
-    let url;
-    try {
-      url = new URL(uri, masterUrl).toString();
-    } catch {
-      continue;
-    }
-
     out.push({
-      url,
+      // O URL é o MASTER, não a variante do degrau. A variante (`/m3/...`) é
+      // SÓ VÍDEO: o áudio vive numa rendition separada
+      // (`#EXT-X-MEDIA:TYPE=AUDIO`) que apenas o master declara. Baixar a
+      // variante direta entregava um episódio mudo. Com o master e a altura,
+      // o yt-dlp escolhe o degrau e junta a faixa de áudio.
+      url: masterUrl,
+      height: altura ? Number(altura) : undefined,
       quality: nome || (altura ? `${altura}p` : "auto"),
       isM3U8: true,
     });

@@ -24,11 +24,13 @@
  *        100–800 MB → envia como DOCUMENTO;
  *        ≤ 100 MB   → envia como VÍDEO.
  *
- * A resolução do download depende do tipo de fonte. Um m3u8 traz vários degraus
- * no mesmo URL, por isso o yt-dlp é limitado a `ANIME_MAX_HEIGHT` (480p) — sem
- * limite escolhia 1080p e estourava o teto. Uma fonte MP4 direta já É o degrau
- * escolhido no menu (o saimo publica 360p e 720p como fontes distintas),
- * por isso não leva filtro de altura: o teto de MB é que decide.
+ * A resolução do download depende do tipo de fonte. Um m3u8 (saimo) traz todos
+ * os degraus no master, por isso a qualidade escolhida no menu viaja como altura
+ * e o yt-dlp escolhe o degrau — e junta a faixa de áudio, que vive numa rendition
+ * separada e só o master declara. Sem altura publicada usa-se o teto
+ * `ANIME_MAX_HEIGHT` (480p), para não escolher 1080p e estourar o teto. Uma fonte
+ * MP4 direta já É o degrau escolhido no menu, por isso não leva filtro de altura:
+ * o teto de MB é que decide.
  *
  * As linhas guardam apenas índices (`anm:src:0`) porque o `rowId` do WhatsApp
  * tem limite de tamanho e os links de stream são longos/assinados; o array real
@@ -1131,11 +1133,13 @@ async function downloadAndSend({ socket, session, sourceIndex, sendVideoFromFile
       withDownloadSlot(
         () =>
           downloadWithYtDlp(source.url, {
-            // A fonte HLS traz vários degraus no mesmo URL, por isso o limite de
-            // altura escolhe o degrau. Uma fonte MP4 direta (saimo) já É o
-            // degrau escolhido no menu: filtrar por altura
-            // não teria efeito e podia descartar o formato único disponível.
-            height: source.isM3U8 ? alturaMaxima : "best",
+            // O master HLS serve todos os degraus pelo MESMO URL e traz o áudio
+            // numa rendition separada, por isso a qualidade escolhida no menu
+            // viaja como altura (`source.height`) e o yt-dlp escolhe o degrau e
+            // junta o áudio. Sem altura explícita (fonte que não a publica)
+            // mantém-se o teto `ANIME_MAX_HEIGHT`; um MP4 direto já É o degrau
+            // escolhido, pelo que não leva filtro.
+            height: source.height || (source.isM3U8 ? alturaMaxima : "best"),
             maxBytes: ANIME_MAX_DOWNLOAD_BYTES,
             extraArgs: animeDownloadArgs(),
           }),

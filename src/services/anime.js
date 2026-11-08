@@ -365,6 +365,7 @@ function normalizarFontesDoProvider(resolvido) {
       url: item.url,
       quality: item.quality,
       resolution: item.resolution,
+      height: item.height,
       isM3U8: Boolean(item.isM3U8),
     })),
   );
