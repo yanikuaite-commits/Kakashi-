@@ -237,13 +237,18 @@ export function availableAudioVersions(episodes = []) {
  * dublado o faz em português. O card final é que diz o idioma real.
  *
  * @param {string[]} versions
+ * @param {string} [prefixo] namespace do `rowId` (`anm` no fluxo de animes,
+ *   `mgc` no do Saimo TV). O handler de animes corre primeiro e reivindica todo
+ *   o token `anm:`, pelo que um menu de séries que emitisse `anm:aud:` era
+ *   consumido por ele e respondia "menu expirou" — o token tem de dizer a que
+ *   fluxo pertence.
  * @returns {Array<{id: string, title: string, description: string}>}
  */
-export function buildAudioRows(versions = []) {
+export function buildAudioRows(versions = [], prefixo = "anm") {
   return AUDIO_VERSIONS.filter((versao) =>
     versions.map((v) => String(v).toLowerCase()).includes(versao),
   ).map((versao) => ({
-    id: `anm:aud:${versao}`,
+    id: `${prefixo}:aud:${versao}`,
     title: audioVersionLabel(versao),
     description:
       versao === AUDIO_DUBBED
@@ -379,9 +384,11 @@ export function buildEpisodeRows(
  *
  * @param {number} page página atual (base 0)
  * @param {number} totalPages
+ * @param {string} [prefixo] namespace do `rowId` (`anm`/`mgc`), pelo mesmo
+ *   motivo de `buildAudioRows`: o token tem de pertencer ao fluxo que o emite.
  * @returns {Array<{id: string, title: string, description: string}>} vazio na última página
  */
-export function buildNextPageRow(page, totalPages) {
+export function buildNextPageRow(page, totalPages, prefixo = "anm") {
   if (page + 1 >= totalPages) return [];
 
   const proxima = page + 1;
@@ -389,7 +396,7 @@ export function buildNextPageRow(page, totalPages) {
 
   return [
     {
-      id: `anm:pg:${proxima}`,
+      id: `${prefixo}:pg:${proxima}`,
       title: "➡️ Ver mais episódios",
       description: `${ultima ? "Últimos episódios" : "Mais episódios"} · página ${
         proxima + 1

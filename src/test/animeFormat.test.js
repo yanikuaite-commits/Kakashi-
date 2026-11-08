@@ -223,6 +223,14 @@ test("buildAudioRows só cria linhas para as faixas oferecidas", () => {
     ["anm:aud:dubbed"],
   );
   assert.deepEqual(buildAudioRows([]), []);
+
+  // O namespace é parametrizável: o fluxo das séries emite `mgc:` para o token
+  // não ser reivindicado pelo handler de animes (que corre primeiro e trata
+  // todo o `anm:`).
+  assert.deepEqual(
+    buildAudioRows(["subbed", "dubbed"], "mgc").map((r) => r.id),
+    ["mgc:aud:subbed", "mgc:aud:dubbed"],
+  );
 });
 
 test("buildSeasonRows usa anm:sea:<i> e guarda o slug", () => {

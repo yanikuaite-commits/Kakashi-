@@ -572,7 +572,7 @@ async function askAudioVersion({ socket, session }) {
   session.stage = "faixas";
   touch(session);
 
-  const rows = [...buildAudioRows(session.audioVersions), cancelRow()];
+  const rows = [...buildAudioRows(session.audioVersions, "mgc"), cancelRow()];
 
   return sendCard({
     socket,
@@ -989,7 +989,7 @@ async function sendEpisodePage({ socket, session, page }) {
   touch(session);
 
   const rows = buildEpisodeRows(session.episodes, pagina);
-  rows.push(...buildNextPageRow(pagina, totalPaginas));
+  rows.push(...buildNextPageRow(pagina, totalPaginas, "mgc"));
   rows.push(cancelRow());
 
   return sendCard({

@@ -820,3 +820,86 @@ test("a pesquisa pagina os resultados de 20 em 20 com ver mais", async () => {
     "a segunda página traz os restantes 5",
   );
 });
+
+/**
+ * Regressão: "o menu das séries expira na hora de escolher dublado/legendado".
+ *
+ * `buildAudioRows` é partilhado com o fluxo de animes e emitia `anm:aud:<faixa>`
+ * também aqui. Como o `handleAnimeReply` corre ANTES do `handleMegacineReply` e
+ * reivindica todo o token `anm:`, tocar em Dublado/Legendado no menu de séries
+ * caía no handler de animes, que sem sessão de anime responde
+ * "menu de animes expirou" — a mensagem é imediata, não é o TTL.
+ *
+ * O teste fixa o CONTRATO: o token que o menu emite tem de pertencer ao fluxo
+ * (prefixo `mgc`) e o handler de animes não o pode consumir.
+ */
+test("a faixa das séries emite token mgc: e o handler de animes não a rouba", async () => {
+  stubFetch();
+  const { handleMegacineReply, getMegacineSession } = await import(
+    "../utils/megacineMenu.js"
+  );
+  const { handleAnimeReply } = await import("../utils/animeMenu.js");
+
+  const replies = [];
+  const sendReply = async (t) => replies.push(String(t));
+
+  await abrir("dual show");
+  await handleMegacineReply({
+    socket: fakeSocket,
+    chatId: "mgc-test@g.us",
+    senderLid: "5511999999999@lid",
+    text: "mgc:an:0",
+    sendReply,
+  });
+
+  const session = getMegacineSession("mgc-test@g.us", "5511999999999@lid");
+  assert.equal(session.stage, "faixas");
+
+  const linhasFaixa = session.lastRows.filter((r) => /:aud:/.test(String(r.id)));
+  assert.equal(linhasFaixa.length, 2, "oferece as duas faixas");
+  assert.deepEqual(
+    linhasFaixa.map((r) => r.id).sort(),
+    ["mgc:aud:dubbed", "mgc:aud:subbed"],
+    "o rowId pertence ao fluxo das séries, não ao dos animes",
+  );
+
+  // O que o menu emite é o que o utilizador toca: tem de chegar ao megacine.
+  const escolhido = linhasFaixa.find((r) => r.id === "mgc:aud:subbed");
+
+  replies.length = 0;
+  const consumidoPelosAnimes = await handleAnimeReply({
+    socket: fakeSocket,
+    chatId: "mgc-test@g.us",
+    senderLid: "5511999999999@lid",
+    senderLids: ["5511999999999@lid"],
+    text: escolhido.id,
+    sendReply,
+  });
+
+  assert.equal(
+    consumidoPelosAnimes,
+    false,
+    "o handler de animes não pode reivindicar um token das séries",
+  );
+  assert.equal(
+    replies.some((r) => /expirou/i.test(r)),
+    false,
+    "sem a colisão, ninguém responde 'expirou'",
+  );
+
+  const consumidoPeloMegacine = await handleMegacineReply({
+    socket: fakeSocket,
+    chatId: "mgc-test@g.us",
+    senderLid: "5511999999999@lid",
+    senderLids: ["5511999999999@lid"],
+    text: escolhido.id,
+    sendReply,
+  });
+
+  assert.equal(consumidoPeloMegacine, true, "o megacine trata a escolha");
+  assert.equal(
+    getMegacineSession("mgc-test@g.us", "5511999999999@lid").audioVersion,
+    "subbed",
+    "a faixa fica fixada e o fluxo segue",
+  );
+});

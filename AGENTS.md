@@ -1165,6 +1165,19 @@ Newer additions to the flow:
   download time `getEpisodeStream(slug, temporada, episodio, faixa)` serves the
   requested track and **falls back to the one that exists, warning the user** instead
   of switching in silence. The caption shows the track that was actually sent.
+- **every row id of this flow carries the `mgc:` namespace, and the shared builders
+  take it as a parameter.** `buildAudioRows` and `buildNextPageRow` live in
+  `animeFormat.js` and are used by BOTH menus, but they emitted `anm:` ids. The
+  middleware runs `handleAnimeReply` BEFORE `handleMegacineReply`, and the anime
+  handler claims every `anm:` token; a series card that emitted `anm:aud:<faixa>`
+  was therefore consumed by the anime handler, which had no anime session and
+  answered "menu de animes expirou" — the message was immediate, not the 2-minute
+  TTL. Tapping dublado/legendado (or "ver mais episódios", which emitted `anm:pg:`)
+  in the series menu could never reach `handleMegacineReply`. Both builders now
+  take the namespace (`buildAudioRows(versions, "mgc")`,
+  `buildNextPageRow(page, total, "mgc")`), defaulting to `anm` for the anime flow.
+  The tests must assert the id the menu EMITS, not a hand-written `mgc:` token —
+  the earlier tests used the intended token and missed the collision entirely.
 - films are handled by their own branch (see "Filmes" below); the search no longer
   skips `tipo === "f"`.
 
