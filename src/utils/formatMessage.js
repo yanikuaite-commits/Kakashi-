@@ -13,7 +13,7 @@
 import { PLAIN_MESSAGE_THEME } from "../config.js";
 
 const BOT_DISPLAY_NAME = "Kakashi Bot";
-const BOT_VERSION = "4.0";
+const BOT_VERSION = "1.0.0";
 const CREATOR_NAME = "Yanik Uaite";
 
 const SMALL_CAPS_MAP = {
@@ -248,7 +248,7 @@ export function mainMenuMessage({
   const cleanUser = usuario.replace(/^@/, "");
   const campos = [
     `༺ ⟡ ༻ ${BOT_DISPLAY_NAME.toUpperCase()} ༺ ⟡ ༻`,
-    `   ⊹ ࣪ ˖ ✦ ${toStylizedText("KAKASHI CORE")} ✦ ˖ ࣪ ⊹`,
+    `   ⊹ ࣪ ˖ ✦ KAKASHI CORE ✦ ˖ ࣪ ⊹`,
     `   ☽༺✧༻ CREATOR » ${CREATOR_NAME}`,
     `   ☽༺✧༻ BOT    » ${BOT_DISPLAY_NAME}`,
     `   ☽༺✧༻ VERSION » ${versao}`,
