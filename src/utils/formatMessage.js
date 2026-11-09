@@ -377,6 +377,7 @@ export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", 
  * @param {string} [options.uptime] Tempo de atividade (ex: '2h 15m')
  * @param {string} [options.ping] Latência (ex: '45ms')
  * @param {string} [options.ram] Uso de memória (ex: '128 MB')
+ * @param {string} [options.velocidade] Velocidade de resposta (ex: '0.2s')
  * @param {string} [options.cargo] Cargo/patente do utilizador (ex: 'Admin')
  * @param {string} [options.tipoUsuario] Tipo do utilizador (ex: 'FREE USER' / 'VIP')
  * @param {string} [options.grupo] Nome do grupo atual
@@ -394,6 +395,7 @@ export function mainMenuMessage({
   uptime,
   ping,
   ram,
+  velocidade,
   cargo,
   tipoUsuario,
   grupo,
@@ -413,6 +415,7 @@ export function mainMenuMessage({
     uptime ? `│ ⏳ *${toStylizedText("Uptime")}:* ${uptime}` : "",
     ping ? `│ ⚡ *${toStylizedText("Latência")}:* ${ping}` : "",
     ram ? `│ 💻 *${toStylizedText("RAM")}:* ${ram}` : "",
+    velocidade ? `│ 🚀 *${toStylizedText("Velocidade")}:* ${velocidade}` : "",
     totalComandos ? `│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}` : "",
     versao ? `│ ⚙️ *${toStylizedText("Versão")}:* v${versao}` : "",
     status ? `│ 🛡️ *${toStylizedText("Status")}:* ${status}` : "",
