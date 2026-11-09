@@ -296,23 +296,8 @@ export function mainMenuMessage({
     `│ ⚔️ *Criador:* ${CREATOR_NAME}`,
     `╰━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
-    `✨ Escolha uma das categorias abaixo no menu interativo, @${cleanUser}!`,
+    `✨ Use o menu interativo para explorar os comandos disponíveis!`,
   ];
-
-  if (categorias.length > 0) {
-    campos.push("");
-    for (const cat of categorias) {
-      const icon = cat.icone || "✦";
-      const catEstilizada = cat.categoria.toUpperCase();
-      campos.push(`╭━━━ ⛩️ ${icon} *${catEstilizada}* ⛩️ ━━━╮`);
-      if (Array.isArray(cat.comandos)) {
-        for (const cmd of cat.comandos) {
-          campos.push(`│ ➳ ${prefixo}${cmd}`);
-        }
-      }
-      campos.push(`╰━━━━━━━━━━━━━━━━━━━━━━━╯`);
-    }
-  }
 
   return formatMessage({
     icone: "🌀",
