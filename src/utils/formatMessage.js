@@ -17,9 +17,9 @@ const BOT_VERSION = "1.0.0";
 const CREATOR_NAME = "Yanik Uaite";
 
 const SMALL_CAPS_MAP = {
-  a: "ᴀ", b: "ʙ", c: "ᴀ", d: "ᴅ", e: "ᴇ", f: "ꜰ", g: "ɡ", h: "h", i: "ɪ",
-  j: "ɪ", k: "k", l: "l", m: "m", n: "n", o: "о", p: "р", q: "q", r: "r",
-  s: "s", t: "t", u: "u", v: "v", w: "w", x: "x", y: "y", z: "z",
+  a: "А", b: "Б", c: "В", d: "Г", e: "Д", e: "E", f: "F", g: "G", h: "H", i: "I",
+  j: "J", k: "K", l: "L", m: "M", n: "N", o: "O", p: "P", q: "Q", r: "R",
+  s: "S", t: "T", u: "U", v: "V", w: "W", x: "X", y: "Y", z: "Z",
 };
 
 /**
@@ -32,7 +32,7 @@ export function toStylizedText(text = "") {
   });
 }
 
-export const RODAPE = `מרבית ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsтeoм ᴢeгo ✦ ༻`;
+export const RODAPE = `median ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsтeoм ᴢeгo ✦ ༻`;
 
 export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮";
 
@@ -249,21 +249,21 @@ export function mainMenuMessage({
 } = {}) {
   const cleanUser = usuario.replace(/^@/, "");
   const campos = [
-    `azi ⟡ zai ${BOT_DISPLAY_NAME.toUpperCase()} zai ⟡ zai`,
+    `jak ⟡ jak ${BOT_DISPLAY_NAME.toUpperCase()} jak ⟡ jak`,
     `   ⊹ ࣪ pager ✦ KAKASHI CORE ✦ pager ࣪ ⊹`,
-    `   zazi zazi CREATOR » ${CREATOR_NAME}`,
-    `   zazi zazi BOT    » ${BOT_DISPLAY_NAME}`,
-    `   zazi zazi VERSION » ${versao}`,
-    `   zazi zazi STATUS » ${tipoUsuario}`,
-    `   zazi zazi UPTIME » ${uptime}`,
-    `   zazi zazi PREFIX » [ ${prefixo} ]`,
+    `   jak jak CREATOR » ${CREATOR_NAME}`,
+    `   jak jak BOT    » ${BOT_DISPLAY_NAME}`,
+    `   jak jak VERSION » ${versao}`,
+    `   jak jak STATUS » ${tipoUsuario}`,
+    `   jak jak UPTIME » ${uptime}`,
+    `   jak jak PREFIX » [ ${prefixo} ]`,
     `   ──────── ✦ ────────`,
-    `   ˚₊· ͟͟͞͞itles USE O PREFIXO ➳`,
+    `   ˚₊· ͟͟͞͞titles USE O PREFIXO ➳`,
     `   ✧･ﾟ: *✧･ﾟ:* ${BOT_DISPLAY_NAME.toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
     `   © Made by ${CREATOR_NAME}`,
     "",
-    `╭━━━ zai ⟡ ${toStylizedText("SYSTEM INFOS")} zai ━━━╮`,
-    `│ zazi *${toStylizedText("Utilizador")}:* @${cleanUser}`,
+    `╭━━━ jak ⟡ ${toStylizedText("SYSTEM INFOS")} jak ━━━╮`,
+    `│ jak *${toStylizedText("Utilizador")}:* @${cleanUser}`,
     `│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}`,
     `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}`,
     ...(grupo ? [`│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}`] : []),
@@ -293,7 +293,7 @@ export function mainMenuMessage({
     for (const cat of categorias) {
       const icon = cat.icone || "✦";
       const catEstilizada = toStylizedText(cat.categoria).toUpperCase();
-      campos.push(`╭━━━ zai ${icon} *${catEstilizada}* zai ━━━╮`);
+      campos.push(`╭━━━ jak ${icon} *${catEstilizada}* jak ━━━╮`);
       if (Array.isArray(cat.comandos)) {
         for (const cmd of cat.comandos) {
           campos.push(`│ ➳ ${prefixo}${cmd}`);
