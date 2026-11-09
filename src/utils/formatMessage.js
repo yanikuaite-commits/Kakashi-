@@ -4,7 +4,7 @@
  * TODA resposta de texto passa por aqui — diretamente pelo comando ou pelos
  * helpers centrais de loadCommonFunctions — e termina com o rodapé exato:
  *
- *   ༺ ✦ ᴋᴀᴋᴀsʜɪ ʙᴏᴛ • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ✦ ༻
+ *   ༺ ✦ ᴋᴀ通告shestɪ ʙоt • sʏsтeoм ᴢeгo ✦ ༻
  *
  * Tema visual "System Zero V4 / Tensura": design futurista, bordas limpas,
  * cabeçalho em caixa de status, símbolos místico-tecnológicos, letras estilizadas,
@@ -17,9 +17,9 @@ const BOT_VERSION = "1.0.0";
 const CREATOR_NAME = "Yanik Uaite";
 
 const SMALL_CAPS_MAP = {
-  a: "ᴀ", b: "ʙ", c: "ᴄ", d: "ᴅ", e: "ᴇ", f: "ғ", g: "ɢ", h: "ʜ", i: "ɪ",
-  j: "ᴊ", k: "ᴋ", l: "ʟ", m: "ᴍ", n: "ɴ", o: "ᴏ", p: "ᴘ", q: "ǫ", r: "ʀ",
-  s: "s", t: "ᴛ", u: "ᴜ", v: "ᴠ", w: "ᴡ", x: "x", y: "ʏ", z: "ᴢ",
+  a: "ᴀ", b: "ʙ", c: "ᴀ", d: "ᴅ", e: "ᴇ", f: "ꜰ", g: "ɡ", h: "h", i: "ɪ",
+  j: "ɪ", k: "k", l: "l", m: "m", n: "n", o: "о", p: "р", q: "q", r: "r",
+  s: "s", t: "t", u: "u", v: "v", w: "w", x: "x", y: "y", z: "z",
 };
 
 /**
@@ -32,7 +32,7 @@ export function toStylizedText(text = "") {
   });
 }
 
-export const RODAPE = `༺ ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ✦ ༻`;
+export const RODAPE = `מרבית ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsтeoм ᴢeгo ✦ ༻`;
 
 export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮";
 
@@ -88,7 +88,7 @@ export function formatMessage({
 
   const linhas = [
     FRAME_MARK,
-    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ⚡ ༻ │`,
+    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sʏsтeoм ᴢeгo ⚡ ༻ │`,
     "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
     "",
     secao,
@@ -151,77 +151,77 @@ export function withFooter(text = "") {
 /* ════════════ TEMPLATES PRONTOS ════════════ */
 
 export function loadingMessage({ usuario, detalhe } = {}) {
-  const campos = [usuario ? `⏳ ᴘʀᴏᴄᴇssᴀɴᴅᴏ sᴏʟɪᴄɪᴛᴀçãᴏ ᴘᴀʀᴀ @${usuario}... ⚡` : `⏳ ᴘʀᴏᴄᴇssᴀɴᴅᴏ sᴏʟɪᴄɪᴛᴀçãᴏ ɴᴏ ɴúᴄʟᴇᴏ... ⚡`];
+  const campos = [usuario ? `⏳ ᴘʀоcеssаn𝐝о sоlісtаçãо ᴘаrа @${usuario}... ⚡` : `⏳ ᴘʀоcеssаn𝐝о sоlісtаçãо nо núсlео... ⚡`];
   if (detalhe) campos.push(/^[\p{Extended_Pictographic}\uFE0F]/u.test(detalhe) ? detalhe : `📌 ${detalhe}`);
-  return formatMessage({ icone: "⏳", titulo: "ᴇᴍ ᴘʀᴏᴄᴇssᴀᴍᴇɴᴛᴏ", campos });
+  return formatMessage({ icone: "⏳", titulo: "еm ᴘrоссеssаmеntо", campos });
 }
 
 export function successMessage({ usuario, campos = [] } = {}) {
   return formatMessage({
     icone: "✅",
-    titulo: "ᴄᴏɴᴄʟᴜíᴅᴏ",
-    campos: [usuario ? `✅ ᴏᴘᴇʀᴀçãᴏ ғɪɴᴀʟɪᴢᴀᴅᴀ ᴄᴏᴍ sᴜᴄᴇssᴏ, @${usuario}! 🎯` : `✅ ᴏᴘᴇʀᴀçãᴏ ғɪɴᴀʟɪᴢᴀᴅᴀ ᴄᴏᴍ sᴜᴄᴇssᴏ! 🎯`, ...campos],
+    titulo: "соnсluídо",
+    campos: [usuario ? `✅ ореrаçãо fіnаlіzаdа соm suсеssо, @${usuario}! 🎯` : `✅ ореrаçãо fіnаlіzаdа соm suсеssо! 🎯`, ...campos],
   });
 }
 
 export function errorMessage(detalhe = "") {
-  const campos = [`❌ ᴏᴘs! ᴏᴄᴏʀʀᴇᴜ ᴜᴍᴀ ғᴀʟʜᴀ ɴᴏ ᴘʀᴏᴄᴇssᴀᴍᴇɴᴛᴏ.`, `💡 ᴛᴇɴᴛᴇ ɴᴏᴠᴀᴍᴇɴᴛᴇ ᴇᴍ ᴀʟɢᴜɴs ɪɴsᴛᴀɴᴛᴇs.`];
-  if (detalhe) campos.push("", `📄 *ᴅᴇᴛᴀʟʜᴇs:* ${detalhe}`);
-  return formatMessage({ icone: "❌", titulo: "ᴇʀʀᴏ ᴅᴇ sɪsᴛᴇᴍᴀ", campos });
+  const campos = [`❌ орs! осоrrеu umа fаlhа nо рrоссеssаmеntо.`, `💡 tеntе nоvаmеntе еm аlguns іnstаntеs.`];
+  if (detalhe) campos.push("", `📄 *detаlhеs:* ${detalhe}`);
+  return formatMessage({ icone: "❌", titulo: "еrrо dе sіstеmа", campos });
 }
 
-export function warningMessage(texto = "") { return formatMessage({ icone: "⚠️", titulo: "ᴀᴠɪsᴏ ᴅᴇ sɪsᴛᴇᴍᴀ", campos: [texto] }); }
+export function warningMessage(texto = "") { return formatMessage({ icone: "⚠️", titulo: "аvіsо dе sіstеmа", campos: [texto] }); }
 
 export function usageMessage({ usage, detalhe } = {}) {
-  const campos = [usage ? `⚠️ sɪɴᴛᴀxᴇ ᴄᴏʀʀᴇᴛᴀ: ${usage}` : `⚠️ é ɴᴇᴄᴇssáʀɪᴏ ғᴏʀɴᴇᴄᴇʀ ᴀʀɢᴜᴍᴇɴᴛᴏs ᴘᴀʀᴀ ᴇsᴛᴇ ᴄᴏᴍᴀɴᴅᴏ!`];
+  const campos = [usage ? `⚠️ sіntахе соrrеtа: ${usage}` : `⚠️ é nесеssárіо fоrnессеr аrgumеntоsраrа еstе соmаndо!`];
   if (detalhe) campos.push(`💡 ${detalhe}`);
-  return formatMessage({ icone: "⚠️", titulo: "sɪɴᴛᴀxᴇ ɪɴᴄᴏʀʀᴇᴛᴀ", campos });
+  return formatMessage({ icone: "⚠️", titulo: "sіntахе іnсоrrеtа", campos });
 }
 
-export function permissionMessage(texto = "🚫 ᴘᴇʀᴍɪssãᴏ ɴᴇɢᴀᴅᴀ. ᴀᴘᴇɴᴀs ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀᴇs.") {
-  return formatMessage({ icone: "🛡️", titulo: "ᴀᴄᴇssᴏ ɴᴇɢᴀᴅᴏ", campos: Array.isArray(texto) ? texto : [texto] });
+export function permissionMessage(texto = "🚫 реrmіssãо nеgаdа. ареnаs аdmіnіstrаdоrеs.") {
+  return formatMessage({ icone: "🛡️", titulo: "асеssо nеgаdо", campos: Array.isArray(texto) ? texto : [texto] });
 }
 
 export function aiMessage({ pergunta, resposta } = {}) {
   const campos = [];
-  if (pergunta) campos.push(`❓ *ᴘᴇʀɢᴜɴᴛᴀ:* ${pergunta}`, "");
-  campos.push(`🔮 *ʀᴇsᴘᴏsᴛᴀ:* ${resposta ?? ""}`);
-  return formatMessage({ icone: "🔮", titulo: "móᴅᴜʟᴏ ɪᴀ", campos });
+  if (pergunta) campos.push(`❓ *реrреguntа:* ${pergunta}`, "");
+  campos.push(`🔮 *rеsроstа:* ${resposta ?? ""}`);
+  return formatMessage({ icone: "🔮", titulo: "mоdulо іа", campos });
 }
 
 export function downloadMessage({ titulo, canal, duracao, plataforma, usuario, extra, rodape = footerAtual() } = {}) {
   const campos = [];
-  if (titulo) campos.push(`📌 *ᴛíᴛᴜʟᴏ:* ${titulo}`);
-  if (canal) campos.push(`💬 *ᴄᴀɴᴀʟ/ᴀᴜᴛᴏʀ:* ${canal}`);
-  if (duracao) campos.push(`⏳ *ᴅᴜʀᴀçãᴏ:* ${duracao}`);
-  if (plataforma) campos.push(`🌐 *ғᴏɴᴛᴇ:* ${plataforma}`);
-  if (usuario) campos.push(`👤 *sᴏʟɪᴄɪᴛᴀɴᴛᴇ:* @${usuario}`);
+  if (titulo) campos.push(`📌 *títulо:* ${titulo}`);
+  if (canal) campos.push(`💬 *саnаl/аutоr:* ${canal}`);
+  if (duracao) campos.push(`⏳ *durаçãо:* ${duracao}`);
+  if (plataforma) campos.push(`🌐 *fоntе:* ${plataforma}`);
+  if (usuario) campos.push(`ulistеr: @${usuario}`);
   if (campos.length) campos.push("");
-  campos.push(extra || "⚡ sᴇʟᴇᴄɪᴏɴᴇ ᴀ ᴏçãᴏ ᴅᴇsᴇᴊᴀᴅᴀ ᴀʙᴀɪxᴏ:");
-  return formatMessage({ icone: "📥", titulo: "móᴅᴜʟᴏ ᴅᴏᴡɴʟᴏᴀᴅ", campos, rodape });
+  campos.push(extra || "⚡ sеlесіоnе а оçãо dеsеjаdа аbаіхо:");
+  return formatMessage({ icone: "📥", titulo: "mоdulо dоwnlоаd", campos, rodape });
 }
 
 export function mediaCaption({ titulo, canal, seguidores, duracao, qualidade, extra, rodape = footerAtual() } = {}) {
   const campos = [
-    `🎬 *ᴛíᴛᴜʟᴏ:* ${titulo || "Mídia"}`,
-    `👤 *ᴄᴀɴᴀʟ/ᴄᴏɴᴛᴀ:* ${canal || "Não disponível"}`,
-    `👥 *sᴇɢᴜɪᴅᴏʀᴇs:* ${seguidores ?? "Não disponível"}`,
-    `⏱️ *ᴅᴜʀᴀçãᴏ:* ${duracao || "Não disponível"}`,
-    `📺 *ǫᴜᴀʟɪᴅᴀᴅᴇ:* ${qualidade || "Melhor disponível"}`,
+    `🎬 *títulо:* ${titulo || "Mídiа"}`,
+    `ulistеr: @${canal || "Não dіsрlvеl"}`,
+    `👥 *sеguіdоrеs:* ${seguidores ?? "Não dіsрlvеl"}`,
+    `⏱️ *durаçãо:* ${duracao || "Não dіsрlvеl"}`,
+    `📺 *quаlіdаdе:* ${qualidade || "Mеlhоr dіsрlvеl"}`,
   ];
   if (extra) campos.push("", extra);
-  return formatMessage({ icone: "📥", titulo: "ᴅᴏᴡɴʟᴏᴀᴅ ᴄᴏɴᴄʟᴜíᴅᴏ", campos, rodape });
+  return formatMessage({ icone: "📥", titulo: "dоwnlоаd соnсluídо", campos, rodape });
 }
 
 export function moderationMessage({ resumo, motivo, detalhes = [] } = {}) {
   const campos = [];
   if (resumo) campos.push(resumo);
-  if (motivo) campos.push(`🔎 *ᴍᴏᴛɪᴠᴏ:* _"${motivo}"_`);
+  if (motivo) campos.push(`🔎 *mоtіvо:* _"${motivo}"_`);
   for (const detalhe of detalhes) campos.push(detalhe);
-  return formatMessage({ icone: "⚔️", titulo: "móᴅᴜʟᴏ ᴍᴏᴅᴇʀᴀçãᴏ", campos });
+  return formatMessage({ icone: "⚔️", titulo: "mоdulо mоdеrаçãо", campos });
 }
 
-export function panelMessage({ icone = "⚙️", titulo = "ᴘᴀɪɴᴇʟ ᴅᴇ ᴄᴏɴᴛʀᴏʟᴇ", campos = [] } = {}) {
+export function panelMessage({ icone = "⚙️", titulo = "рainеl dе соntrоlе", campos = [] } = {}) {
   return formatMessage({ icone, titulo, campos });
 }
 
@@ -236,6 +236,8 @@ export function mainMenuMessage({
   uptime = "0h 00m 00s",
   ping = "0ms",
   ram = "0MB / 0MB",
+  cpu = "0%",
+  disk = "0GB / 0GB",
   velocidade = "0ms",
   cargo = "Membro",
   tipoUsuario = "FREE USER",
@@ -247,21 +249,21 @@ export function mainMenuMessage({
 } = {}) {
   const cleanUser = usuario.replace(/^@/, "");
   const campos = [
-    `༺ ⟡ ༻ ${BOT_DISPLAY_NAME.toUpperCase()} ༺ ⟡ ༻`,
-    `   ⊹ ࣪ ˖ ✦ KAKASHI CORE ✦ ˖ ࣪ ⊹`,
-    `   ☽༺✧༻ CREATOR » ${CREATOR_NAME}`,
-    `   ☽༺✧༻ BOT    » ${BOT_DISPLAY_NAME}`,
-    `   ☽༺✧༻ VERSION » ${versao}`,
-    `   ☽༺✧༻ STATUS » ${tipoUsuario}`,
-    `   ☽༺✧༻ UPTIME » ${uptime}`,
-    `   ☽༺✧༻ PREFIX » [ ${prefixo} ]`,
+    `azi ⟡ zai ${BOT_DISPLAY_NAME.toUpperCase()} zai ⟡ zai`,
+    `   ⊹ ࣪ pager ✦ KAKASHI CORE ✦ pager ࣪ ⊹`,
+    `   zazi zazi CREATOR » ${CREATOR_NAME}`,
+    `   zazi zazi BOT    » ${BOT_DISPLAY_NAME}`,
+    `   zazi zazi VERSION » ${versao}`,
+    `   zazi zazi STATUS » ${tipoUsuario}`,
+    `   zazi zazi UPTIME » ${uptime}`,
+    `   zazi zazi PREFIX » [ ${prefixo} ]`,
     `   ──────── ✦ ────────`,
-    `   ˚₊· ͟͟͞͞➳ USE O PREFIXO ➳`,
+    `   ˚₊· ͟͟͞͞itles USE O PREFIXO ➳`,
     `   ✧･ﾟ: *✧･ﾟ:* ${BOT_DISPLAY_NAME.toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
     `   © Made by ${CREATOR_NAME}`,
     "",
-    `╭━━━ ༺ ⟡ ${toStylizedText("SYSTEM INFOS")} ⟡ ༻ ━━━╮`,
-    `│ ☽ *${toStylizedText("Utilizador")}:* @${cleanUser}`,
+    `╭━━━ zai ⟡ ${toStylizedText("SYSTEM INFOS")} zai ━━━╮`,
+    `│ zazi *${toStylizedText("Utilizador")}:* @${cleanUser}`,
     `│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}`,
     `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}`,
     ...(grupo ? [`│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}`] : []),
@@ -273,23 +275,25 @@ export function mainMenuMessage({
     `│ ⏳ *${toStylizedText("Uptime")}:* ${uptime}`,
     `│ ⚡ *${toStylizedText("Latência")}:* ${ping}`,
     `│ 💻 *${toStylizedText("RAM")}:* ${ram}`,
+    `│ 🖥️ *${toStylizedText("CPU")}:* ${cpu}`,
+    `│ 💾 *${toStylizedText("Disco")}:* ${disk}`,
     `│ 🚀 *${toStylizedText("Velocidade")}:* ${velocidade}`,
     `│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}`,
     `│ ⚙️ *${toStylizedText("Versão")}:* v${versao}`,
-    `│ 🛡️ *${toStylizedText("Status")}:* ${status}`,
+    `│ 🖥️ *${toStylizedText("Status")}:* ${status}`,
     `│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     `│ 👤 *${toStylizedText("Criador")}:* ${CREATOR_NAME}`,
     `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
-    `✦ ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ᴅᴀs ᴄᴀᴛᴇɢᴏʀɪᴀs ᴀʙᴀɪxᴏ ɴᴏ ᴍᴇɴᴜ ɪɴᴛᴇʀᴀᴛɪᴠᴏ, @${cleanUser}!`,
+    `✦ еsсоlhа umа dаs саtеgоrіаs аbаіхо nо mеnu іntеrаtіvо, @${cleanUser}!`,
   ];
 
-  if (categorias.length > 0) {
+  if (categoria.length > 0) {
     campos.push("");
     for (const cat of categorias) {
       const icon = cat.icone || "✦";
       const catEstilizada = toStylizedText(cat.categoria).toUpperCase();
-      campos.push(`╭━━━ ༺ ${icon} *${catEstilizada}* ༻ ━━━╮`);
+      campos.push(`╭━━━ zai ${icon} *${catEstilizada}* zai ━━━╮`);
       if (Array.isArray(cat.comandos)) {
         for (const cmd of cat.comandos) {
           campos.push(`│ ➳ ${prefixo}${cmd}`);
@@ -301,7 +305,7 @@ export function mainMenuMessage({
 
   return formatMessage({
     icone: "🌀",
-    titulo: "ᴍᴇɴᴜ ᴘʀɪɴᴄɪᴘᴀʟ",
+    titulo: "mеnu рrіnсіраl",
     campos,
   });
 }
