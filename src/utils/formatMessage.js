@@ -245,6 +245,7 @@ export function mainMenuMessage({
   status = "ONLINE",
   categorias = [],
 } = {}) {
+  const cleanUser = usuario.replace(/^@/, "");
   const campos = [
     `༺ ⟡ ༻ ${toStylizedText(BOT_DISPLAY_NAME).toUpperCase()} ༺ ⟡ ༻`,
     `   ⊹ ࣪ ˖ ✦ ${toStylizedText("KAKASHI CORE")} ✦ ˖ ࣪ ⊹`,
@@ -255,12 +256,12 @@ export function mainMenuMessage({
     `   ☽༺✧༻ UPTIME » ${uptime}`,
     `   ☽༺✧༻ PREFIX » [ ${prefixo} ]`,
     `   ──────── ✦ ────────`,
-    `   ˚₊· ͟͟͞͞➳ USE O PREFIXO ➳`,
+    `   ˚₊· ͟͟͞͞➳ SOLICITANTE: @${cleanUser} ➳`,
     `   ✧･ﾟ: *✧･ﾟ:* ${toStylizedText(BOT_DISPLAY_NAME).toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
     `   © Made by ${CREATOR_NAME}`,
     "",
     `╭━━━ ༺ ⟡ ${toStylizedText("SYSTEM INFOS")} ⟡ ༻ ━━━╮`,
-    `│ ☽ *${toStylizedText("Utilizador")}:* ${usuario.replace(/^@/, "")}`,
+    `│ ☽ *${toStylizedText("Utilizador")}:* @${cleanUser}`,
     `│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}`,
     `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}`,
     ...(grupo ? [`│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}`] : []),
@@ -280,7 +281,7 @@ export function mainMenuMessage({
     `│ 👤 *${toStylizedText("Criador")}:* ${CREATOR_NAME}`,
     `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
-    "✦ ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ᴅᴀs ᴄᴀᴛᴇɢᴏʀɪᴀs ᴀʙᴀɪxᴏ ɴᴏ ᴍᴇɴᴜ ɪɴᴛᴇʀᴀᴛɪᴠᴏ ᴘᴀʀᴀ ᴇxᴘʟᴏʀᴀʀ ᴏs ᴄᴏᴍᴀɴᴅᴏs!",
+    `✦ ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ᴅᴀs ᴄᴀᴛᴇɢᴏʀɪᴀs ᴀʙᴀɪxᴏ ɴᴏ ᴍᴇɴᴜ ɪɴᴛᴇʀᴀᴛɪᴠᴏ, @${cleanUser}!`,
   ];
 
   if (categorias.length > 0) {
