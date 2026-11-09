@@ -6,7 +6,11 @@
  */
 import { DEVELOPER_MODE, PREFIX } from "../config.js";
 import { badMacHandler } from "../utils/badMacHandler.js";
-import { checkIfMemberIsMuted, getPrefix } from "../utils/database.js";
+import {
+  checkIfMemberIsMuted,
+  getPrefix,
+  isPrefixlessEnabled,
+} from "../utils/database.js";
 import { dynamicCommand } from "../utils/dynamicCommand.js";
 import {
   GROUP_PARTICIPANT_ADD,
@@ -122,10 +126,59 @@ export async function onMessagesUpsert({ socket, messages, startProcess }) {
         return;
       }
 
-      const commonFunctions = loadCommonFunctions({ socket, webMessage });
+      let commonFunctions = loadCommonFunctions({ socket, webMessage });
 
       if (!commonFunctions) {
         continue;
+      }
+
+      const currentPrefix = getPrefix(commonFunctions.remoteJid) || PREFIX;
+
+      if (
+        isPrefixlessEnabled(commonFunctions.remoteJid) &&
+        commonFunctions.fullMessage &&
+        !commonFunctions.fullMessage.startsWith(currentPrefix)
+      ) {
+        const textWithPrefix = `${currentPrefix}${commonFunctions.fullMessage}`;
+        const msgObj = webMessage.message ? { ...webMessage.message } : {};
+
+        if (msgObj.conversation) {
+          msgObj.conversation = textWithPrefix;
+        } else if (msgObj.extendedTextMessage?.text) {
+          msgObj.extendedTextMessage = {
+            ...msgObj.extendedTextMessage,
+            text: textWithPrefix,
+          };
+        } else if (msgObj.imageMessage) {
+          msgObj.imageMessage = {
+            ...msgObj.imageMessage,
+            caption: textWithPrefix,
+          };
+        } else if (msgObj.videoMessage) {
+          msgObj.videoMessage = {
+            ...msgObj.videoMessage,
+            caption: textWithPrefix,
+          };
+        } else if (msgObj.documentMessage) {
+          msgObj.documentMessage = {
+            ...msgObj.documentMessage,
+            caption: textWithPrefix,
+          };
+        } else {
+          msgObj.conversation = textWithPrefix;
+        }
+
+        const prefixlessFunctions = loadCommonFunctions({
+          socket,
+          webMessage: {
+            ...webMessage,
+            message: msgObj,
+          },
+        });
+
+        if (prefixlessFunctions) {
+          commonFunctions = prefixlessFunctions;
+        }
       }
 
       // Pagamento (e-mola/m-pesa): lê o SMS reencaminhado antes de qualquer
