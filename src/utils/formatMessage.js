@@ -81,9 +81,6 @@ export function formatMessage({
   }
 
   if (!useFrame) {
-    // Quando useFrame é false, os 'campos' já contêm a estrutura completa da mensagem,
-    // incluindo quaisquer cabeçalhos/molduras personalizadas.
-    // Apenas juntamos os campos e anexamos o rodapé global, se não estiver presente.
     const body = [...campos, extra]
       .flatMap(valor => linesOf(valor))
       .filter(line => line !== "")
@@ -96,7 +93,6 @@ export function formatMessage({
     return finalMessage;
   }
 
-  // Lógica de moldura original para useFrame = true (padrão)
   const nomeEstilizado = toStylizedText(BOT_DISPLAY_NAME);
   const secao = titulo
     ? `╭━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()} • ${toStylizedText(titulo).toUpperCase()}* ༻ ━━╮`
@@ -130,7 +126,6 @@ export function ensureFrame(text, options = {}) {
   if (!value || isFramed(value)) return value;
   if (value.length > MAX_FRAME_LENGTH) return value;
   if (value.split("\n").length > MAX_FRAME_LINES) return value;
-  // Ao garantir uma moldura, queremos o comportamento de moldura padrão, então useFrame deve ser true.
   return formatMessage({ ...inferReplyStyle(value), ...options, campos: [value], useFrame: true });
 }
 
@@ -261,49 +256,44 @@ export function mainMenuMessage({
 } = {}) {
   const cleanUser = usuario.replace(/^@/, "");
   const campos = [
-    `⚔️ ⟡ ⚔️ *${toStylizedText(BOT_DISPLAY_NAME).toUpperCase()}* ⚔️ ⟡ ⚔️`,
-    `   ✦ ᴍᴀsᴛᴇʀ ɴɪɴᴊᴀ ᴄᴏʀᴇ ✦`,
-    `   ⛩️ CREATOR » ${CREATOR_NAME}`,
-    `   ⛩️ BOT    » ${BOT_DISPLAY_NAME}`,
-    `   ⛩️ VERSION » ${versao}`,
-    `   ⛩️ STATUS » ${tipoUsuario}`,
-    `   ⛩️ UPTIME » ${uptime}`,
-    `   ⛩️ PREFIX » [ ${prefixo} ]`,
+    `✨ ⟡ ⚔️ *${toStylizedText(BOT_DISPLAY_NAME).toUpperCase()}* ⚔️ ⟡ ✨`,
+    `   ⛩️ ᴄʀᴇᴀᴛᴏʀ » ${CREATOR_NAME}`,
+    `   ⛩️ ᴠᴇʀsɪᴏɴ » ${versao}`,
+    `   ⛩️ sᴛᴀᴛᴜs » ${tipoUsuario}`,
+    `   ⛩️ ᴜᴘᴛɪᴍᴇ » ${uptime}`,
+    `   ⛩️ ᴘʀᴇғɪx » [ ${prefixo} ]`,
     `   ─────── ⚡ ───────`,
-    `   🍥 *USE O PREFIXO ABAIXO* 🍥`,
-    `   ✧･ﾟ: *✧･ﾟ:* ${BOT_DISPLAY_NAME.toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
-    `   © Made by ${CREATOR_NAME}`,
+    `   🍥 *ᴘᴀɪɴᴇʟ ᴅᴇ ᴄᴏɴᴛʀᴏʟᴇ ɴɪɴᴊᴀ* 🍥`,
     "",
-    `╭━━━ ⛩️ ⟡ SYSTEM INFOS ⟡ ⛩️ ━━━╮`,
-    `│ 🥷 *Utilizador:* @${cleanUser}`,
-    `│ 💎 *Tipo:* ${tipoUsuario}`,
-    `│ 👑 *Cargo:* ${cargo}`,
-    ...(grupo ? [`│ 🏰 *Grupo:* ${grupo}`] : []),
+    `╭━━━ ⛩️ ⟡ sʏsᴛᴇᴍ ɪɴғᴏs ⟡ ⛩️ ━━━╮`,
+    `│ 🥷 *ᴜsᴜáʀɪᴏ:* @${cleanUser}`,
+    `│ 💎 *ᴛɪᴘᴏ:* ${tipoUsuario}`,
+    `│ 👑 *ᴄᴀʀɢᴏ:* ${cargo}`,
+    ...(grupo ? [`│ 🏰 *ɢʀᴜᴘᴏ:* ${grupo}`] : []),
     `│ ═══════════════════════`,
-    `│ ⚡ *Prefixo:* [ ${prefixo} ]`,
-    `│ 🛡️ *Modo:* ${modo}`,
-    ...(dataHora ? [`│ 📅 *Data/Hora:* ${dataHora}`] : []),
+    `│ ⚡ *ᴘʀᴇғɪxᴏ:* [ ${prefixo} ]`,
+    `│ 🛡️ *ᴍᴏᴅᴏ:* ${modo}`,
+    ...(dataHora ? [`│ 📅 *ᴅᴀᴛᴀ:* ${dataHora}`] : []),
     `│ ═══════════════════════`,
-    `│ ⏳ *Uptime:* ${uptime}`,
-    `│ 📡 *Latência:* ${ping}`,
-    `│ 💾 *RAM:* ${ram}`,
-    `│ 💻 *CPU:* ${cpu}`,
-    `│ 💿 *Disco:* ${disk}`,
-    `│ 🚀 *Velocidade:* ${velocidade}`,
-    `│ 📜 *Comandos:* ${totalComandos}`,
-    `│ ⚙️ *Versão:* v${versao}`,
-    `│ 🟢 *Status:* ${status}`,
+    `│ ⏳ *ᴜᴘᴛɪᴍᴇ:* ${uptime}`,
+    `│ 📡 *ᴘɪɴɢ:* ${ping}`,
+    `│ 💾 *ʀᴀᴍ:* ${ram}`,
+    `│ 💻 *ᴄᴘᴜ:* ${cpu}`,
+    `│ 💿 *ᴅɪsᴄᴏ:* ${disk}`,
+    `│ 🚀 *ᴠᴇʟᴏᴄɪᴅᴀᴅᴇ:* ${velocidade}`,
+    `│ 📜 *ᴄᴏᴍᴀɴᴅᴏs:* ${totalComandos}`,
+    `│ 🟢 *sᴛᴀᴛᴜs:* ${status}`,
     `│ ═══════════════════════`,
-    `│ ⚔️ *Criador:* ${CREATOR_NAME}`,
+    `│ ⚔️ *ᴄʀɪᴀᴅᴏʀ:* ${CREATOR_NAME}`,
     `╰━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
-    `✨ Use o menu interativo para explorar os comandos disponíveis!`,
+    `✨ Use o menu interativo abaixo para navegar pelo sistema!`,
   ];
 
   return formatMessage({
     icone: "🌀",
-    titulo: "MENU PRINCIPAL",
+    titulo: "ᴍᴇɴᴜ ᴘʀɪɴᴄɪᴘᴀʟ",
     campos,
-    useFrame: false, // Isso garante que a moldura personalizada em 'campos' seja usada.
+    useFrame: false,
   });
 }
