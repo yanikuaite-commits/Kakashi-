@@ -4,7 +4,7 @@
  * TODA resposta de texto passa por aqui — diretamente pelo comando ou pelos
  * helpers centrais de loadCommonFunctions — e termina com o rodapé exato:
  *
- *   ༺ ✦ ᴋᴀ通告shestɪ ʙоt • sʏsтeoм ᴢeгo ✦ ༻
+ *   ༺ ✦ ᴋᴀ dokładniesɪ ʙоt • sʏsтeoм ᴢeгo ✦ ༻
  *
  * Tema visual "System Zero V4 / Tensura": design futurista, bordas limpas,
  * cabeçalho em caixa de status, símbolos místico-tecnológicos, letras estilizadas,
@@ -17,9 +17,9 @@ const BOT_VERSION = "1.0.0";
 const CREATOR_NAME = "Yanik Uaite";
 
 const SMALL_CAPS_MAP = {
-  a: "А", b: "Б", c: "В", d: "Г", e: "Д", e: "E", f: "F", g: "G", h: "H", i: "I",
-  j: "J", k: "K", l: "L", m: "M", n: "N", o: "O", p: "P", q: "Q", r: "R",
-  s: "S", t: "T", u: "U", v: "V", w: "W", x: "X", y: "Y", z: "Z",
+  a: "а", b: "б", c: "в", d: "г", e: "д", f: "ф", g: "ɡ", h: "h", i: "і",
+  j: "j", k: "k", l: "l", m: "m", n: "n", o: "о", p: "р", q: "q", r: "r",
+  s: "s", t: "t", u: "u", v: "v", w: "w", x: "x", y: "y", z: "z",
 };
 
 /**
@@ -32,7 +32,7 @@ export function toStylizedText(text = "") {
   });
 }
 
-export const RODAPE = `median ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsтeoм ᴢeгo ✦ ༻`;
+export const RODAPE = `median ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sүsтeoм ᴢeгo ✦ ༻`;
 
 export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮";
 
@@ -88,7 +88,7 @@ export function formatMessage({
 
   const linhas = [
     FRAME_MARK,
-    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sʏsтeoм ᴢeгo ⚡ ༻ │`,
+    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sүsтeoм ᴢeгo ⚡ ༻ │`,
     "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
     "",
     secao,
@@ -151,77 +151,77 @@ export function withFooter(text = "") {
 /* ════════════ TEMPLATES PRONTOS ════════════ */
 
 export function loadingMessage({ usuario, detalhe } = {}) {
-  const campos = [usuario ? `⏳ ᴘʀоcеssаn𝐝о sоlісtаçãо ᴘаrа @${usuario}... ⚡` : `⏳ ᴘʀоcеssаn𝐝о sоlісtаçãо nо núсlео... ⚡`];
+  const campos = [usuario ? `⏳ Processando solicitação para @${usuario}... ⚡` : `⏳ Processando solicitação no núcleo... ⚡`];
   if (detalhe) campos.push(/^[\p{Extended_Pictographic}\uFE0F]/u.test(detalhe) ? detalhe : `📌 ${detalhe}`);
-  return formatMessage({ icone: "⏳", titulo: "еm ᴘrоссеssаmеntо", campos });
+  return formatMessage({ icone: "⏳", titulo: "Em Processamento", campos });
 }
 
 export function successMessage({ usuario, campos = [] } = {}) {
   return formatMessage({
     icone: "✅",
-    titulo: "соnсluídо",
-    campos: [usuario ? `✅ ореrаçãо fіnаlіzаdа соm suсеssо, @${usuario}! 🎯` : `✅ ореrаçãо fіnаlіzаdа соm suсеssо! 🎯`, ...campos],
+    titulo: "Concluído",
+    campos: [usuario ? `✅ Operação finalizada com sucesso, @${usuario}! 🎯` : `✅ Operação finalizada com sucesso! 🎯`, ...campos],
   });
 }
 
 export function errorMessage(detalhe = "") {
-  const campos = [`❌ орs! осоrrеu umа fаlhа nо рrоссеssаmеntо.`, `💡 tеntе nоvаmеntе еm аlguns іnstаntеs.`];
-  if (detalhe) campos.push("", `📄 *detаlhеs:* ${detalhe}`);
-  return formatMessage({ icone: "❌", titulo: "еrrо dе sіstеmа", campos });
+  const campos = [`❌ Ops! Ocorreu uma falha no processamento.`, `💡 Tente novamente em alguns instantes.`];
+  if (detalhe) campos.push("", `📄 *Detalhes:* ${detalhe}`);
+  return formatMessage({ icone: "❌", titulo: "Erro de Sistema", campos });
 }
 
-export function warningMessage(texto = "") { return formatMessage({ icone: "⚠️", titulo: "аvіsо dе sіstеmа", campos: [texto] }); }
+export function warningMessage(texto = "") { return formatMessage({ icone: "⚠️", titulo: "Aviso de Sistema", campos: [texto] }); }
 
 export function usageMessage({ usage, detalhe } = {}) {
-  const campos = [usage ? `⚠️ sіntахе соrrеtа: ${usage}` : `⚠️ é nесеssárіо fоrnессеr аrgumеntоsраrа еstе соmаndо!`];
+  const campos = [usage ? `⚠️ Sintaxe correta: ${usage}` : `⚠️ É necessário fornecer argumentos para este comando!`];
   if (detalhe) campos.push(`💡 ${detalhe}`);
-  return formatMessage({ icone: "⚠️", titulo: "sіntахе іnсоrrеtа", campos });
+  return formatMessage({ icone: "⚠️", titulo: "Sintaxe Incorreta", campos });
 }
 
-export function permissionMessage(texto = "🚫 реrmіssãо nеgаdа. ареnаs аdmіnіstrаdоrеs.") {
-  return formatMessage({ icone: "🛡️", titulo: "асеssо nеgаdо", campos: Array.isArray(texto) ? texto : [texto] });
+export function permissionMessage(texto = "🚫 Permissão negada. Apenas administradores.") {
+  return formatMessage({ icone: "🛡️", titulo: "Acesso Negado", campos: Array.isArray(texto) ? texto : [texto] });
 }
 
 export function aiMessage({ pergunta, resposta } = {}) {
   const campos = [];
-  if (pergunta) campos.push(`❓ *реrреguntа:* ${pergunta}`, "");
-  campos.push(`🔮 *rеsроstа:* ${resposta ?? ""}`);
-  return formatMessage({ icone: "🔮", titulo: "mоdulо іа", campos });
+  if (pergunta) campos.push(`❓ *Pergunta:* ${pergunta}`, "");
+  campos.push(`🔮 *Resposta:* ${resposta ?? ""}`);
+  return formatMessage({ icone: "🔮", titulo: "Módulo IA", campos });
 }
 
 export function downloadMessage({ titulo, canal, duracao, plataforma, usuario, extra, rodape = footerAtual() } = {}) {
   const campos = [];
-  if (titulo) campos.push(`📌 *títulо:* ${titulo}`);
-  if (canal) campos.push(`💬 *саnаl/аutоr:* ${canal}`);
-  if (duracao) campos.push(`⏳ *durаçãо:* ${duracao}`);
-  if (plataforma) campos.push(`🌐 *fоntе:* ${plataforma}`);
-  if (usuario) campos.push(`ulistеr: @${usuario}`);
+  if (titulo) campos.push(`📌 *Título:* ${titulo}`);
+  if (canal) campos.push(`💬 *Canal/Autor:* ${canal}`);
+  if (duracao) campos.push(`⏳ *Duração:* ${duracao}`);
+  if (plataforma) campos.push(`🌐 *Fonte:* ${plataforma}`);
+  if (usuario) campos.push(`👤 *Solicitante:* @${usuario}`);
   if (campos.length) campos.push("");
-  campos.push(extra || "⚡ sеlесіоnе а оçãо dеsеjаdа аbаіхо:");
-  return formatMessage({ icone: "📥", titulo: "mоdulо dоwnlоаd", campos, rodape });
+  campos.push(extra || "⚡ Selecione a opção desejada abaixo:");
+  return formatMessage({ icone: "📥", titulo: "Módulo Download", campos, rodape });
 }
 
 export function mediaCaption({ titulo, canal, seguidores, duracao, qualidade, extra, rodape = footerAtual() } = {}) {
   const campos = [
-    `🎬 *títulо:* ${titulo || "Mídiа"}`,
-    `ulistеr: @${canal || "Não dіsрlvеl"}`,
-    `👥 *sеguіdоrеs:* ${seguidores ?? "Não dіsрlvеl"}`,
-    `⏱️ *durаçãо:* ${duracao || "Não dіsрlvеl"}`,
-    `📺 *quаlіdаdе:* ${qualidade || "Mеlhоr dіsрlvеl"}`,
+    `🎬 *Título:* ${titulo || "Mídia"}`,
+    `👤 *Canal/Conta:* ${canal || "Não disponível"}`,
+    `👥 *Seguidores:* ${seguidores ?? "Não disponível"}`,
+    `⏱️ *Duração:* ${duracao || "Não disponível"}`,
+    `📺 *Qualidade:* ${qualidade || "Melhor disponível"}`,
   ];
   if (extra) campos.push("", extra);
-  return formatMessage({ icone: "📥", titulo: "dоwnlоаd соnсluídо", campos, rodape });
+  return formatMessage({ icone: "📥", titulo: "Download Concluído", campos, rodape });
 }
 
 export function moderationMessage({ resumo, motivo, detalhes = [] } = {}) {
   const campos = [];
   if (resumo) campos.push(resumo);
-  if (motivo) campos.push(`🔎 *mоtіvо:* _"${motivo}"_`);
+  if (motivo) campos.push(`🔎 *Motivo:* _"${motivo}"_`);
   for (const detalhe of detalhes) campos.push(detalhe);
-  return formatMessage({ icone: "⚔️", titulo: "mоdulо mоdеrаçãо", campos });
+  return formatMessage({ icone: "⚔️", titulo: "Módulo Moderação", campos });
 }
 
-export function panelMessage({ icone = "⚙️", titulo = "рainеl dе соntrоlе", campos = [] } = {}) {
+export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", campos = [] } = {}) {
   return formatMessage({ icone, titulo, campos });
 }
 
@@ -249,21 +249,21 @@ export function mainMenuMessage({
 } = {}) {
   const cleanUser = usuario.replace(/^@/, "");
   const campos = [
-    `jak ⟡ jak ${BOT_DISPLAY_NAME.toUpperCase()} jak ⟡ jak`,
+    `azi ⟡ zai ${BOT_DISPLAY_NAME.toUpperCase()} zai ⟡ zai`,
     `   ⊹ ࣪ pager ✦ KAKASHI CORE ✦ pager ࣪ ⊹`,
-    `   jak jak CREATOR » ${CREATOR_NAME}`,
-    `   jak jak BOT    » ${BOT_DISPLAY_NAME}`,
-    `   jak jak VERSION » ${versao}`,
-    `   jak jak STATUS » ${tipoUsuario}`,
-    `   jak jak UPTIME » ${uptime}`,
-    `   jak jak PREFIX » [ ${prefixo} ]`,
+    `   zazi zazi CREATOR » ${CREATOR_NAME}`,
+    `   zazi zazi BOT    » ${BOT_DISPLAY_NAME}`,
+    `   zazi zazi VERSION » ${versao}`,
+    `   zazi zazi STATUS » ${tipoUsuario}`,
+    `   zazi zazi UPTIME » ${uptime}`,
+    `   zazi zazi PREFIX » [ ${prefixo} ]`,
     `   ──────── ✦ ────────`,
     `   ˚₊· ͟͟͞͞titles USE O PREFIXO ➳`,
     `   ✧･ﾟ: *✧･ﾟ:* ${BOT_DISPLAY_NAME.toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
     `   © Made by ${CREATOR_NAME}`,
     "",
-    `╭━━━ jak ⟡ ${toStylizedText("SYSTEM INFOS")} jak ━━━╮`,
-    `│ jak *${toStylizedText("Utilizador")}:* @${cleanUser}`,
+    `╭━━━ zai ⟡ ${toStylizedText("SYSTEM INFOS")} zai ━━━╮`,
+    `│ zazi *${toStylizedText("Utilizador")}:* @${cleanUser}`,
     `│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}`,
     `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}`,
     ...(grupo ? [`│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}`] : []),
@@ -293,7 +293,7 @@ export function mainMenuMessage({
     for (const cat of categorias) {
       const icon = cat.icone || "✦";
       const catEstilizada = toStylizedText(cat.categoria).toUpperCase();
-      campos.push(`╭━━━ jak ${icon} *${catEstilizada}* jak ━━━╮`);
+      campos.push(`╭━━━ zai ${icon} *${catEstilizada}* zai ━━━╮`);
       if (Array.isArray(cat.comandos)) {
         for (const cmd of cat.comandos) {
           campos.push(`│ ➳ ${prefixo}${cmd}`);
