@@ -36,7 +36,8 @@ const BUTTON_SYMBOLS = {
   prefix: '⚡',
   mode: '🛡️',
   date: '📅',
-  channel: '🌐'
+  channel: '🌐',
+  list: '☰'
 };
 
 /**
@@ -77,7 +78,7 @@ export function createButtonRow(buttons) {
 export function createMainMenuButtons(prefixo, categorias = []) {
   const mainButtons = [
     createButton('Menu Principal', 'menu_main', BUTTON_SYMBOLS.main),
-    createButton('Informações', 'menu_info', BUTTON_SYMBOLS.info),
+    createButton('Comandos', 'menu_commands', BUTTON_SYMBOLS.list),
     createButton('Canal Oficial', 'menu_channel', BUTTON_SYMBOLS.channel),
   ];
 
