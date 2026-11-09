@@ -81,21 +81,22 @@ export function formatMessage({
   }
 
   if (!useFrame) {
-    const nomeEstilizado = toStylizedText(BOT_DISPLAY_NAME);
-    const header = titulo
-      ? `⚡ ${icone} ${toStylizedText(titulo).toUpperCase()} • ${nomeEstilizado.toUpperCase()} ⚡`
-      : `⚡ ${icone} ${nomeEstilizado.toUpperCase()} ⚡`;
-
+    // Quando useFrame é false, os 'campos' já contêm a estrutura completa da mensagem,
+    // incluindo quaisquer cabeçalhos/molduras personalizadas.
+    // Apenas juntamos os campos e anexamos o rodapé global, se não estiver presente.
     const body = [...campos, extra]
       .flatMap(valor => linesOf(valor))
       .filter(line => line !== "")
       .join("\n");
 
-    const footer = rodape;
-
-    return [header, "", body, "", footer].filter(part => part !== "").join("\n");
+    let finalMessage = body;
+    if (rodape && !finalMessage.endsWith(rodape)) {
+        finalMessage += `\n\n${rodape}`;
+    }
+    return finalMessage;
   }
 
+  // Lógica de moldura original para useFrame = true (padrão)
   const nomeEstilizado = toStylizedText(BOT_DISPLAY_NAME);
   const secao = titulo
     ? `╭━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()} • ${toStylizedText(titulo).toUpperCase()}* ༻ ━━╮`
@@ -129,7 +130,8 @@ export function ensureFrame(text, options = {}) {
   if (!value || isFramed(value)) return value;
   if (value.length > MAX_FRAME_LENGTH) return value;
   if (value.split("\n").length > MAX_FRAME_LINES) return value;
-  return formatMessage({ ...inferReplyStyle(value), ...options, campos: [value] });
+  // Ao garantir uma moldura, queremos o comportamento de moldura padrão, então useFrame deve ser true.
+  return formatMessage({ ...inferReplyStyle(value), ...options, campos: [value], useFrame: true });
 }
 
 function inferReplyStyle(text) {
@@ -302,6 +304,6 @@ export function mainMenuMessage({
     icone: "🌀",
     titulo: "MENU PRINCIPAL",
     campos,
-    useFrame: false,
+    useFrame: false, // Isso garante que a moldura personalizada em 'campos' seja usada.
   });
 }
