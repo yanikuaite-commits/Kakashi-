@@ -256,7 +256,6 @@ export function mainMenuMessage({
   totalComandos = "0",
   versao = BOT_VERSION,
   status = "ONLINE",
-  categorias = [],
 } = {}) {
   const cleanUser = usuario.replace(/^@/, "");
   const campos = [
