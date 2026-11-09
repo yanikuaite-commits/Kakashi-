@@ -22,7 +22,9 @@
  *
  *   ༺ ✦ ᴋᴀᴋᴀsʜɪ ʙᴏᴛ • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ✦ ༻
  */
-import { BOT_NAME, PLAIN_MESSAGE_THEME } from "../config.js";
+import { PLAIN_MESSAGE_THEME } from "../config.js";
+
+const BOT_DISPLAY_NAME = "Kakashi Bot";
 
 const SMALL_CAPS_MAP = {
   a: "ᴀ", b: "ʙ", c: "ᴄ", d: "ᴅ", e: "ᴇ", f: "ғ", g: "ɢ", h: "ʜ", i: "ɪ",
@@ -42,7 +44,7 @@ export function toStylizedText(text = "") {
   });
 }
 
-export const RODAPE = `༺ ✦ ${toStylizedText(BOT_NAME)} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ✦ ༻`;
+export const RODAPE = `༺ ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ✦ ༻`;
 
 /** Marca de molde aplicado — evita emoldurar a mesma mensagem duas vezes. */
 export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮";
@@ -106,7 +108,7 @@ export function formatMessage({
     return rodape ? `${partes}\n\n${rodape}` : partes;
   }
 
-  const nomeEstilizado = toStylizedText(BOT_NAME);
+  const nomeEstilizado = toStylizedText(BOT_DISPLAY_NAME);
   const secao = titulo
     ? `╭━━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()} • ${toStylizedText(titulo).toUpperCase()}* ༻ ━━━╮`
     : `╭━━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()}* ༻ ━━━╮`;
