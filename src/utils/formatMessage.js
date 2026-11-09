@@ -378,6 +378,7 @@ export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", 
  * @param {string} [options.ping] Latência (ex: '45ms')
  * @param {string} [options.ram] Uso de memória (ex: '128 MB')
  * @param {string} [options.cargo] Cargo/patente do utilizador (ex: 'Admin')
+ * @param {string} [options.tipoUsuario] Tipo do utilizador (ex: 'FREE USER' / 'VIP')
  * @param {string} [options.grupo] Nome do grupo atual
  * @param {number|string} [options.totalComandos] Total de comandos disponíveis
  * @param {string} [options.versao] Versão do bot
@@ -394,6 +395,7 @@ export function mainMenuMessage({
   ping,
   ram,
   cargo,
+  tipoUsuario,
   grupo,
   totalComandos,
   versao = BOT_VERSION,
@@ -402,6 +404,7 @@ export function mainMenuMessage({
 } = {}) {
   const infos = [
     `│ ☽ *${toStylizedText("Utilizador")}:* ${usuario.replace(/^@/, "")}`,
+    tipoUsuario ? `│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}` : "",
     cargo ? `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}` : "",
     grupo ? `│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}` : "",
     `│ ⟡ *${toStylizedText("Prefixo")}:* [ ${prefixo} ]`,
