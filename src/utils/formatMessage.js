@@ -4,26 +4,45 @@
  * TODA resposta de texto passa por aqui — diretamente pelo comando ou pelos
  * helpers centrais de loadCommonFunctions — e termina com o rodapé exato:
  *
- *   ༺ ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦ ༻
+ *   ༺ ✦ ᴋᴀᴋᴀsʜɪ ʙᴏᴛ • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ✦ ༻
  *
  * Tema visual "System Zero V4 / Tensura": design futurista, bordas limpas,
- * cabeçalho em caixa de status, símbolos místicos/tecnológicos e rodapé de sistema.
+ * cabeçalho em caixa de status, símbolos místicos/tecnológicos, letras estilizadas
+ * e rodapé de sistema.
  *
  * Molde padrão:
  *
  *   ╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮
- *   │ ༺ ⚡ KAKASHI BOT • SYSTEM ZERO V4 ⚡ ༻ │
+ *   │ ༺ ⚡ ᴋᴀᴋᴀsʜɪ ʙᴏᴛ • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ⚡ ༻ │
  *   ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
- *   ╭━━━ ༺ ⟡ *KAKASHI BOT • TÍTULO* ⟡ ༻ ━━━╮
+ *   ╭━━━ ༺ ⟡ *ᴋᴀᴋᴀsʜɪ ʙᴏᴛ • TÍTULO* ⟡ ༻ ━━━╮
  *   │
  *   │ linha de conteúdo
  *   ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
  *
- *   ༺ ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦ ༻
+ *   ༺ ✦ ᴋᴀᴋᴀsʜɪ ʙᴏᴛ • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ✦ ༻
  */
 import { BOT_NAME, PLAIN_MESSAGE_THEME } from "../config.js";
 
-export const RODAPE = "༺ ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦ ༻";
+const SMALL_CAPS_MAP = {
+  a: "ᴀ", b: "ʙ", c: "ᴄ", d: "ᴅ", e: "ᴇ", f: "ғ", g: "ɢ", h: "ʜ", i: "ɪ",
+  j: "ᴊ", k: "ᴋ", l: "ʟ", m: "ᴍ", n: "ɴ", o: "ᴏ", p: "ᴘ", q: "ǫ", r: "ʀ",
+  s: "s", t: "ᴛ", u: "ᴜ", v: "ᴠ", w: "ᴡ", x: "x", y: "ʏ", z: "ᴢ",
+};
+
+/**
+ * Converte texto para estilo de letra Small Caps futurista/anime.
+ * @param {string} text
+ * @returns {string}
+ */
+export function toStylizedText(text = "") {
+  return String(text).replace(/[a-z]/gi, (char) => {
+    const lower = char.toLowerCase();
+    return SMALL_CAPS_MAP[lower] || char;
+  });
+}
+
+export const RODAPE = `༺ ✦ ${toStylizedText(BOT_NAME)} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ✦ ༻`;
 
 /** Marca de molde aplicado — evita emoldurar a mesma mensagem duas vezes. */
 export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮";
@@ -62,7 +81,7 @@ function linesOf(value) {
  *
  * @param {object} options
  * @param {string} [options.icone] emoji da categoria (default ⟡)
- * @param {string} [options.titulo] título da seção (fica em caixa alta)
+ * @param {string} [options.titulo] título da seção (fica em caixa alta estilizada)
  * @param {Array<string>} [options.campos] linhas de conteúdo (aceita \n)
  * @param {string|null} [options.rodape] rodapé exato (default `RODAPE`)
  * @param {string} [options.extra] bloco extra após os campos
@@ -81,20 +100,20 @@ export function formatMessage({
       .join("\n")
       .trim();
 
-    const cabecalho = titulo ? `*${String(titulo).toUpperCase()}*` : "";
+    const cabecalho = titulo ? `*${toStylizedText(titulo).toUpperCase()}*` : "";
     const partes = [cabecalho, corpo].filter(Boolean).join("\n\n");
 
     return rodape ? `${partes}\n\n${rodape}` : partes;
   }
 
-  const nome = BOT_NAME.toUpperCase();
+  const nomeEstilizado = toStylizedText(BOT_NAME);
   const secao = titulo
-    ? `╭━━━ ༺ ${icone} *${nome} • ${String(titulo).toUpperCase()}* ༻ ━━━╮`
-    : `╭━━━ ༺ ${icone} *${nome}* ༻ ━━━╮`;
+    ? `╭━━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()} • ${toStylizedText(titulo).toUpperCase()}* ༻ ━━━╮`
+    : `╭━━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()}* ༻ ━━━╮`;
 
   const linhas = [
     FRAME_MARK,
-    `│ ༺ ⚡ ${nome} • SYSTEM ZERO V4 ⚡ ༻ │`,
+    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ⚡ ༻ │`,
     "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
     "",
     secao,
@@ -345,7 +364,7 @@ export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", 
 /**
  * 🌀 MENSAGEM PRINCIPAL & MENUS INTERATIVOS (SYSTEM ZERO V4 / TENSURA STYLE)
  *
- * Exibe o cartão do usuário, status do bot, prefixo e categorias do menu.
+ * Exibe o cartão do usuário, status do bot, prefixo e categorias do menu com letras estilizadas.
  *
  * @param {object} options
  * @param {string} options.usuario Nome/mencao do usuário
@@ -363,11 +382,11 @@ export function mainMenuMessage({
   categorias = [],
 } = {}) {
   const campos = [
-    `╭━━━ ༺ ⟡ SYSTEM INFOS ⟡ ༻ ━━━╮`,
-    `│ ☽ *Usuário:* @${usuario.replace(/^@/, "")}`,
-    `│ ⟡ *Prefixo:* [ ${prefixo} ]`,
-    `│ ✧ *Modo:* ${modo}`,
-    dataHora ? `│ ⊹ *Data/Hora:* ${dataHora}` : "",
+    `╭━━━ ༺ ⟡ ${toStylizedText("SYSTEM INFOS")} ⟡ ༻ ━━━╮`,
+    `│ ☽ *${toStylizedText("Usuário")}:* @${usuario.replace(/^@/, "")}`,
+    `│ ⟡ *${toStylizedText("Prefixo")}:* [ ${prefixo} ]`,
+    `│ ✧ *${toStylizedText("Modo")}:* ${modo}`,
+    dataHora ? `│ ⊹ *${toStylizedText("Data/Hora")}:* ${dataHora}` : "",
     `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
     "✦ Escolha uma das categorias abaixo no menu interativo para explorar os comandos!",
@@ -377,7 +396,8 @@ export function mainMenuMessage({
     campos.push("");
     for (const cat of categorias) {
       const icon = cat.icone || "✦";
-      campos.push(`╭━━━ ༺ ${icon} *${cat.categoria.toUpperCase()}* ༻ ━━━╮`);
+      const catEstilizada = toStylizedText(cat.categoria).toUpperCase();
+      campos.push(`╭━━━ ༺ ${icon} *${catEstilizada}* ༻ ━━━╮`);
       if (Array.isArray(cat.comandos)) {
         for (const cmd of cat.comandos) {
           campos.push(`│ ➳ ${prefixo}${cmd}`);
