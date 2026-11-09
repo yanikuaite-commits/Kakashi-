@@ -381,6 +381,7 @@ export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", 
  * @param {string} [options.grupo] Nome do grupo atual
  * @param {number|string} [options.totalComandos] Total de comandos disponíveis
  * @param {string} [options.versao] Versão do bot
+ * @param {string} [options.status] Status do sistema (ex: 'Online', 'Otimizado')
  * @param {Array<{categoria: string, icone?: string, comandos: string[]}>} [options.categorias]
  * @returns {string}
  */
@@ -396,6 +397,7 @@ export function mainMenuMessage({
   grupo,
   totalComandos,
   versao = BOT_VERSION,
+  status = "Online",
   categorias = [],
 } = {}) {
   const infos = [
@@ -410,6 +412,7 @@ export function mainMenuMessage({
     ram ? `│ 💻 *${toStylizedText("RAM")}:* ${ram}` : "",
     totalComandos ? `│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}` : "",
     versao ? `│ ⚙️ *${toStylizedText("Versão")}:* v${versao}` : "",
+    status ? `│ 🛡️ *${toStylizedText("Status")}:* ${status}` : "",
   ].filter(Boolean);
 
   const campos = [
