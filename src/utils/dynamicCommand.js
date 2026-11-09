@@ -156,8 +156,8 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   // além de invocar o comando, pede a resposta em TEXTO. Sem ele, estes
   // utilizadores recebiam cards que não conseguem abrir.
   const textOnly = prefix === "!";
-  const validPrefix = verifyPrefix(prefix, remoteJid) ||
-    prefix === "" || textOnly || prefixless;
+  const validPrefix =
+    verifyPrefix(prefix, remoteJid) || textOnly || prefixless;
 
   // Quando o prefixless está ativo, se a mensagem não tinha o prefixo, ajustamos a forma de encontrar o comando simulando o prefixo do grupo
   let effectiveCommandName = commandName;
