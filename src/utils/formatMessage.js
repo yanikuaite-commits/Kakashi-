@@ -34,8 +34,6 @@ export function toStylizedText(text = "") {
 
 export const RODAPE = `༺ ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ✦ ༻`;
 
-export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━╮";
-
 let plainTheme = PLAIN_MESSAGE_THEME;
 
 export function isPlainTheme() {
@@ -54,7 +52,7 @@ const MAX_FRAME_LENGTH = 1500;
 const MAX_FRAME_LINES = 40;
 
 export function isFramed(text = "") {
-  return String(text ?? "").includes(FRAME_MARK);
+  return String(text ?? "").includes("╭");
 }
 
 function linesOf(value) {
@@ -68,6 +66,7 @@ export function formatMessage({
   campos = [],
   rodape = footerAtual(),
   extra,
+  useFrame = true,
 } = {}) {
   if (isPlainTheme()) {
     const corpo = [...campos, extra]
@@ -81,16 +80,28 @@ export function formatMessage({
     return rodape ? `${partes}\n\n${rodape}` : partes;
   }
 
+  if (!useFrame) {
+    const nomeEstilizado = toStylizedText(BOT_DISPLAY_NAME);
+    const header = titulo
+      ? `⚡ ${icone} ${toStylizedText(titulo).toUpperCase()} • ${nomeEstilizado.toUpperCase()} ⚡`
+      : `⚡ ${icone} ${nomeEstilizado.toUpperCase()} ⚡`;
+
+    const body = [...campos, extra]
+      .flatMap(valor => linesOf(valor))
+      .filter(line => line !== "")
+      .join("\n");
+
+    const footer = rodape;
+
+    return [header, "", body, "", footer].filter(part => part !== "").join("\n");
+  }
+
   const nomeEstilizado = toStylizedText(BOT_DISPLAY_NAME);
   const secao = titulo
     ? `╭━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()} • ${toStylizedText(titulo).toUpperCase()}* ༻ ━━╮`
     : `╭━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()}* ༻ ━━╮`;
 
   const linhas = [
-    FRAME_MARK,
-    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ⚡ ༻ │`,
-    "╰━━━━━━━━━━━━━━━━━━━━━━━╯",
-    "",
     secao,
     "│",
   ];
@@ -307,5 +318,6 @@ export function mainMenuMessage({
     icone: "🌀",
     titulo: "MENU PRINCIPAL",
     campos,
+    useFrame: false,
   });
 }
