@@ -247,7 +247,7 @@ export function mainMenuMessage({
 } = {}) {
   const cleanUser = usuario.replace(/^@/, "");
   const campos = [
-    `༺ ⟡ ༻ ${toStylizedText(BOT_DISPLAY_NAME).toUpperCase()} ༺ ⟡ ༻`,
+    `༺ ⟡ ༻ ${BOT_DISPLAY_NAME.toUpperCase()} ༺ ⟡ ༻`,
     `   ⊹ ࣪ ˖ ✦ ${toStylizedText("KAKASHI CORE")} ✦ ˖ ࣪ ⊹`,
     `   ☽༺✧༻ CREATOR » ${CREATOR_NAME}`,
     `   ☽༺✧༻ BOT    » ${BOT_DISPLAY_NAME}`,
@@ -256,8 +256,8 @@ export function mainMenuMessage({
     `   ☽༺✧༻ UPTIME » ${uptime}`,
     `   ☽༺✧༻ PREFIX » [ ${prefixo} ]`,
     `   ──────── ✦ ────────`,
-    `   ˚₊· ͟͟͞͞➳ SOLICITANTE: @${cleanUser} ➳`,
-    `   ✧･ﾟ: *✧･ﾟ:* ${toStylizedText(BOT_DISPLAY_NAME).toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
+    `   ˚₊· ͟͟͞͞➳ USE O PREFIXO ➳`,
+    `   ✧･ﾟ: *✧･ﾟ:* ${BOT_DISPLAY_NAME.toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
     `   © Made by ${CREATOR_NAME}`,
     "",
     `╭━━━ ༺ ⟡ ${toStylizedText("SYSTEM INFOS")} ⟡ ༻ ━━━╮`,
