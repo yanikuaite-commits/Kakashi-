@@ -227,54 +227,58 @@ export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", 
 }
 
 /**
- * MENSAGEM PRINCIPAL & MENUS INTERATIVOS (SYSTEM ZERO V4 / TENSURA STYLE)
+ * MENSAGEM PRINCIPAL & MENUS INTERATIVOS (SYSTEM ZERO V4 / TENSURA STYLE REFINED)
  */
 export function mainMenuMessage({
   usuario = "Utilizador",
   prefixo = "/",
   modo = "Público",
   dataHora = "",
-  uptime,
-  ping,
-  ram,
-  velocidade,
-  cargo,
-  tipoUsuario,
+  uptime = "0h 00m 00s",
+  ping = "0ms",
+  ram = "0MB / 0MB",
+  velocidade = "0ms",
+  cargo = "Membro",
+  tipoUsuario = "FREE USER",
   grupo,
-  totalComandos,
+  totalComandos = "0",
   versao = BOT_VERSION,
-  status = "Online",
+  status = "ONLINE",
   categorias = [],
 } = {}) {
-  const infos = [];
-  infos.push(`│ ☽ *${toStylizedText("Utilizador")}:* ${usuario.replace(/^@/, "")}`);
-  if (tipoUsuario) infos.push(`│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}`);
-  if (cargo) infos.push(`│ 👑 *${toStylizedText("Cargo")}:* ${cargo}`);
-  if (grupo) infos.push(`│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}`);
-  
-  infos.push(`│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-  
-  infos.push(`│ ⟡ *${toStylizedText("Prefixo")}:* [ ${prefixo} ]`);
-  infos.push(`│ ✧ *${toStylizedText("Modo")}:* ${modo}`);
-  if (dataHora) infos.push(`│ ⊹ *${toStylizedText("Data/Hora")}:* ${dataHora}`);
-  
-  infos.push(`│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-  
-  if (uptime) infos.push(`│ ⏳ *${toStylizedText("Uptime")}:* ${uptime}`);
-  if (ping) infos.push(`│ ⚡ *${toStylizedText("Latência")}:* ${ping}`);
-  if (ram) infos.push(`│ 💻 *${toStylizedText("RAM")}:* ${ram}`);
-  if (velocidade) infos.push(`│ 🚀 *${toStylizedText("Velocidade")}:* ${velocidade}`);
-  if (totalComandos) infos.push(`│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}`);
-  if (versao) infos.push(`│ ⚙️ *${toStylizedText("Versão")}:* v${versao}`);
-  if (status) infos.push(`│ 🛡️ *${toStylizedText("Status")}:* ${status}`);
-  
-  infos.push(`│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-  
-  infos.push(`│ 👤 *${toStylizedText("Criador")}:* ${CREATOR_NAME}`);
-
   const campos = [
+    `༺ ⟡ ༻ ${toStylizedText(BOT_DISPLAY_NAME).toUpperCase()} ༺ ⟡ ༻`,
+    `   ⊹ ࣪ ˖ ✦ ${toStylizedText("KAKASHI CORE")} ✦ ˖ ࣪ ⊹`,
+    `   ☽༺✧༻ CREATOR » ${CREATOR_NAME}`,
+    `   ☽༺✧༻ BOT    » ${BOT_DISPLAY_NAME}`,
+    `   ☽༺✧༻ VERSION » ${versao}`,
+    `   ☽༺✧༻ STATUS » ${tipoUsuario}`,
+    `   ☽༺✧༻ UPTIME » ${uptime}`,
+    `   ☽༺✧༻ PREFIX » [ ${prefixo} ]`,
+    `   ──────── ✦ ────────`,
+    `   ˚₊· ͟͟͞͞➳ USE O PREFIXO ➳`,
+    `   ✧･ﾟ: *✧･ﾟ:* ${toStylizedText(BOT_DISPLAY_NAME).toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
+    `   © Made by ${CREATOR_NAME}`,
+    "",
     `╭━━━ ༺ ⟡ ${toStylizedText("SYSTEM INFOS")} ⟡ ༻ ━━━╮`,
-    ...infos,
+    `│ ☽ *${toStylizedText("Utilizador")}:* ${usuario.replace(/^@/, "")}`,
+    `│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}`,
+    `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}`,
+    ...(grupo ? [`│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}`] : []),
+    `│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `│ ⟡ *${toStylizedText("Prefixo")}:* [ ${prefixo} ]`,
+    `│ ✧ *${toStylizedText("Modo")}:* ${modo}`,
+    ...(dataHora ? [`│ ⊹ *${toStylizedText("Data/Hora")}:* ${dataHora}`] : []),
+    `│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `│ ⏳ *${toStylizedText("Uptime")}:* ${uptime}`,
+    `│ ⚡ *${toStylizedText("Latência")}:* ${ping}`,
+    `│ 💻 *${toStylizedText("RAM")}:* ${ram}`,
+    `│ 🚀 *${toStylizedText("Velocidade")}:* ${velocidade}`,
+    `│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}`,
+    `│ ⚙️ *${toStylizedText("Versão")}:* v${versao}`,
+    `│ 🛡️ *${toStylizedText("Status")}:* ${status}`,
+    `│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `│ 👤 *${toStylizedText("Criador")}:* ${CREATOR_NAME}`,
     `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
     "✦ Escolha uma das categorias abaixo no menu interativo para explorar os comandos!",
