@@ -29,3 +29,4 @@ database/credits.json
 database/subscriptions.json
 database/pending-recharges.json
 database/rate-limit.json
+.aider*
