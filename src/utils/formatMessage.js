@@ -4,29 +4,29 @@
  * TODA resposta de texto passa por aqui — diretamente pelo comando ou pelos
  * helpers centrais de loadCommonFunctions — e termina com o rodapé exato:
  *
- *   ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦
+ *   ༺ ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦ ༻
  *
  * Tema visual "System Zero V4 / Tensura": design futurista, bordas limpas,
- * cabeçalho em caixa de status e rodapé com assinatura de sistema.
+ * cabeçalho em caixa de status, símbolos místicos/tecnológicos e rodapé de sistema.
  *
  * Molde padrão:
  *
- *   ╭───────────────────────────────╮
- *   │ ⚡ KAKASHI BOT • SYSTEM ZERO ⚡│
- *   ╰───────────────────────────────╯
- *   ┌─[ ◈ *KAKASHI BOT • TÍTULO* ]─┐
+ *   ╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮
+ *   │ ༺ ⚡ KAKASHI BOT • SYSTEM ZERO V4 ⚡ ༻ │
+ *   ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+ *   ╭━━━ ༺ ⟡ *KAKASHI BOT • TÍTULO* ⟡ ༻ ━━━╮
  *   │
  *   │ linha de conteúdo
- *   └───────────────────────────────┘
+ *   ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
  *
- *   ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦
+ *   ༺ ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦ ༻
  */
 import { BOT_NAME, PLAIN_MESSAGE_THEME } from "../config.js";
 
-export const RODAPE = "✦ KAKASHI BOT • SYSTEM ZERO V4 ✦";
+export const RODAPE = "༺ ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦ ༻";
 
 /** Marca de molde aplicado — evita emoldurar a mesma mensagem duas vezes. */
-export const FRAME_MARK = "┌─[ ◈";
+export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮";
 
 let plainTheme = PLAIN_MESSAGE_THEME;
 
@@ -61,7 +61,7 @@ function linesOf(value) {
  * Monta a mensagem no molde visual único do bot.
  *
  * @param {object} options
- * @param {string} [options.icone] emoji da categoria (default ◈)
+ * @param {string} [options.icone] emoji da categoria (default ⟡)
  * @param {string} [options.titulo] título da seção (fica em caixa alta)
  * @param {Array<string>} [options.campos] linhas de conteúdo (aceita \n)
  * @param {string|null} [options.rodape] rodapé exato (default `RODAPE`)
@@ -69,7 +69,7 @@ function linesOf(value) {
  * @returns {string}
  */
 export function formatMessage({
-  icone = "◈",
+  icone = "⟡",
   titulo,
   campos = [],
   rodape = footerAtual(),
@@ -89,13 +89,13 @@ export function formatMessage({
 
   const nome = BOT_NAME.toUpperCase();
   const secao = titulo
-    ? `┌─[ ${icone} *${nome} • ${String(titulo).toUpperCase()}* ]─┐`
-    : `┌─[ ${icone} *${nome}* ]─┐`;
+    ? `╭━━━ ༺ ${icone} *${nome} • ${String(titulo).toUpperCase()}* ༻ ━━━╮`
+    : `╭━━━ ༺ ${icone} *${nome}* ༻ ━━━╮`;
 
   const linhas = [
-    "╭───────────────────────────────╮",
-    `│ ⚡ ${nome} • SYSTEM ZERO V4 ⚡ │`,
-    "╰───────────────────────────────╯",
+    FRAME_MARK,
+    `│ ༺ ⚡ ${nome} • SYSTEM ZERO V4 ⚡ ༻ │`,
+    "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
     "",
     secao,
     "│",
@@ -115,7 +115,7 @@ export function formatMessage({
   for (const campo of campos) push(campo);
   if (extra) push(extra);
 
-  linhas.push("└───────────────────────────────┘");
+  linhas.push("╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯");
 
   if (rodape) linhas.push("", rodape);
 
@@ -173,7 +173,7 @@ function inferReplyStyle(text) {
     return { icone: "✅", titulo: "Concluído" };
   }
 
-  return { icone: "💬", titulo: "Resposta" };
+  return { icone: "✧", titulo: "Resposta" };
 }
 
 /**
@@ -363,12 +363,12 @@ export function mainMenuMessage({
   categorias = [],
 } = {}) {
   const campos = [
-    `╭─── SYSTEM INFOS ───╮`,
-    `│ 👤 *Usuário:* @${usuario.replace(/^@/, "")}`,
-    `│ ⚙️ *Prefixo:* [ ${prefixo} ]`,
-    `│ 🛡️ *Modo:* ${modo}`,
-    dataHora ? `│ ⏱️ *Data/Hora:* ${dataHora}` : "",
-    `╰─────────────────────╯`,
+    `╭━━━ ༺ ⟡ SYSTEM INFOS ⟡ ༻ ━━━╮`,
+    `│ ☽ *Usuário:* @${usuario.replace(/^@/, "")}`,
+    `│ ⟡ *Prefixo:* [ ${prefixo} ]`,
+    `│ ✧ *Modo:* ${modo}`,
+    dataHora ? `│ ⊹ *Data/Hora:* ${dataHora}` : "",
+    `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
     "✦ Escolha uma das categorias abaixo no menu interativo para explorar os comandos!",
   ].filter(Boolean);
@@ -377,13 +377,13 @@ export function mainMenuMessage({
     campos.push("");
     for (const cat of categorias) {
       const icon = cat.icone || "✦";
-      campos.push(`┌──[ ${icon} *${cat.categoria.toUpperCase()}* ]`);
+      campos.push(`╭━━━ ༺ ${icon} *${cat.categoria.toUpperCase()}* ༻ ━━━╮`);
       if (Array.isArray(cat.comandos)) {
         for (const cmd of cat.comandos) {
-          campos.push(`│ ➢ ${prefixo}${cmd}`);
+          campos.push(`│ ➳ ${prefixo}${cmd}`);
         }
       }
-      campos.push(`└─────────────────────────`);
+      campos.push(`╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
     }
   }
 
