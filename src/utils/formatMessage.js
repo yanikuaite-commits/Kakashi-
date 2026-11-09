@@ -364,24 +364,24 @@ export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", 
 /**
  * 🌀 MENSAGEM PRINCIPAL & MENUS INTERATIVOS (SYSTEM ZERO V4 / TENSURA STYLE)
  *
- * Exibe cartão de status dinâmico do usuário/sistema, prefixo e categorias do menu.
+ * Exibe cartão de status dinâmico do utilizador/sistema, prefixo e categorias do menu.
  *
  * @param {object} options
- * @param {string} [options.usuario] Nome/menção do usuário
+ * @param {string} [options.usuario] Nome/menção do utilizador que solicitou
  * @param {string} [options.prefixo] Prefixo do bot (default '/')
  * @param {string} [options.modo] Modo do bot (ex: 'Público' / 'Privado')
  * @param {string} [options.dataHora] Hora/Data formatada
  * @param {string} [options.uptime] Tempo de atividade (ex: '2h 15m')
  * @param {string} [options.ping] Latência (ex: '45ms')
  * @param {string} [options.ram] Uso de memória (ex: '128 MB')
- * @param {string} [options.cargo] Cargo/patente do usuário (ex: 'Admin')
+ * @param {string} [options.cargo] Cargo/patente do utilizador (ex: 'Admin')
  * @param {string} [options.grupo] Nome do grupo atual
  * @param {number|string} [options.totalComandos] Total de comandos disponíveis
  * @param {Array<{categoria: string, icone?: string, comandos: string[]}>} [options.categorias]
  * @returns {string}
  */
 export function mainMenuMessage({
-  usuario = "Usuário",
+  usuario = "Utilizador",
   prefixo = "/",
   modo = "Público",
   dataHora = "",
@@ -394,7 +394,7 @@ export function mainMenuMessage({
   categorias = [],
 } = {}) {
   const infos = [
-    `│ ☽ *${toStylizedText("Usuário")}:* @${usuario.replace(/^@/, "")}`,
+    `│ ☽ *${toStylizedText("Utilizador")}:* ${usuario.replace(/^@/, "")}`,
     cargo ? `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}` : "",
     grupo ? `│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}` : "",
     `│ ⟡ *${toStylizedText("Prefixo")}:* [ ${prefixo} ]`,
