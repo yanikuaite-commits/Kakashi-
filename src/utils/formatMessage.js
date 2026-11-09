@@ -25,6 +25,7 @@
 import { PLAIN_MESSAGE_THEME } from "../config.js";
 
 const BOT_DISPLAY_NAME = "Kakashi Bot";
+const BOT_VERSION = "4.0";
 
 const SMALL_CAPS_MAP = {
   a: "ᴀ", b: "ʙ", c: "ᴄ", d: "ᴅ", e: "ᴇ", f: "ғ", g: "ɢ", h: "ʜ", i: "ɪ",
@@ -44,7 +45,7 @@ export function toStylizedText(text = "") {
   });
 }
 
-export const RODAPE = `༺ ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ✦ ༻`;
+export const RODAPE = `༺ ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ✦ ༻`;
 
 /** Marca de molde aplicado — evita emoldurar a mesma mensagem duas vezes. */
 export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮";
@@ -115,7 +116,7 @@ export function formatMessage({
 
   const linhas = [
     FRAME_MARK,
-    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ⚡ ༻ │`,
+    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ⚡ ༻ │`,
     "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
     "",
     secao,
@@ -379,6 +380,7 @@ export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", 
  * @param {string} [options.cargo] Cargo/patente do utilizador (ex: 'Admin')
  * @param {string} [options.grupo] Nome do grupo atual
  * @param {number|string} [options.totalComandos] Total de comandos disponíveis
+ * @param {string} [options.versao] Versão do bot
  * @param {Array<{categoria: string, icone?: string, comandos: string[]}>} [options.categorias]
  * @returns {string}
  */
@@ -393,6 +395,7 @@ export function mainMenuMessage({
   cargo,
   grupo,
   totalComandos,
+  versao = BOT_VERSION,
   categorias = [],
 } = {}) {
   const infos = [
@@ -406,6 +409,7 @@ export function mainMenuMessage({
     ping ? `│ ⚡ *${toStylizedText("Latência")}:* ${ping}` : "",
     ram ? `│ 💻 *${toStylizedText("RAM")}:* ${ram}` : "",
     totalComandos ? `│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}` : "",
+    versao ? `│ ⚙️ *${toStylizedText("Versão")}:* v${versao}` : "",
   ].filter(Boolean);
 
   const campos = [
