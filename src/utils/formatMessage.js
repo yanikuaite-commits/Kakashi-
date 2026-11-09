@@ -82,7 +82,6 @@ export function formatMessage({
   }
 
   const nomeEstilizado = toStylizedText(BOT_DISPLAY_NAME);
-  // Otimização para WhatsApp Mobile: Cabeçalhos ligeiramente mais curtos evitam quebra de linha indesejada em ecrãs menores.
   const secao = titulo
     ? `╭━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()} • ${toStylizedText(titulo).toUpperCase()}* ༻ ━━╮`
     : `╭━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()}* ༻ ━━╮`;
@@ -152,77 +151,77 @@ export function withFooter(text = "") {
 /* ════════════ TEMPLATES PRONTOS ════════════ */
 
 export function loadingMessage({ usuario, detalhe } = {}) {
-  const campos = [usuario ? `⏳ Processando solicitação para @${usuario}... ⚡` : `⏳ Processando solicitação no núcleo... ⚡`];
+  const campos = [usuario ? `⏳ ᴘʀᴏᴄᴇssᴀɴᴅᴏ sᴏʟɪᴄɪᴛᴀçãᴏ ᴘᴀʀᴀ @${usuario}... ⚡` : `⏳ ᴘʀᴏᴄᴇssᴀɴᴅᴏ sᴏʟɪᴄɪᴛᴀçãᴏ ɴᴏ ɴúᴄʟᴇᴏ... ⚡`];
   if (detalhe) campos.push(/^[\p{Extended_Pictographic}\uFE0F]/u.test(detalhe) ? detalhe : `📌 ${detalhe}`);
-  return formatMessage({ icone: "⏳", titulo: "Em Processamento", campos });
+  return formatMessage({ icone: "⏳", titulo: "ᴇᴍ ᴘʀᴏᴄᴇssᴀᴍᴇɴᴛᴏ", campos });
 }
 
 export function successMessage({ usuario, campos = [] } = {}) {
   return formatMessage({
     icone: "✅",
-    titulo: "Concluído",
-    campos: [usuario ? `✅ Operação finalizada com sucesso, @${usuario}! 🎯` : `✅ Operação finalizada com sucesso! 🎯`, ...campos],
+    titulo: "ᴄᴏɴᴄʟᴜíᴅᴏ",
+    campos: [usuario ? `✅ ᴏᴘᴇʀᴀçãᴏ ғɪɴᴀʟɪᴢᴀᴅᴀ ᴄᴏᴍ sᴜᴄᴇssᴏ, @${usuario}! 🎯` : `✅ ᴏᴘᴇʀᴀçãᴏ ғɪɴᴀʟɪᴢᴀᴅᴀ ᴄᴏᴍ sᴜᴄᴇssᴏ! 🎯`, ...campos],
   });
 }
 
 export function errorMessage(detalhe = "") {
-  const campos = [`❌ Ops! Ocorreu uma falha no processamento.`, `💡 Tente novamente em alguns instantes.`];
-  if (detalhe) campos.push("", `📄 *Detalhes:* ${detalhe}`);
-  return formatMessage({ icone: "❌", titulo: "Erro de Sistema", campos });
+  const campos = [`❌ ᴏᴘs! ᴏᴄᴏʀʀᴇᴜ ᴜᴍᴀ ғᴀʟʜᴀ ɴᴏ ᴘʀᴏᴄᴇssᴀᴍᴇɴᴛᴏ.`, `💡 ᴛᴇɴᴛᴇ ɴᴏᴠᴀᴍᴇɴᴛᴇ ᴇᴍ ᴀʟɢᴜɴs ɪɴsᴛᴀɴᴛᴇs.`];
+  if (detalhe) campos.push("", `📄 *ᴅᴇᴛᴀʟʜᴇs:* ${detalhe}`);
+  return formatMessage({ icone: "❌", titulo: "ᴇʀʀᴏ ᴅᴇ sɪsᴛᴇᴍᴀ", campos });
 }
 
-export function warningMessage(texto = "") { return formatMessage({ icone: "⚠️", titulo: "Aviso de Sistema", campos: [texto] }); }
+export function warningMessage(texto = "") { return formatMessage({ icone: "⚠️", titulo: "ᴀᴠɪsᴏ ᴅᴇ sɪsᴛᴇᴍᴀ", campos: [texto] }); }
 
 export function usageMessage({ usage, detalhe } = {}) {
-  const campos = [usage ? `⚠️ Sintaxe correta: ${usage}` : `⚠️ É necessário fornecer argumentos para este comando!`];
+  const campos = [usage ? `⚠️ sɪɴᴛᴀxᴇ ᴄᴏʀʀᴇᴛᴀ: ${usage}` : `⚠️ é ɴᴇᴄᴇssáʀɪᴏ ғᴏʀɴᴇᴄᴇʀ ᴀʀɢᴜᴍᴇɴᴛᴏs ᴘᴀʀᴀ ᴇsᴛᴇ ᴄᴏᴍᴀɴᴅᴏ!`];
   if (detalhe) campos.push(`💡 ${detalhe}`);
-  return formatMessage({ icone: "⚠️", titulo: "Sintaxe Incorreta", campos });
+  return formatMessage({ icone: "⚠️", titulo: "sɪɴᴛᴀxᴇ ɪɴᴄᴏʀʀᴇᴛᴀ", campos });
 }
 
-export function permissionMessage(texto = "🚫 Permissão negada. Apenas administradores.") {
-  return formatMessage({ icone: "🛡️", titulo: "Acesso Negado", campos: Array.isArray(texto) ? texto : [texto] });
+export function permissionMessage(texto = "🚫 ᴘᴇʀᴍɪssãᴏ ɴᴇɢᴀᴅᴀ. ᴀᴘᴇɴᴀs ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀᴇs.") {
+  return formatMessage({ icone: "🛡️", titulo: "ᴀᴄᴇssᴏ ɴᴇɢᴀᴅᴏ", campos: Array.isArray(texto) ? texto : [texto] });
 }
 
 export function aiMessage({ pergunta, resposta } = {}) {
   const campos = [];
-  if (pergunta) campos.push(`❓ *Pergunta:* ${pergunta}`, "");
-  campos.push(`🔮 *Resposta:* ${resposta ?? ""}`);
-  return formatMessage({ icone: "🔮", titulo: "Módulo IA", campos });
+  if (pergunta) campos.push(`❓ *ᴘᴇʀɢᴜɴᴛᴀ:* ${pergunta}`, "");
+  campos.push(`🔮 *ʀᴇsᴘᴏsᴛᴀ:* ${resposta ?? ""}`);
+  return formatMessage({ icone: "🔮", titulo: "móᴅᴜʟᴏ ɪᴀ", campos });
 }
 
 export function downloadMessage({ titulo, canal, duracao, plataforma, usuario, extra, rodape = footerAtual() } = {}) {
   const campos = [];
-  if (titulo) campos.push(`📌 *Título:* ${titulo}`);
-  if (canal) campos.push(`💬 *Canal/Autor:* ${canal}`);
-  if (duracao) campos.push(`⏳ *Duração:* ${duracao}`);
-  if (plataforma) campos.push(`🌐 *Fonte:* ${plataforma}`);
-  if (usuario) campos.push(`👤 *Solicitante:* @${usuario}`);
+  if (titulo) campos.push(`📌 *ᴛíᴛᴜʟᴏ:* ${titulo}`);
+  if (canal) campos.push(`💬 *ᴄᴀɴᴀʟ/ᴀᴜᴛᴏʀ:* ${canal}`);
+  if (duracao) campos.push(`⏳ *ᴅᴜʀᴀçãᴏ:* ${duracao}`);
+  if (plataforma) campos.push(`🌐 *ғᴏɴᴛᴇ:* ${plataforma}`);
+  if (usuario) campos.push(`👤 *sᴏʟɪᴄɪᴛᴀɴᴛᴇ:* @${usuario}`);
   if (campos.length) campos.push("");
-  campos.push(extra || "⚡ Selecione a opção desejada abaixo:");
-  return formatMessage({ icone: "📥", titulo: "Módulo Download", campos, rodape });
+  campos.push(extra || "⚡ sᴇʟᴇᴄɪᴏɴᴇ ᴀ ᴏçãᴏ ᴅᴇsᴇᴊᴀᴅᴀ ᴀʙᴀɪxᴏ:");
+  return formatMessage({ icone: "📥", titulo: "móᴅᴜʟᴏ ᴅᴏᴡɴʟᴏᴀᴅ", campos, rodape });
 }
 
 export function mediaCaption({ titulo, canal, seguidores, duracao, qualidade, extra, rodape = footerAtual() } = {}) {
   const campos = [
-    `🎬 *Título:* ${titulo || "Mídia"}`,
-    `👤 *Canal/Conta:* ${canal || "Não disponível"}`,
-    `👥 *Seguidores:* ${seguidores ?? "Não disponível"}`,
-    `⏱️ *Duração:* ${duracao || "Não disponível"}`,
-    `📺 *Qualidade:* ${qualidade || "Melhor disponível"}`,
+    `🎬 *ᴛíᴛᴜʟᴏ:* ${titulo || "Mídia"}`,
+    `👤 *ᴄᴀɴᴀʟ/ᴄᴏɴᴛᴀ:* ${canal || "Não disponível"}`,
+    `👥 *sᴇɢᴜɪᴅᴏʀᴇs:* ${seguidores ?? "Não disponível"}`,
+    `⏱️ *ᴅᴜʀᴀçãᴏ:* ${duracao || "Não disponível"}`,
+    `📺 *ǫᴜᴀʟɪᴅᴀᴅᴇ:* ${qualidade || "Melhor disponível"}`,
   ];
   if (extra) campos.push("", extra);
-  return formatMessage({ icone: "📥", titulo: "Download Concluído", campos, rodape });
+  return formatMessage({ icone: "📥", titulo: "ᴅᴏᴡɴʟᴏᴀᴅ ᴄᴏɴᴄʟᴜíᴅᴏ", campos, rodape });
 }
 
 export function moderationMessage({ resumo, motivo, detalhes = [] } = {}) {
   const campos = [];
   if (resumo) campos.push(resumo);
-  if (motivo) campos.push(`🔎 *Motivo:* _"${motivo}"_`);
+  if (motivo) campos.push(`🔎 *ᴍᴏᴛɪᴠᴏ:* _"${motivo}"_`);
   for (const detalhe of detalhes) campos.push(detalhe);
-  return formatMessage({ icone: "⚔️", titulo: "Módulo Moderação", campos });
+  return formatMessage({ icone: "⚔️", titulo: "móᴅᴜʟᴏ ᴍᴏᴅᴇʀᴀçãᴏ", campos });
 }
 
-export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", campos = [] } = {}) {
+export function panelMessage({ icone = "⚙️", titulo = "ᴘᴀɪɴᴇʟ ᴅᴇ ᴄᴏɴᴛʀᴏʟᴇ", campos = [] } = {}) {
   return formatMessage({ icone, titulo, campos });
 }
 
@@ -281,7 +280,7 @@ export function mainMenuMessage({
     `│ 👤 *${toStylizedText("Criador")}:* ${CREATOR_NAME}`,
     `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
-    "✦ Escolha uma das categorias abaixo no menu interativo para explorar os comandos!",
+    "✦ ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ᴅᴀs ᴄᴀᴛᴇɢᴏʀɪᴀs ᴀʙᴀɪxᴏ ɴᴏ ᴍᴇɴᴜ ɪɴᴛᴇʀᴀᴛɪᴠᴏ ᴘᴀʀᴀ ᴇxᴘʟᴏʀᴀʀ ᴏs ᴄᴏᴍᴀɴᴅᴏs!",
   ];
 
   if (categorias.length > 0) {
@@ -301,7 +300,7 @@ export function mainMenuMessage({
 
   return formatMessage({
     icone: "🌀",
-    titulo: "MENU PRINCIPAL",
+    titulo: "ᴍᴇɴᴜ ᴘʀɪɴᴄɪᴘᴀʟ",
     campos,
   });
 }
