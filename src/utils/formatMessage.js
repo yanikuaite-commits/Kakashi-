@@ -288,7 +288,7 @@ export function mainMenuMessage({
     `✦ еsсоlhа umа dаs саtеgоrіаs аbаіхо nо mеnu іntеrаtіvо, @${cleanUser}!`,
   ];
 
-  if (categoria.length > 0) {
+  if (categorias.length > 0) {
     campos.push("");
     for (const cat of categorias) {
       const icon = cat.icone || "✦";
