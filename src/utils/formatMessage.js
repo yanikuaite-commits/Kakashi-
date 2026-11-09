@@ -4,7 +4,7 @@
  * TODA resposta de texto passa por aqui — diretamente pelo comando ou pelos
  * helpers centrais de loadCommonFunctions — e termina com o rodapé exato:
  *
- *   ༺ ✦ ᴋᴀ dokładniesɪ ʙоt • sʏsтeoм ᴢeгo ✦ ༻
+ *   ༺ ✦ ᴋᴀᴋᴀsʜɪ ʙᴏᴛ • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ1.0.0 ✦ ༻
  *
  * Tema visual "System Zero V4 / Tensura": design futurista, bordas limpas,
  * cabeçalho em caixa de status, símbolos místico-tecnológicos, letras estilizadas,
@@ -17,9 +17,9 @@ const BOT_VERSION = "1.0.0";
 const CREATOR_NAME = "Yanik Uaite";
 
 const SMALL_CAPS_MAP = {
-  a: "а", b: "б", c: "в", d: "г", e: "д", f: "ф", g: "ɡ", h: "h", i: "і",
-  j: "j", k: "k", l: "l", m: "m", n: "n", o: "о", p: "р", q: "q", r: "r",
-  s: "s", t: "t", u: "u", v: "v", w: "w", x: "x", y: "y", z: "z",
+  a: "ᴀ", b: "ʙ", c: "ᴄ", d: "ᴅ", e: "ᴇ", f: "ғ", g: "ɢ", h: "ʜ", i: "ɪ",
+  j: "ᴊ", k: "ᴋ", l: "ʟ", m: "ᴍ", n: "ɴ", o: "ᴏ", p: "ᴘ", q: "ǫ", r: "ʀ",
+  s: "s", t: "ᴛ", u: "ᴜ", v: "ᴠ", w: "ᴡ", x: "x", y: "ʏ", z: "ᴢ",
 };
 
 /**
@@ -32,7 +32,7 @@ export function toStylizedText(text = "") {
   });
 }
 
-export const RODAPE = `median ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sүsтeoм ᴢeгo ✦ ༻`;
+export const RODAPE = `༺ ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ✦ ༻`;
 
 export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮";
 
@@ -88,7 +88,7 @@ export function formatMessage({
 
   const linhas = [
     FRAME_MARK,
-    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sүsтeoм ᴢeгo ⚡ ༻ │`,
+    `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ⚡ ༻ │`,
     "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
     "",
     secao,
@@ -249,51 +249,51 @@ export function mainMenuMessage({
 } = {}) {
   const cleanUser = usuario.replace(/^@/, "");
   const campos = [
-    `azi ⟡ zai ${BOT_DISPLAY_NAME.toUpperCase()} zai ⟡ zai`,
-    `   ⊹ ࣪ pager ✦ KAKASHI CORE ✦ pager ࣪ ⊹`,
-    `   zazi zazi CREATOR » ${CREATOR_NAME}`,
-    `   zazi zazi BOT    » ${BOT_DISPLAY_NAME}`,
-    `   zazi zazi VERSION » ${versao}`,
-    `   zazi zazi STATUS » ${tipoUsuario}`,
-    `   zazi zazi UPTIME » ${uptime}`,
-    `   zazi zazi PREFIX » [ ${prefixo} ]`,
+    `༺ ⟡ ༻ ${BOT_DISPLAY_NAME.toUpperCase()} ༺ ⟡ ༻`,
+    `   ⊹ ࣪ ˖ ✦ KAKASHI CORE ✦ ˖ ࣪ ⊹`,
+    `   ☽༺✧༻ CREATOR » ${CREATOR_NAME}`,
+    `   ☽༺✧༻ BOT    » ${BOT_DISPLAY_NAME}`,
+    `   ☽༺✧༻ VERSION » ${versao}`,
+    `   ☽༺✧༻ STATUS » ${tipoUsuario}`,
+    `   ☽༺✧༻ UPTIME » ${uptime}`,
+    `   ☽༺✧༻ PREFIX » [ ${prefixo} ]`,
     `   ──────── ✦ ────────`,
-    `   ˚₊· ͟͟͞͞titles USE O PREFIXO ➳`,
+    `   ˚₊· ͟͟͞͞➳ USE O PREFIXO ➳`,
     `   ✧･ﾟ: *✧･ﾟ:* ${BOT_DISPLAY_NAME.toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
     `   © Made by ${CREATOR_NAME}`,
     "",
-    `╭━━━ zai ⟡ ${toStylizedText("SYSTEM INFOS")} zai ━━━╮`,
-    `│ zazi *${toStylizedText("Utilizador")}:* @${cleanUser}`,
-    `│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}`,
-    `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}`,
-    ...(grupo ? [`│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}`] : []),
+    `╭━━━ ༺ ⟡ SYSTEM INFOS ⟡ ༻ ━━━╮`,
+    `│ ☽ *Utilizador:* @${cleanUser}`,
+    `│ 💎 *Tipo:* ${tipoUsuario}`,
+    `│ 👑 *Cargo:* ${cargo}`,
+    ...(grupo ? [`│ 🏰 *Grupo:* ${grupo}`] : []),
     `│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-    `│ ⟡ *${toStylizedText("Prefixo")}:* [ ${prefixo} ]`,
-    `│ ✧ *${toStylizedText("Modo")}:* ${modo}`,
-    ...(dataHora ? [`│ ⊹ *${toStylizedText("Data/Hora")}:* ${dataHora}`] : []),
+    `│ ⟡ *Prefixo:* [ ${prefixo} ]`,
+    `│ ✧ *Modo:* ${modo}`,
+    ...(dataHora ? [`│ ⊹ *Data/Hora:* ${dataHora}`] : []),
     `│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-    `│ ⏳ *${toStylizedText("Uptime")}:* ${uptime}`,
-    `│ ⚡ *${toStylizedText("Latência")}:* ${ping}`,
-    `│ 💻 *${toStylizedText("RAM")}:* ${ram}`,
-    `│ 🖥️ *${toStylizedText("CPU")}:* ${cpu}`,
-    `│ 💾 *${toStylizedText("Disco")}:* ${disk}`,
-    `│ 🚀 *${toStylizedText("Velocidade")}:* ${velocidade}`,
-    `│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}`,
-    `│ ⚙️ *${toStylizedText("Versão")}:* v${versao}`,
-    `│ 🖥️ *${toStylizedText("Status")}:* ${status}`,
+    `│ ⏳ *Uptime:* ${uptime}`,
+    `│ ⚡ *Latência:* ${ping}`,
+    `│ 💻 *RAM:* ${ram}`,
+    `│ 🖥️ *CPU:* ${cpu}`,
+    `│ 💾 *Disco:* ${disk}`,
+    `│ 🚀 *Velocidade:* ${velocidade}`,
+    `│ 📜 *Comandos:* ${totalComandos}`,
+    `│ ⚙️ *Versão:* v${versao}`,
+    `│ 🖥️ *Status:* ${status}`,
     `│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-    `│ 👤 *${toStylizedText("Criador")}:* ${CREATOR_NAME}`,
+    `│ 👤 *Criador:* ${CREATOR_NAME}`,
     `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
-    `✦ еsсоlhа umа dаs саtеgоrіаs аbаіхо nо mеnu іntеrаtіvо, @${cleanUser}!`,
+    `✦ Escolha uma das categorias abaixo no menu interativo, @${cleanUser}!`,
   ];
 
   if (categorias.length > 0) {
     campos.push("");
     for (const cat of categorias) {
       const icon = cat.icone || "✦";
-      const catEstilizada = toStylizedText(cat.categoria).toUpperCase();
-      campos.push(`╭━━━ zai ${icon} *${catEstilizada}* zai ━━━╮`);
+      const catEstilizada = cat.categoria.toUpperCase();
+      campos.push(`╭━━━ ༺ ${icon} *${catEstilizada}* ༻ ━━━╮`);
       if (Array.isArray(cat.comandos)) {
         for (const cmd of cat.comandos) {
           campos.push(`│ ➳ ${prefixo}${cmd}`);
@@ -305,7 +305,7 @@ export function mainMenuMessage({
 
   return formatMessage({
     icone: "🌀",
-    titulo: "mеnu рrіnсіраl",
+    titulo: "MENU PRINCIPAL",
     campos,
   });
 }
