@@ -34,7 +34,7 @@ export function toStylizedText(text = "") {
 
 export const RODAPE = `༺ ✦ ${toStylizedText(BOT_DISPLAY_NAME)} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ✦ ༻`;
 
-export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮";
+export const FRAME_MARK = "╭━━━━━━━━━━━━━━━━━━━━━━━╮";
 
 let plainTheme = PLAIN_MESSAGE_THEME;
 
@@ -89,7 +89,7 @@ export function formatMessage({
   const linhas = [
     FRAME_MARK,
     `│ ༺ ⚡ ${nomeEstilizado.toUpperCase()} • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ${BOT_VERSION} ⚡ ༻ │`,
-    "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
+    "╰━━━━━━━━━━━━━━━━━━━━━━━╯",
     "",
     secao,
     "│",
@@ -107,7 +107,7 @@ export function formatMessage({
   for (const campo of campos) push(campo);
   if (extra) push(extra);
 
-  linhas.push("╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯");
+  linhas.push("╰━━━━━━━━━━━━━━━━━━━━━━━╯");
   if (rodape) linhas.push("", rodape);
 
   return linhas.join("\n");
@@ -267,11 +267,11 @@ export function mainMenuMessage({
     `│ 💎 *Tipo:* ${tipoUsuario}`,
     `│ 👑 *Cargo:* ${cargo}`,
     ...(grupo ? [`│ 🏰 *Grupo:* ${grupo}`] : []),
-    `│ ══════════════════════════════`,
+    `│ ═══════════════════════`,
     `│ ⟡ *Prefixo:* [ ${prefixo} ]`,
     `│ ✧ *Modo:* ${modo}`,
     ...(dataHora ? [`│ ⊹ *Data/Hora:* ${dataHora}`] : []),
-    `│ ══════════════════════════════`,
+    `│ ═══════════════════════`,
     `│ ⏳ *Uptime:* ${uptime}`,
     `│ ⚡ *Latência:* ${ping}`,
     `│ 💻 *RAM:* ${ram}`,
@@ -281,9 +281,9 @@ export function mainMenuMessage({
     `│ 📜 *Comandos:* ${totalComandos}`,
     `│ ⚙️ *Versão:* v${versao}`,
     `│ 🖥️ *Status:* ${status}`,
-    `│ ══════════════════════════════`,
+    `│ ═══════════════════════`,
     `│ 👤 *Criador:* ${CREATOR_NAME}`,
-    `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
+    `╰━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
     `✦ Escolha uma das categorias abaixo no menu interativo, @${cleanUser}!`,
   ];
@@ -299,7 +299,7 @@ export function mainMenuMessage({
           campos.push(`│ ➳ ${prefixo}${cmd}`);
         }
       }
-      campos.push(`╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
+      campos.push(`╰━━━━━━━━━━━━━━━━━━━━━━━╯`);
     }
   }
 
