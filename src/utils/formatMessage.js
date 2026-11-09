@@ -7,8 +7,8 @@
  *   ༺ ✦ ᴋᴀᴋᴀsʜɪ ʙᴏᴛ • sʏsᴛᴇᴍ ᴢᴇʀᴏ ᴠ4 ✦ ༻
  *
  * Tema visual "System Zero V4 / Tensura": design futurista, bordas limpas,
- * cabeçalho em caixa de status, símbolos místicos/tecnológicos, letras estilizadas
- * e rodapé de sistema.
+ * cabeçalho em caixa de status, símbolos místico-tecnológicos, letras estilizadas,
+ * separadores elegantes e rodapé de sistema.
  */
 import { PLAIN_MESSAGE_THEME } from "../config.js";
 
@@ -245,23 +245,31 @@ export function mainMenuMessage({
   status = "Online",
   categorias = [],
 } = {}) {
-  const infos = [
-    `│ ☽ *${toStylizedText("Utilizador")}:* ${usuario.replace(/^@/, "")}`,
-    tipoUsuario ? `│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}` : "",
-    cargo ? `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}` : "",
-    grupo ? `│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}` : "",
-    `│ ⟡ *${toStylizedText("Prefixo")}:* [ ${prefixo} ]`,
-    `│ ✧ *${toStylizedText("Modo")}:* ${modo}`,
-    dataHora ? `│ ⊹ *${toStylizedText("Data/Hora")}:* ${dataHora}` : "",
-    uptime ? `│ ⏳ *${toStylizedText("Uptime")}:* ${uptime}` : "",
-    ping ? `│ ⚡ *${toStylizedText("Latência")}:* ${ping}` : "",
-    ram ? `│ 💻 *${toStylizedText("RAM")}:* ${ram}` : "",
-    velocidade ? `│ 🚀 *${toStylizedText("Velocidade")}:* ${velocidade}` : "",
-    totalComandos ? `│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}` : "",
-    versao ? `│ ⚙️ *${toStylizedText("Versão")}:* v${versao}` : "",
-    status ? `│ 🛡️ *${toStylizedText("Status")}:* ${status}` : "",
-    `│ 👤 *${toStylizedText("Criador")}:* ${CREATOR_NAME}`,
-  ].filter(Boolean);
+  const infos = [];
+  infos.push(`│ ☽ *${toStylizedText("Utilizador")}:* ${usuario.replace(/^@/, "")}`);
+  if (tipoUsuario) infos.push(`│ 💎 *${toStylizedText("Tipo")}:* ${tipoUsuario}`);
+  if (cargo) infos.push(`│ 👑 *${toStylizedText("Cargo")}:* ${cargo}`);
+  if (grupo) infos.push(`│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}`);
+  
+  infos.push(`│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  
+  infos.push(`│ ⟡ *${toStylizedText("Prefixo")}:* [ ${prefixo} ]`);
+  infos.push(`│ ✧ *${toStylizedText("Modo")}:* ${modo}`);
+  if (dataHora) infos.push(`│ ⊹ *${toStylizedText("Data/Hora")}:* ${dataHora}`);
+  
+  infos.push(`│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  
+  if (uptime) infos.push(`│ ⏳ *${toStylizedText("Uptime")}:* ${uptime}`);
+  if (ping) infos.push(`│ ⚡ *${toStylizedText("Latência")}:* ${ping}`);
+  if (ram) infos.push(`│ 💻 *${toStylizedText("RAM")}:* ${ram}`);
+  if (velocidade) infos.push(`│ 🚀 *${toStylizedText("Velocidade")}:* ${velocidade}`);
+  if (totalComandos) infos.push(`│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}`);
+  if (versao) infos.push(`│ ⚙️ *${toStylizedText("Versão")}:* v${versao}`);
+  if (status) infos.push(`│ 🛡️ *${toStylizedText("Status")}:* ${status}`);
+  
+  infos.push(`│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  
+  infos.push(`│ 👤 *${toStylizedText("Criador")}:* ${CREATOR_NAME}`);
 
   const campos = [
     `╭━━━ ༺ ⟡ ${toStylizedText("SYSTEM INFOS")} ⟡ ༻ ━━━╮`,
