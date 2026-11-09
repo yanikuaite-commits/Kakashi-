@@ -26,6 +26,7 @@ import { PLAIN_MESSAGE_THEME } from "../config.js";
 
 const BOT_DISPLAY_NAME = "Kakashi Bot";
 const BOT_VERSION = "4.0";
+const CREATOR_NAME = "Yanik Uaite";
 
 const SMALL_CAPS_MAP = {
   a: "ᴀ", b: "ʙ", c: "ᴄ", d: "ᴅ", e: "ᴇ", f: "ғ", g: "ɢ", h: "ʜ", i: "ɪ",
@@ -419,6 +420,7 @@ export function mainMenuMessage({
     totalComandos ? `│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}` : "",
     versao ? `│ ⚙️ *${toStylizedText("Versão")}:* v${versao}` : "",
     status ? `│ 🛡️ *${toStylizedText("Status")}:* ${status}` : "",
+    `│ 👤 *${toStylizedText("Criador")}:* ${CREATOR_NAME}`,
   ].filter(Boolean);
 
   const campos = [
