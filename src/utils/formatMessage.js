@@ -226,7 +226,7 @@ export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", 
 }
 
 /**
- * MENSAGEM PRINCIPAL & MENUS INTERATIVOS (SYSTEM ZERO V4 / TENSURA STYLE REFINED)
+ * MENSAGEM PRINCIPAL & MENUS INTERATIVOS (SYSTEM ZERO V4 / TENSURA STYLE PREMIUM)
  */
 export function mainMenuMessage({
   usuario = "Utilizador",
@@ -249,43 +249,43 @@ export function mainMenuMessage({
 } = {}) {
   const cleanUser = usuario.replace(/^@/, "");
   const campos = [
-    `༺ ⟡ ༻ ${BOT_DISPLAY_NAME.toUpperCase()} ༺ ⟡ ༻`,
-    `   ⊹ ࣪ ˖ ✦ KAKASHI CORE ✦ ˖ ࣪ ⊹`,
-    `   ☽༺✧༻ CREATOR » ${CREATOR_NAME}`,
-    `   ☽༺✧༻ BOT    » ${BOT_DISPLAY_NAME}`,
-    `   ☽༺✧༻ VERSION » ${versao}`,
-    `   ☽༺✧༻ STATUS » ${tipoUsuario}`,
-    `   ☽༺✧༻ UPTIME » ${uptime}`,
-    `   ☽༺✧༻ PREFIX » [ ${prefixo} ]`,
-    `   ──────── ✦ ────────`,
-    `   ˚₊· ͟͟͞͞➳ USE O PREFIXO ➳`,
+    `⚔️ ⟡ ⚔️ *${toStylizedText(BOT_DISPLAY_NAME).toUpperCase()}* ⚔️ ⟡ ⚔️`,
+    `   ✦ ᴍᴀsᴛᴇʀ ɴɪɴᴊᴀ ᴄᴏʀᴇ ✦`,
+    `   ⛩️ CREATOR » ${CREATOR_NAME}`,
+    `   ⛩️ BOT    » ${BOT_DISPLAY_NAME}`,
+    `   ⛩️ VERSION » ${versao}`,
+    `   ⛩️ STATUS » ${tipoUsuario}`,
+    `   ⛩️ UPTIME » ${uptime}`,
+    `   ⛩️ PREFIX » [ ${prefixo} ]`,
+    `   ─────── ⚡ ───────`,
+    `   🍥 *USE O PREFIXO ABAIXO* 🍥`,
     `   ✧･ﾟ: *✧･ﾟ:* ${BOT_DISPLAY_NAME.toUpperCase()} *:･ﾟ✧*:･ﾟ✧`,
     `   © Made by ${CREATOR_NAME}`,
     "",
-    `╭━━━ ༺ ⟡ SYSTEM INFOS ⟡ ༻ ━━━╮`,
-    `│ ☽ *Utilizador:* @${cleanUser}`,
+    `╭━━━ ⛩️ ⟡ SYSTEM INFOS ⟡ ⛩️ ━━━╮`,
+    `│ 🥷 *Utilizador:* @${cleanUser}`,
     `│ 💎 *Tipo:* ${tipoUsuario}`,
     `│ 👑 *Cargo:* ${cargo}`,
     ...(grupo ? [`│ 🏰 *Grupo:* ${grupo}`] : []),
     `│ ═══════════════════════`,
-    `│ ⟡ *Prefixo:* [ ${prefixo} ]`,
-    `│ ✧ *Modo:* ${modo}`,
-    ...(dataHora ? [`│ ⊹ *Data/Hora:* ${dataHora}`] : []),
+    `│ ⚡ *Prefixo:* [ ${prefixo} ]`,
+    `│ 🛡️ *Modo:* ${modo}`,
+    ...(dataHora ? [`│ 📅 *Data/Hora:* ${dataHora}`] : []),
     `│ ═══════════════════════`,
     `│ ⏳ *Uptime:* ${uptime}`,
-    `│ ⚡ *Latência:* ${ping}`,
-    `│ 💻 *RAM:* ${ram}`,
-    `│ 🖥️ *CPU:* ${cpu}`,
-    `│ 💾 *Disco:* ${disk}`,
+    `│ 📡 *Latência:* ${ping}`,
+    `│ 💾 *RAM:* ${ram}`,
+    `│ 💻 *CPU:* ${cpu}`,
+    `│ 💿 *Disco:* ${disk}`,
     `│ 🚀 *Velocidade:* ${velocidade}`,
     `│ 📜 *Comandos:* ${totalComandos}`,
     `│ ⚙️ *Versão:* v${versao}`,
-    `│ 🖥️ *Status:* ${status}`,
+    `│ 🟢 *Status:* ${status}`,
     `│ ═══════════════════════`,
-    `│ 👤 *Criador:* ${CREATOR_NAME}`,
+    `│ ⚔️ *Criador:* ${CREATOR_NAME}`,
     `╰━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
-    `✦ Escolha uma das categorias abaixo no menu interativo, @${cleanUser}!`,
+    `✨ Escolha uma das categorias abaixo no menu interativo, @${cleanUser}!`,
   ];
 
   if (categorias.length > 0) {
@@ -293,7 +293,7 @@ export function mainMenuMessage({
     for (const cat of categorias) {
       const icon = cat.icone || "✦";
       const catEstilizada = cat.categoria.toUpperCase();
-      campos.push(`╭━━━ ༺ ${icon} *${catEstilizada}* ༻ ━━━╮`);
+      campos.push(`╭━━━ ⛩️ ${icon} *${catEstilizada}* ⛩️ ━━━╮`);
       if (Array.isArray(cat.comandos)) {
         for (const cmd of cat.comandos) {
           campos.push(`│ ➳ ${prefixo}${cmd}`);
