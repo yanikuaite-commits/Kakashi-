@@ -158,9 +158,24 @@ export async function dynamicCommand(paramsHandler, startProcess) {
   const textOnly = prefix === "!";
   const validPrefix = verifyPrefix(prefix, remoteJid) ||
     prefix === "" || textOnly || prefixless;
+
+  // Quando o prefixless está ativo, se a mensagem não tinha o prefixo, ajustamos a forma de encontrar o comando simulando o prefixo do grupo
+  let effectiveCommandName = commandName;
+  let effectiveFullArgs = paramsHandler.fullArgs;
+  let effectiveArgs = paramsHandler.args;
+
+  if (prefixless && !verifyPrefix(prefix, remoteJid) && prefix !== "!" && fullMessage) {
+    const resolvedPrefixless = await findCommandInMessage(fullMessage.startsWith(groupPrefix) ? fullMessage.slice(groupPrefix.length) : fullMessage, fullMessage);
+    if (resolvedPrefixless && resolvedPrefixless.command) {
+      effectiveCommandName = resolvedPrefixless.commandName;
+      effectiveFullArgs = resolvedPrefixless.fullArgs;
+      effectiveArgs = resolvedPrefixless.args;
+    }
+  }
+
   const resolved = validPrefix
-    ? await findCommandInMessage(commandName, paramsHandler.fullArgs)
-    : { type: "", command: null, commandName, fullArgs: paramsHandler.fullArgs, args: paramsHandler.args };
+    ? await findCommandInMessage(effectiveCommandName, effectiveFullArgs)
+    : { type: "", command: null, commandName: effectiveCommandName, fullArgs: effectiveFullArgs, args: effectiveArgs };
   const { type, command } = resolved;
   const invocation = { ...paramsHandler, ...resolved, prefix: prefix || groupPrefix, textOnly };
 
@@ -248,12 +263,12 @@ export async function dynamicCommand(paramsHandler, startProcess) {
     return;
   }
 
-if (!hasTypeAndCommand({ type, command })) {
+  if (!hasTypeAndCommand({ type, command })) {
     if (!prefix && !prefixless) return;
     // No modo prefixless, ignora silenciosamente mensagens que não são comandos.
     // Só responde quando há prefixo explícito (erro normal) ou quando a mensagem
     // é claramente um comando que não existe.
-    if (prefixless && !prefix) return;
+    if (prefixless && !prefix && !fullMessage.startsWith(groupPrefix)) return;
     await sendWarningReply(
       `Comando não encontrado! Use ${groupPrefix}menu para ver os comandos disponíveis!`
     );
