@@ -36,14 +36,7 @@ const BUTTON_SYMBOLS = {
   prefix: '⚡',
   mode: '🛡️',
   date: '📅',
-  ping: '📡',
-  ram: '💾',
-  disk: '💿',
-  speed: '🚀',
-  commands: '📜',
-  version: '⚙️',
-  status: '🟢',
-  creator: '⚔️',
+  channel: '🌐'
 };
 
 /**
@@ -55,7 +48,7 @@ const BUTTON_SYMBOLS = {
  */
 export function createButton(label, callbackData, symbol = BUTTON_SYMBOLS.action) {
   return {
-    displayText: `${symbol} ${label}`,
+    displayText: `${symbol} ${toStylizedText(label.toUpperCase())}`,
     type: 1,
     reply: {
       id: callbackData,
@@ -85,21 +78,11 @@ export function createMainMenuButtons(prefixo, categorias = []) {
   const mainButtons = [
     createButton('Menu Principal', 'menu_main', BUTTON_SYMBOLS.main),
     createButton('Informações', 'menu_info', BUTTON_SYMBOLS.info),
-    createButton('Configurações', 'menu_settings', BUTTON_SYMBOLS.settings),
+    createButton('Canal Oficial', 'menu_channel', BUTTON_SYMBOLS.channel),
   ];
 
-  const categoryButtons = categorias.map(cat => {
-    const symbol = cat.icone || BUTTON_SYMBOLS.main;
-    return createButton(
-      toStylizedText(cat.categoria).toUpperCase(),
-      `menu_${cat.categoria.toLowerCase().replace(/\s+/g, '_')}`,
-      symbol
-    );
-  });
-
   return [
-    createButtonRow(mainButtons),
-    createButtonRow(categoryButtons),
+    createButtonRow(mainButtons)
   ];
 }
 
@@ -111,7 +94,7 @@ export function createMainMenuButtons(prefixo, categorias = []) {
  */
 export function createActionButton(comando, acao) {
   return createButton(
-    `${BUTTON_SYMBOLS.action} ${comando}`,
+    comando,
     `cmd_${comando}_${acao}`,
     BUTTON_SYMBOLS.action
   );
@@ -137,38 +120,9 @@ export function createConfirmationButtons(acao) {
 export function createStatusButtons(status = {}) {
   const buttons = [];
   
-  if (status.uptime) {
-    buttons.push(createButton(`Uptime: ${status.uptime}`, 'status_uptime', BUTTON_SYMBOLS.time));
-  }
-  
-  if (status.ping) {
-    buttons.push(createButton(`Latência: ${status.ping}`, 'status_ping', BUTTON_SYMBOLS.network));
-  }
-  
-  if (status.ram) {
-    buttons.push(createButton(`RAM: ${status.ram}`, 'status_ram', BUTTON_SYMBOLS.memory));
-  }
-  
-  if (status.cpu) {
-    buttons.push(createButton(`CPU: ${status.cpu}`, 'status_cpu', BUTTON_SYMBOLS.cpu));
-  }
-  
-  if (status.velocidade) {
-    buttons.push(createButton(`Velocidade: ${status.velocidade}`, 'status_speed', BUTTON_SYMBOLS.speed));
-  }
-  
-  if (status.comandos) {
-    buttons.push(createButton(`Comandos: ${status.comandos}`, 'status_commands', BUTTON_SYMBOLS.commands));
-  }
-  
-  if (status.versao) {
-    buttons.push(createButton(`Versão: ${status.versao}`, 'status_version', BUTTON_SYMBOLS.version));
-  }
-  
-  if (status.status) {
-    const symbol = status.status === 'ONLINE' ? BUTTON_SYMBOLS.status : BUTTON_SYMBOLS.offline;
-    buttons.push(createButton(`Status: ${status.status}`, 'status_system', symbol));
-  }
+  if (status.uptime) buttons.push(createButton(`Uptime: ${status.uptime}`, 'status_uptime', BUTTON_SYMBOLS.time));
+  if (status.ping) buttons.push(createButton(`Ping: ${status.ping}`, 'status_ping', BUTTON_SYMBOLS.network));
+  if (status.ram) buttons.push(createButton(`RAM: ${status.ram}`, 'status_ram', BUTTON_SYMBOLS.memory));
   
   return [createButtonRow(buttons)];
 }
@@ -181,17 +135,8 @@ export function createStatusButtons(status = {}) {
 export function createUserButtons(userInfo = {}) {
   const buttons = [];
   
-  if (userInfo.tipo) {
-    buttons.push(createButton(`Tipo: ${userInfo.tipo}`, 'user_type', BUTTON_SYMBOLS.premium));
-  }
-  
-  if (userInfo.cargo) {
-    buttons.push(createButton(`Cargo: ${userInfo.cargo}`, 'user_role', BUTTON_SYMBOLS.admin));
-  }
-  
-  if (userInfo.grupo) {
-    buttons.push(createButton(`Grupo: ${userInfo.grupo}`, 'user_group', BUTTON_SYMBOLS.group));
-  }
+  if (userInfo.tipo) buttons.push(createButton(`Tipo: ${userInfo.tipo}`, 'user_type', BUTTON_SYMBOLS.premium));
+  if (userInfo.cargo) buttons.push(createButton(`Cargo: ${userInfo.cargo}`, 'user_role', BUTTON_SYMBOLS.admin));
   
   return [createButtonRow(buttons)];
 }
@@ -205,15 +150,9 @@ export function createUserButtons(userInfo = {}) {
 export function createNavigationButtons(pagina = 1, totalPaginas = 1) {
   const buttons = [];
   
-  if (pagina > 1) {
-    buttons.push(createButton('Anterior', `nav_prev_${pagina}`, BUTTON_SYMBOLS.warning));
-  }
-  
+  if (pagina > 1) buttons.push(createButton('Anterior', `nav_prev_${pagina}`, BUTTON_SYMBOLS.warning));
   buttons.push(createButton(`Página ${pagina}/${totalPaginas}`, 'nav_info', BUTTON_SYMBOLS.info));
-  
-  if (pagina < totalPaginas) {
-    buttons.push(createButton('Próximo', `nav_next_${pagina}`, BUTTON_SYMBOLS.success));
-  }
+  if (pagina < totalPaginas) buttons.push(createButton('Próximo', `nav_next_${pagina}`, BUTTON_SYMBOLS.success));
   
   return [createButtonRow(buttons)];
 }
@@ -226,12 +165,7 @@ export function createHelpButtons() {
   return [
     createButtonRow([
       createButton('Comandos', 'help_commands', BUTTON_SYMBOLS.commands),
-      createButton('Exemplos', 'help_examples', BUTTON_SYMBOLS.info),
       createButton('Suporte', 'help_support', BUTTON_SYMBOLS.main),
-    ]),
-    createButtonRow([
-      createButton('Atualizações', 'help_updates', BUTTON_SYMBOLS.status),
-      createButton('Sobre', 'help_about', BUTTON_SYMBOLS.creator),
     ])
   ];
 }
@@ -242,22 +176,10 @@ export function createHelpButtons() {
  * @returns {Array<Object>} Botões de download
  */
 export function createDownloadButtons(fileInfo = {}) {
-  const buttons = [];
-  
-  if (fileInfo.qualidade) {
-    buttons.push(createButton(`Qualidade: ${fileInfo.qualidade}`, 'download_quality', BUTTON_SYMBOLS.settings));
-  }
-  
-  if (fileInfo.formato) {
-    buttons.push(createButton(`Formato: ${fileInfo.formato}`, 'download_format', BUTTON_SYMBOLS.settings));
-  }
-  
-  buttons.push(
+  return [
     createButtonRow([
-      createButton('Baixar Agora', 'download_start', BUTTON_SYMBOLS.download),
+      createButton('Baixar', 'download_start', BUTTON_SYMBOLS.download),
       createButton('Cancelar', 'download_cancel', BUTTON_SYMBOLS.error),
     ])
-  );
-  
-  return buttons;
+  ];
 }
