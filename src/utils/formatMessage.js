@@ -4,37 +4,30 @@
  * TODA resposta de texto passa por aqui — diretamente pelo comando ou pelos
  * helpers centrais de loadCommonFunctions — e termina com o rodapé exato:
  *
- *   ✦ Constelado por Yanik Uaite ✦
+ *   ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦
  *
- * Tema visual "Galáxia": cabeçalho cósmico, secção em caixa e rodapé de
- * constelação.
+ * Tema visual "System Zero V4 / Tensura": design futurista, bordas limpas,
+ * cabeçalho em caixa de status e rodapé com assinatura de sistema.
  *
  * Molde padrão:
  *
- *   ☄️ · ✦ ·  ˚  ✧ · ☾ · ✦ · ˚ · ✧ · ☄️
- *         ⋆｡°✩  KAKASHI BOT  ✩°｡⋆
- *   ✧ · ˚ · ✦ · ☄️ · ˚ · ✧ · ✦ · ˚ · ✧
- *
- *   ┌─〔 🎛️ *KAKASHI BOT • TÍTULO* 〕─┐
+ *   ╭───────────────────────────────╮
+ *   │ ⚡ KAKASHI BOT • SYSTEM ZERO ⚡│
+ *   ╰───────────────────────────────╯
+ *   ┌─[ ◈ *KAKASHI BOT • TÍTULO* ]─┐
  *   │
  *   │ linha de conteúdo
- *   └──────────────────┘
+ *   └───────────────────────────────┘
  *
- *   ✦ Constelado por Yanik Uaite ✦
- *
- * Nunca monte o molde à mão num comando: use formatMessage ou os templates
- * prontos abaixo.
+ *   ✦ KAKASHI BOT • SYSTEM ZERO V4 ✦
  */
 import { BOT_NAME, PLAIN_MESSAGE_THEME } from "../config.js";
 
-export const RODAPE = "✦ Constelado por Yanik Uaite ✦";
+export const RODAPE = "✦ KAKASHI BOT • SYSTEM ZERO V4 ✦";
 
 /** Marca de molde aplicado — evita emoldurar a mesma mensagem duas vezes. */
-export const FRAME_MARK = "┌─〔";
+export const FRAME_MARK = "┌─[ ◈";
 
-// O tema é lido do config no arranque, mas fica num estado mutável para os
-// testes poderem exercer os DOIS temas no mesmo processo — sem isto, só o tema
-// ativo era testável e o outro apodrecia em silêncio.
 let plainTheme = PLAIN_MESSAGE_THEME;
 
 /** O tema ativo é o "plain" (só conteúdo)? */
@@ -52,8 +45,6 @@ export function footerAtual() {
   return plainTheme ? "" : RODAPE;
 }
 
-// Textos gigantes (ex.: clearChat com ~1900 quebras de linha) ficam como estão:
-// emoldurar só atrapalha e pode estourar o limite de 4096 caracteres.
 const MAX_FRAME_LENGTH = 1500;
 const MAX_FRAME_LINES = 40;
 
@@ -70,7 +61,7 @@ function linesOf(value) {
  * Monta a mensagem no molde visual único do bot.
  *
  * @param {object} options
- * @param {string} [options.icone] emoji da categoria (default 🎛️)
+ * @param {string} [options.icone] emoji da categoria (default ◈)
  * @param {string} [options.titulo] título da seção (fica em caixa alta)
  * @param {Array<string>} [options.campos] linhas de conteúdo (aceita \n)
  * @param {string|null} [options.rodape] rodapé exato (default `RODAPE`)
@@ -78,18 +69,13 @@ function linesOf(value) {
  * @returns {string}
  */
 export function formatMessage({
-  icone = "🎛️",
+  icone = "◈",
   titulo,
   campos = [],
   rodape = footerAtual(),
   extra,
 } = {}) {
-  // Tema "plain": só o conteúdo. O ícone e a assinatura "KAKASHI BOT" eram
-  // decoração, mas o título é informação (ex.: "DOWNLOADS"), por isso fica como
-  // uma linha simples em vez da caixa `┌─〔 ... 〕─┐`.
   if (isPlainTheme()) {
-    // Um campo vazio é um separador de parágrafo (ex.: entre a pergunta e a
-    // resposta da IA): `linesOf` descarta-o, por isso aqui é tratado à parte.
     const corpo = [...campos, extra]
       .flatMap((valor) => (valor === "" ? [""] : linesOf(valor)))
       .join("\n")
@@ -103,13 +89,13 @@ export function formatMessage({
 
   const nome = BOT_NAME.toUpperCase();
   const secao = titulo
-    ? `┌─〔 ${icone} *${nome} • ${String(titulo).toUpperCase()}* 〕─┐`
-    : `┌─〔 ${icone} *${nome}* 〕─┐`;
+    ? `┌─[ ${icone} *${nome} • ${String(titulo).toUpperCase()}* ]─┐`
+    : `┌─[ ${icone} *${nome}* ]─┐`;
 
   const linhas = [
-    "☄️ · ✦ ·  ˚  ✧ · ☾ · ✦ · ˚ · ✧ · ☄️",
-    `       ⋆｡°✩  ${nome}  ✩°｡⋆`,
-    "☄️ · ✦ ·  ˚  ✧ · ☾ · ✦ · ˚ · ✧ · ☄️",
+    "╭───────────────────────────────╮",
+    `│ ⚡ ${nome} • SYSTEM ZERO V4 ⚡ │`,
+    "╰───────────────────────────────╯",
     "",
     secao,
     "│",
@@ -129,7 +115,7 @@ export function formatMessage({
   for (const campo of campos) push(campo);
   if (extra) push(extra);
 
-  linhas.push("└──────────────────┘");
+  linhas.push("└───────────────────────────────┘");
 
   if (rodape) linhas.push("", rodape);
 
@@ -157,10 +143,10 @@ function inferReplyStyle(text) {
     .toLocaleLowerCase();
 
   if (/carregando|processando|ja estou a tratar|a baixar|a descarregar/.test(normalized)) {
-    return { icone: "⏳", titulo: "A decorrer" };
+    return { icone: "⏳", titulo: "Processando" };
   }
   if (/sem permissao|nao tens permissao|so admins|acesso negado/.test(normalized)) {
-    return { icone: "🚫", titulo: "Acesso restrito" };
+    return { icone: "🛡️", titulo: "Acesso Restrito" };
   }
   if (/erro|falha|nao consegui|nao foi possivel|invalido|invalida/.test(normalized)) {
     return { icone: "❌", titulo: "Erro" };
@@ -172,16 +158,16 @@ function inferReplyStyle(text) {
     return { icone: "👋", titulo: "Grupo" };
   }
   if (/foi removid|foi banid|advertencia|advertido|silenciado|moderacao/.test(normalized)) {
-    return { icone: "🛡️", titulo: "Moderação" };
+    return { icone: "⚔️", titulo: "Moderação" };
   }
   if (/jogo|pontuacao|pontos|experiencia|\bxp\b|ranking|dado rolado/.test(normalized)) {
-    return { icone: "🎮", titulo: "Jogo e XP" };
+    return { icone: "🎮", titulo: "Sistema de Jogo" };
   }
   if (/inteligencia artificial|resposta da ia|gemini|deepseek|gpt|\bia\b/.test(normalized)) {
-    return { icone: "🤖", titulo: "Inteligência artificial" };
+    return { icone: "🔮", titulo: "Núcleo de IA" };
   }
   if (/painel|administrador|configuracao|saldo de creditos|comando bloqueado/.test(normalized)) {
-    return { icone: "🔧", titulo: "Painel" };
+    return { icone: "⚙️", titulo: "Painel de Controle" };
   }
   if (/sucesso|concluido|enviado|criado|ativado|desativado|feito|adicionado|removido/.test(normalized)) {
     return { icone: "✅", titulo: "Concluído" };
@@ -191,8 +177,7 @@ function inferReplyStyle(text) {
 }
 
 /**
- * Anexa o rodapé exato de forma idempotente (nunca duplica e nunca estoura
- * o limite de 4096 caracteres do WhatsApp).
+ * Anexa o rodapé exato de forma idempotente.
  */
 export function withFooter(text = "") {
   const value = String(text ?? "");
@@ -200,7 +185,6 @@ export function withFooter(text = "") {
   if (!value) return value;
 
   const trimmed = value.trimEnd();
-  // No tema "plain" não há rodapé a anexar.
   const rodape = footerAtual();
   if (!rodape || trimmed.endsWith(rodape)) return trimmed;
 
@@ -219,8 +203,8 @@ export function withFooter(text = "") {
 export function loadingMessage({ usuario, detalhe } = {}) {
   const campos = [
     usuario
-      ? `⏳ Já estou a tratar do teu pedido, @${usuario}... 🔄`
-      : `⏳ Já estou a tratar do teu pedido... 🔄`,
+      ? `⏳ Processando solicitação para @${usuario}... ⚡`
+      : `⏳ Processando solicitação no núcleo... ⚡`,
   ];
 
   if (detalhe) {
@@ -228,18 +212,18 @@ export function loadingMessage({ usuario, detalhe } = {}) {
     campos.push(jaTemIcone ? detalhe : `📌 ${detalhe}`);
   }
 
-  return formatMessage({ icone: "⏳", titulo: "Carregando", campos });
+  return formatMessage({ icone: "⏳", titulo: "Em Processamento", campos });
 }
 
 /** ✅ SUCESSO — confirmação de que o pedido foi concluído. */
 export function successMessage({ usuario, campos = [] } = {}) {
   return formatMessage({
     icone: "✅",
-    titulo: "Sucesso",
+    titulo: "Concluído",
     campos: [
       usuario
-        ? `✅ Feito, @${usuario}! Aqui está o que pediste 🎉`
-        : `✅ Feito! Aqui está o que pediste 🎉`,
+        ? `✅ Operação finalizada com sucesso, @${usuario}! 🎯`
+        : `✅ Operação finalizada com sucesso! 🎯`,
       ...campos,
     ],
   });
@@ -248,54 +232,50 @@ export function successMessage({ usuario, campos = [] } = {}) {
 /** ❌ ERRO — falha na processamento com dica de resolução. */
 export function errorMessage(detalhe = "") {
   const campos = [
-    `❌ Ops! Algo correu mal ao processar.`,
-    `💡 Tenta de novo em instantes ou verifica o link.`,
+    `❌ Ops! Ocorreu uma falha no processamento.`,
+    `💡 Tente novamente em alguns instantes.`,
   ];
 
   if (detalhe) campos.push("", `📄 *Detalhes:* ${detalhe}`);
 
-  return formatMessage({ icone: "❌", titulo: "Erro", campos });
+  return formatMessage({ icone: "❌", titulo: "Erro de Sistema", campos });
 }
 
-/** ⚠️ ATENÇÃO — aviso geral (não é erro de uso). */
+/** ⚠️ ATENÇÃO — aviso geral. */
 export function warningMessage(texto = "") {
-  return formatMessage({ icone: "⚠️", titulo: "Atenção", campos: [texto] });
+  return formatMessage({ icone: "⚠️", titulo: "Aviso de Sistema", campos: [texto] });
 }
 
 /** ⚠️ ERRO DE USO — mostra o uso correto do comando. */
 export function usageMessage({ usage, detalhe } = {}) {
   const campos = [
     usage
-      ? `⚠️ Uso correto: ${usage}`
-      : `⚠️ Este comando precisa de argumentos!`,
+      ? `⚠️ Sintaxe correta: ${usage}`
+      : `⚠️ É necessário fornecer argumentos para este comando!`,
   ];
 
   if (detalhe) campos.push(`💡 ${detalhe}`);
 
-  return formatMessage({ icone: "⚠️", titulo: "Uso incorreto", campos });
+  return formatMessage({ icone: "⚠️", titulo: "Sintaxe Incorreta", campos });
 }
 
 /** 🚫 SEM PERMISSÃO — comando restrito. */
-export function permissionMessage(texto = "🚫 Só admins podem usar este comando.") {
+export function permissionMessage(texto = "🚫 Permissão negada. Apenas administradores.") {
   const campos = Array.isArray(texto) ? texto : [texto];
-  return formatMessage({ icone: "🚫", titulo: "Sem permissão", campos });
+  return formatMessage({ icone: "🛡️", titulo: "Acesso Negado", campos });
 }
 
-/** 🤖 RESPOSTA DA IA — pergunta e resposta separadas. */
+/** 🔮 RESPOSTA DA IA — pergunta e resposta separadas. */
 export function aiMessage({ pergunta, resposta } = {}) {
   const campos = [];
 
   if (pergunta) campos.push(`❓ *Pergunta:* ${pergunta}`, "");
-  campos.push(`💬 *Resposta:* ${resposta ?? ""}`);
+  campos.push(`🔮 *Resposta:* ${resposta ?? ""}`);
 
-  return formatMessage({ icone: "🤖", titulo: "Resposta da IA", campos });
+  return formatMessage({ icone: "🔮", titulo: "Módulo IA", campos });
 }
 
-/** 📥 DOWNLOAD — card de download com os campos do pedido.
- *
- * `rodape: null` quando o card que o envolve já leva `footer`, para o rodapé não
- * sair impresso duas vezes.
- */
+/** 📥 DOWNLOAD — card de download com os campos do pedido. */
 export function downloadMessage({
   titulo,
   canal,
@@ -308,35 +288,17 @@ export function downloadMessage({
   const campos = [];
 
   if (titulo) campos.push(`📌 *Título:* ${titulo}`);
-  if (canal) campos.push(`💬 *Canal:* ${canal}`);
+  if (canal) campos.push(`💬 *Canal/Autor:* ${canal}`);
   if (duracao) campos.push(`⏳ *Duração:* ${duracao}`);
   if (plataforma) campos.push(`🌐 *Fonte:* ${plataforma}`);
-  if (usuario) campos.push(`👤 *Pedido de:* @${usuario}`);
+  if (usuario) campos.push(`👤 *Solicitante:* @${usuario}`);
   if (campos.length) campos.push("");
-  campos.push(extra || "✨ Escolha a qualidade desejada abaixo!");
+  campos.push(extra || "⚡ Selecione a opção desejada abaixo:");
 
-  return formatMessage({ icone: "📥", titulo: "Download", campos, rodape });
+  return formatMessage({ icone: "📥", titulo: "Módulo Download", campos, rodape });
 }
 
-/**
- * 📥 LEGENDA DE MÍDIA — molde pedido para o envio final do arquivo:
- *
- *   🎬 *Título:* [title]
- *   👤 *Canal/Conta:* [uploader ou channel]
- *   👥 *Seguidores:* [channel_follower_count ou "Não disponível"]
- *   ⏱️ *Duração:* [duration_string]
- *   📺 *Qualidade:* [qualidade escolhida ou "Melhor disponível"]
- *
- * @param {object} options
- * @param {string} [options.titulo]
- * @param {string} [options.canal]
- * @param {number|string} [options.seguidores]
- * @param {string} [options.duracao]
- * @param {string} [options.qualidade]
- * @param {string} [options.extra] linha extra opcional no fim
- * @param {string|null} [options.rodape] rodapé do corpo (null quando o card já
- *   leva `footer`, para não imprimir o `RODAPE` duas vezes)
- */
+/** 📥 LEGENDA DE MÍDIA — molde para o envio final do arquivo. */
 export function mediaCaption({
   titulo,
   canal,
@@ -361,10 +323,10 @@ export function mediaCaption({
 
   if (extra) campos.push("", extra);
 
-  return formatMessage({ icone: "📥", titulo: "Download", campos, rodape });
+  return formatMessage({ icone: "📥", titulo: "Download Concluído", campos, rodape });
 }
 
-/** 🛡️ MODERAÇÃO — ação de administração aplicada a um membro. */
+/** ⚔️ MODERAÇÃO — ação de administração aplicada a um membro. */
 export function moderationMessage({ resumo, motivo, detalhes = [] } = {}) {
   const campos = [];
 
@@ -372,10 +334,62 @@ export function moderationMessage({ resumo, motivo, detalhes = [] } = {}) {
   if (motivo) campos.push(`🔎 *Motivo:* _"${motivo}"_`);
   for (const detalhe of detalhes) campos.push(detalhe);
 
-  return formatMessage({ icone: "🛡️", titulo: "Moderação", campos });
+  return formatMessage({ icone: "⚔️", titulo: "Módulo Moderação", campos });
 }
 
-/** 🔧 PAINEL — campos em lista (admin/owner/créditos). */
-export function panelMessage({ icone = "🔧", titulo = "Painel", campos = [] } = {}) {
+/** ⚙️ PAINEL — campos em lista (admin/owner/créditos). */
+export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", campos = [] } = {}) {
   return formatMessage({ icone, titulo, campos });
+}
+
+/**
+ * 🌀 MENSAGEM PRINCIPAL & MENUS INTERATIVOS (SYSTEM ZERO V4 / TENSURA STYLE)
+ *
+ * Exibe o cartão do usuário, status do bot, prefixo e categorias do menu.
+ *
+ * @param {object} options
+ * @param {string} options.usuario Nome/mencao do usuário
+ * @param {string} [options.prefixo] Prefixo do bot (default '/')
+ * @param {string} [options.modo] Modo do bot (ex: 'Público' / 'Privado')
+ * @param {string} [options.dataHora] Hora/Data formatada
+ * @param {Array<{categoria: string, icone?: string, comandos: string[]}>} [options.categorias]
+ * @returns {string}
+ */
+export function mainMenuMessage({
+  usuario = "Usuário",
+  prefixo = "/",
+  modo = "Público",
+  dataHora = "",
+  categorias = [],
+} = {}) {
+  const campos = [
+    `╭─── SYSTEM INFOS ───╮`,
+    `│ 👤 *Usuário:* @${usuario.replace(/^@/, "")}`,
+    `│ ⚙️ *Prefixo:* [ ${prefixo} ]`,
+    `│ 🛡️ *Modo:* ${modo}`,
+    dataHora ? `│ ⏱️ *Data/Hora:* ${dataHora}` : "",
+    `╰─────────────────────╯`,
+    "",
+    "✦ Escolha uma das categorias abaixo no menu interativo para explorar os comandos!",
+  ].filter(Boolean);
+
+  if (categorias.length > 0) {
+    campos.push("");
+    for (const cat of categorias) {
+      const icon = cat.icone || "✦";
+      campos.push(`┌──[ ${icon} *${cat.categoria.toUpperCase()}* ]`);
+      if (Array.isArray(cat.comandos)) {
+        for (const cmd of cat.comandos) {
+          campos.push(`│ ➢ ${prefixo}${cmd}`);
+        }
+      }
+      campos.push(`└─────────────────────────`);
+    }
+  }
+
+  return formatMessage({
+    icone: "🌀",
+    titulo: "MENU PRINCIPAL",
+    campos,
+  });
 }
