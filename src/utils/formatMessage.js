@@ -82,9 +82,10 @@ export function formatMessage({
   }
 
   const nomeEstilizado = toStylizedText(BOT_DISPLAY_NAME);
+  // Otimização para WhatsApp Mobile: Cabeçalhos ligeiramente mais curtos evitam quebra de linha indesejada em ecrãs menores.
   const secao = titulo
-    ? `╭━━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()} • ${toStylizedText(titulo).toUpperCase()}* ༻ ━━━╮`
-    : `╭━━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()}* ༻ ━━━╮`;
+    ? `╭━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()} • ${toStylizedText(titulo).toUpperCase()}* ༻ ━━╮`
+    : `╭━━ ༺ ${icone} *${nomeEstilizado.toUpperCase()}* ༻ ━━╮`;
 
   const linhas = [
     FRAME_MARK,
