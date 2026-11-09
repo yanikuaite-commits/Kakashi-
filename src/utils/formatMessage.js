@@ -364,13 +364,19 @@ export function panelMessage({ icone = "⚙️", titulo = "Painel de Controle", 
 /**
  * 🌀 MENSAGEM PRINCIPAL & MENUS INTERATIVOS (SYSTEM ZERO V4 / TENSURA STYLE)
  *
- * Exibe o cartão do usuário, status do bot, prefixo e categorias do menu com letras estilizadas.
+ * Exibe cartão de status dinâmico do usuário/sistema, prefixo e categorias do menu.
  *
  * @param {object} options
- * @param {string} options.usuario Nome/mencao do usuário
+ * @param {string} [options.usuario] Nome/menção do usuário
  * @param {string} [options.prefixo] Prefixo do bot (default '/')
  * @param {string} [options.modo] Modo do bot (ex: 'Público' / 'Privado')
  * @param {string} [options.dataHora] Hora/Data formatada
+ * @param {string} [options.uptime] Tempo de atividade (ex: '2h 15m')
+ * @param {string} [options.ping] Latência (ex: '45ms')
+ * @param {string} [options.ram] Uso de memória (ex: '128 MB')
+ * @param {string} [options.cargo] Cargo/patente do usuário (ex: 'Admin')
+ * @param {string} [options.grupo] Nome do grupo atual
+ * @param {number|string} [options.totalComandos] Total de comandos disponíveis
  * @param {Array<{categoria: string, icone?: string, comandos: string[]}>} [options.categorias]
  * @returns {string}
  */
@@ -379,18 +385,34 @@ export function mainMenuMessage({
   prefixo = "/",
   modo = "Público",
   dataHora = "",
+  uptime,
+  ping,
+  ram,
+  cargo,
+  grupo,
+  totalComandos,
   categorias = [],
 } = {}) {
-  const campos = [
-    `╭━━━ ༺ ⟡ ${toStylizedText("SYSTEM INFOS")} ⟡ ༻ ━━━╮`,
+  const infos = [
     `│ ☽ *${toStylizedText("Usuário")}:* @${usuario.replace(/^@/, "")}`,
+    cargo ? `│ 👑 *${toStylizedText("Cargo")}:* ${cargo}` : "",
+    grupo ? `│ 🏰 *${toStylizedText("Grupo")}:* ${grupo}` : "",
     `│ ⟡ *${toStylizedText("Prefixo")}:* [ ${prefixo} ]`,
     `│ ✧ *${toStylizedText("Modo")}:* ${modo}`,
     dataHora ? `│ ⊹ *${toStylizedText("Data/Hora")}:* ${dataHora}` : "",
+    uptime ? `│ ⏳ *${toStylizedText("Uptime")}:* ${uptime}` : "",
+    ping ? `│ ⚡ *${toStylizedText("Latência")}:* ${ping}` : "",
+    ram ? `│ 💻 *${toStylizedText("RAM")}:* ${ram}` : "",
+    totalComandos ? `│ 📜 *${toStylizedText("Comandos")}:* ${totalComandos}` : "",
+  ].filter(Boolean);
+
+  const campos = [
+    `╭━━━ ༺ ⟡ ${toStylizedText("SYSTEM INFOS")} ⟡ ༻ ━━━╮`,
+    ...infos,
     `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`,
     "",
     "✦ Escolha uma das categorias abaixo no menu interativo para explorar os comandos!",
-  ].filter(Boolean);
+  ];
 
   if (categorias.length > 0) {
     campos.push("");
